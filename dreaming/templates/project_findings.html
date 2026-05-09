@@ -1,0 +1,40 @@
+{% extends "_project_layout.html" %}
+{% set active='findings' %}
+{% block project_content %}
+{% if not td_dir_set %}
+<div class="bg-amber-50 border border-amber-200 rounded p-4 mb-4">
+  <p class="text-sm">Каталог tech-debt не настроен.</p>
+  <p class="text-xs muted mt-2">Зайди в <a class="text-blue-600 underline" href="/p/{{ project.slug }}/settings">Settings</a> и пропиши <code>tech_debt_dir</code>, например: <code>D:\Work\micode\{{ project.slug }}\docs\tech-debt</code>.</p>
+</div>
+{% elif not td_dir_exists %}
+<p class="muted">Каталог <code>{{ td_dir }}</code> не существует.</p>
+{% elif error %}
+<div class="bg-red-50 border border-red-200 rounded p-4 mb-4">
+  <p class="text-sm text-red-700">Ошибка парсинга: <code>{{ error }}</code></p>
+</div>
+{% elif items %}
+<p class="text-xs muted mb-3">{{ items|length }} items in <code>{{ td_dir }}</code></p>
+<table class="w-full bg-white rounded shadow text-sm">
+  <thead class="text-left border-b"><tr>
+    <th class="p-2">id</th>
+    <th class="p-2">title</th>
+    <th class="p-2">status</th>
+    <th class="p-2">priority</th>
+    <th class="p-2">module</th>
+  </tr></thead>
+  <tbody>
+  {% for it in items %}
+  <tr class="border-b">
+    <td class="p-2 font-mono text-xs">{{ it.id or it.slug or '—' }}</td>
+    <td class="p-2">{{ it.title or '—' }}</td>
+    <td class="p-2 text-xs"><span class="font-mono">{{ it.status or '—' }}</span></td>
+    <td class="p-2 text-xs">{{ it.priority or '—' }}</td>
+    <td class="p-2 text-xs muted">{{ it.module or '' }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">В <code>{{ td_dir }}</code> нет markdown файлов.</p>
+{% endif %}
+{% endblock %}

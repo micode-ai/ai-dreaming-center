@@ -9,6 +9,8 @@ from dreaming.routes.project_settings import router as project_settings_router
 from dreaming.routes.project_topics import router as topics_router
 from dreaming.routes.project_kanban import router as kanban_router
 from dreaming.routes.project_notes import router as notes_router
+from dreaming.routes.project_findings import router as findings_router
+from dreaming.routes.project_tech_debt import router as tech_debt_router
 
 
 router = APIRouter()
@@ -18,4 +20,6 @@ router.include_router(rotation_router)
 router.include_router(topics_router)
 router.include_router(kanban_router)
 router.include_router(notes_router)
+router.include_router(findings_router)
+router.include_router(tech_debt_router)
 router.include_router(project_settings_router)
