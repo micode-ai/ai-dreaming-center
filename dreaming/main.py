@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from dreaming.config import settings as load_settings
 from dreaming.services.db import SqliteDB
+from dreaming.services.projects import ProjectsService
 
 
 @asynccontextmanager
@@ -13,6 +14,7 @@ async def lifespan(app: FastAPI):
     app.state.settings = load_settings()
     app.state.db = SqliteDB(app.state.settings.db_path)
     await app.state.db.connect()
+    app.state.projects = ProjectsService(app.state.db)
     try:
         yield
     finally:
