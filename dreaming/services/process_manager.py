@@ -1,34 +1,708 @@
-"""Stub for Wave 1+. Public API mirrors ALC's ProcessManager but raises NotImplementedError
-for spawn-related calls. Allows downstream imports in Wave 0.
+"""Process Manager — runs claude CLI sessions with stdout streaming."""
 
-NOTE for Wave 1 implementer:
-- Add per-project FIFO queue (dict[project_id, list[QueuedTask]]) and global semaphore
-  for `max_concurrent`; per-project semaphore for `max_concurrent_per_project`.
-- Add `keep_awake: KeepAwake` attribute (Windows Modern Standby suppressor) — owned
-  by ProcessManager, not app.state, per spec singleton inventory.
-- See spec § "Process Manager" and "Concurrency".
-"""
 from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import os
+import shutil
+import time
+from dataclasses import dataclass, field
+from typing import AsyncIterator, Callable, TYPE_CHECKING
+from uuid import uuid4
+
+from dreaming.services.keep_awake import KeepAwake
+
+if TYPE_CHECKING:
+    from dreaming.services.projects import Project
+
+log = logging.getLogger(__name__)
+
+RING_BUFFER_SIZE = 5000
+
+# stream-json от claude может присылать assistant-блоки заметно крупнее
+# дефолтных 64 KB asyncio.StreamReader (планы с многими tool_use, длинные
+# tool_result-вложения). Поднимаем лимит, чтобы readline() не бросал
+# LimitOverrunError и не обрывал чтение посреди сессии.
+STDOUT_BUFFER_LIMIT = 16 * 1024 * 1024  # 16 MB
+
+
+def _resolve_claude_path(claude_path: str) -> str:
+    """Resolve the Claude CLI executable for the current platform.
+
+    On Windows bare 'claude' is a bash script that can't be executed directly;
+    shutil.which picks up 'claude.cmd'. On Linux/macOS it returns the same path.
+    Falls back to the original string so the caller raises a clear FileNotFoundError.
+    """
+    return shutil.which(claude_path) or claude_path
+
+
+@dataclass
+class RunningSession:
+    session_id: str
+    agent_name: str
+    project_id: int
+    project_slug: str
+    process: asyncio.subprocess.Process
+    output_lines: list[str] = field(default_factory=list)
+    subscribers: list[asyncio.Queue] = field(default_factory=list)
+    started_at: float = field(default_factory=time.time)
+    last_stdout_at: float = field(default_factory=time.time)
+    _reader_task: asyncio.Task | None = None
+    _watchdog_task: asyncio.Task | None = None
+    key: str = ""  # composite key in pm.running dict
+
+    async def send_user_message(self, text: str) -> bool:
+        """Записать stream-json user-message в stdin живого процесса.
+        Возвращает True если записано, False если stdin недоступен."""
+        proc = self.process
+        if proc.stdin is None:
+            return False
+        envelope = {
+            "type": "user",
+            "message": {
+                "role": "user",
+                "content": [{"type": "text", "text": text}],
+            },
+        }
+        line = (json.dumps(envelope, ensure_ascii=False) + "\n").encode("utf-8")
+        try:
+            proc.stdin.write(line)
+            await proc.stdin.drain()
+            return True
+        except (BrokenPipeError, ConnectionResetError, OSError, RuntimeError, ValueError):
+            return False
 
 
 class ProcessManager:
-    def __init__(self, settings, db, projects):
+    """Manages concurrent claude CLI processes with stdout streaming."""
+
+    def __init__(
+        self,
+        settings,
+        db,
+        projects,
+        env_resolver: Callable[[], dict[str, str]] | None = None,
+    ):
         self.settings = settings
         self.db = db
         self.projects = projects
-        self.running: dict[str, dict] = {}
-        # Wave 1: queue, semaphores, keep_awake go here.
+        self.running: dict[str, RunningSession] = {}  # composite key: '{slug}:{agent}' or 'cmd:{name}'
+        self.max_concurrent = getattr(settings, "max_concurrent", 2)
+        self.learning_notes_dir = getattr(settings, "learning_notes_dir", None)
+        self.env_resolver = env_resolver
+        # Pока есть хотя бы одна running-сессия — Windows не даёт системе уйти
+        # в Modern Standby (иначе дочерние Claude-процессы умирают, см. инцидент
+        # 05.05 — машина уснула в 06:53, каскад умер в 07:03).
+        self.keep_awake = KeepAwake()
 
-    async def start_session(self, project, agent_name: str, **kwargs) -> str:
-        raise NotImplementedError("ProcessManager.start_session implemented in Wave 1")
+    def _build_env(
+        self,
+        env_overrides: dict[str, str] | None = None,
+        *,
+        include_resolved: bool = True,
+    ) -> dict[str, str]:
+        env = os.environ.copy()
+        if include_resolved and self.env_resolver:
+            try:
+                env.update(self.env_resolver() or {})
+            except Exception as e:
+                log.warning("Failed to resolve process env overrides: %s", e)
+        if env_overrides:
+            env.update(env_overrides)
+        return env
 
-    async def start_command(self, project, command_name: str, prompt: str, **kwargs) -> str:
-        raise NotImplementedError("ProcessManager.start_command implemented in Wave 1")
+    async def start_session(
+        self,
+        project,
+        *,
+        agent_name: str,
+        claude_path: str,
+        working_dir: str,
+        model: str = "sonnet",
+        max_turns: int = 25,
+        timeout_minutes: int = 20,
+        self_study_command: str = "/self-study",
+        extra_prompt: str = "",
+        env_overrides: dict[str, str] | None = None,
+    ) -> str:
+        """Start a claude CLI session for the given agent. Returns session_id."""
+        key = f"{project.slug}:{agent_name}"
+        if key in self.running:
+            raise RuntimeError(f"Agent {agent_name} is already running for {project.slug}")
+        if len(self.running) >= self.max_concurrent:
+            raise RuntimeError(
+                f"Max concurrent sessions ({self.max_concurrent}) reached"
+            )
+
+        # Pre-create DB session so we own its lifecycle
+        db_session_id: str | None = None
+        if self.db is not None:
+            try:
+                db_session_id = await self.db.create_session(project.id, agent_name, model)
+            except Exception as e:
+                log.warning("Failed to pre-create DB session for %s: %s", key, e)
+
+        session_id = db_session_id or str(uuid4())
+
+        prompt = f"{self_study_command} {agent_name}"
+        if extra_prompt:
+            prompt = f"{prompt}\n\n{extra_prompt}"
+
+        resolved_path = _resolve_claude_path(claude_path)
+
+        cmd = [
+            resolved_path,
+            "-p",
+            prompt,
+            "--model", model,
+            "--dangerously-skip-permissions",
+            "--max-turns", str(max_turns),
+            "--output-format", "stream-json",
+            "--verbose",
+        ]
+
+        log.info("Starting session %s for %s: %s", session_id, key, " ".join(cmd))
+
+        env = self._build_env(env_overrides)
+        if db_session_id:
+            env["LEARNING_SESSION_ID"] = db_session_id
+        env["LEARNING_AGENT_NAME"] = agent_name
+        env["LEARNING_PROJECT_SLUG"] = project.slug
+        env["LEARNING_PROJECT_ID"] = str(project.id)
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                cwd=working_dir,
+                # Pass empty stdin so claude doesn't wait for input
+                stdin=asyncio.subprocess.DEVNULL,
+                env=env,
+                limit=STDOUT_BUFFER_LIMIT,
+            )
+        except FileNotFoundError:
+            raise RuntimeError(
+                f"Claude CLI not found at '{claude_path}'. "
+                f"Check Settings → Claude Path."
+            )
+        except OSError as e:
+            raise RuntimeError(f"Failed to start Claude CLI: {e}")
+
+        session = RunningSession(
+            session_id=session_id,
+            agent_name=agent_name,
+            project_id=project.id,
+            project_slug=project.slug,
+            process=process,
+        )
+        session.key = key
+
+        self.running[key] = session
+        self.keep_awake.acquire()
+
+        # Start stdout reader and watchdog
+        session._reader_task = asyncio.create_task(
+            self._read_stdout(session), name=f"reader-{key}"
+        )
+        session._watchdog_task = asyncio.create_task(
+            self._watchdog(session, timeout_minutes), name=f"watchdog-{key}"
+        )
+
+        return session_id
+
+    async def start_command(
+        self,
+        command_name: str,
+        prompt: str,
+        claude_path: str,
+        working_dir: str,
+        model: str = "sonnet",
+        max_turns: int = 25,
+        timeout_minutes: int = 30,
+        env_overrides: dict[str, str] | None = None,
+        session_id: str | None = None,
+        resume_session_id: str | None = None,
+        interactive_stdin: bool = False,
+    ) -> str:
+        """Start a claude CLI command/task (not a self-study session). Returns session_id.
+
+        Uses command_name as the key in self.running (prefixed with 'cmd:' to avoid conflicts).
+        """
+        # TODO Wave 2: scope command keys by project, e.g. f"cmd:{project.slug}:{command_name}"
+        key = f"cmd:{command_name}"
+        if key in self.running:
+            raise RuntimeError(f"Command {command_name} is already running")
+
+        # session_id передаём в CLI как --session-id, чтобы потом дёргать --resume.
+        # Если задан resume_session_id — это «второй ход» в существующей сессии.
+        session_id = resume_session_id or session_id or str(uuid4())
+
+        resolved_path = _resolve_claude_path(claude_path)
+
+        # При interactive_stdin=True ни в коем случае не передаём prompt через
+        # -p <prompt>: Claude CLI с --input-format stream-json игнорирует
+        # позиционный prompt и ждёт ввод через stdin. Если оставить и -p, и
+        # stream-json — процесс висит вечно (зафиксировано на каскаде
+        # forecast-editor/dashboard 05.05). Поэтому для interactive-режима
+        # оставляем только флаг --print (он же -p без аргумента) и шлём prompt
+        # в stdin сразу после создания процесса.
+        cmd = [
+            resolved_path,
+            "--print",
+            "--model", model,
+            "--dangerously-skip-permissions",
+            "--max-turns", str(max_turns),
+            "--output-format", "stream-json",
+            "--verbose",
+        ]
+        if interactive_stdin:
+            cmd += ["--input-format", "stream-json"]
+        else:
+            # Non-interactive: prompt передаётся как позиционный аргумент.
+            cmd.append(prompt)
+        if resume_session_id:
+            cmd += ["--resume", resume_session_id]
+        else:
+            cmd += ["--session-id", session_id]
+
+        log.info("Starting command %s: %s", command_name, " ".join(cmd[:6]))
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                cwd=working_dir,
+                stdin=(asyncio.subprocess.PIPE if interactive_stdin else asyncio.subprocess.DEVNULL),
+                env=self._build_env(env_overrides),
+                limit=STDOUT_BUFFER_LIMIT,
+            )
+        except FileNotFoundError:
+            raise RuntimeError(
+                f"Claude CLI not found at '{claude_path}'. "
+                f"Check Settings → Claude Path."
+            )
+        except OSError as e:
+            raise RuntimeError(f"Failed to start Claude CLI: {e}")
+
+        session = RunningSession(
+            session_id=session_id,
+            agent_name=key,
+            project_id=0,
+            project_slug="",
+            process=process,
+        )
+        session.key = key
+
+        self.running[key] = session
+        self.keep_awake.acquire()
+
+        # В interactive-режиме prompt не доехал в argv — отправляем его сейчас
+        # через stdin как первое user-message. resume-сессия не получает prompt
+        # повторно (caller сам решит, нужно ли что-то слать).
+        if interactive_stdin and prompt and not resume_session_id:
+            ok = await session.send_user_message(prompt)
+            if not ok:
+                log.warning(
+                    "Failed to send initial prompt to interactive session %s",
+                    session_id,
+                )
+
+        session._reader_task = asyncio.create_task(
+            self._read_stdout(session), name=f"reader-{key}"
+        )
+        session._watchdog_task = asyncio.create_task(
+            self._watchdog(session, timeout_minutes), name=f"watchdog-{key}"
+        )
+
+        return session_id
+
+    async def start_raw_command(
+        self,
+        command_name: str,
+        argv: list[str],
+        working_dir: str,
+        timeout_minutes: int = 30,
+        env_overrides: dict[str, str] | None = None,
+    ) -> str:
+        """Start an arbitrary CLI command and stream its stdout."""
+        # TODO Wave 2: scope command keys by project, e.g. f"cmd:{project.slug}:{command_name}"
+        key = f"cmd:{command_name}"
+        if key in self.running:
+            raise RuntimeError(f"Command {command_name} is already running")
+        if not argv:
+            raise RuntimeError("Empty command argv")
+
+        session_id = str(uuid4())
+        log.info("Starting raw command %s: %s", command_name, " ".join(argv[:8]))
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *argv,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                cwd=working_dir,
+                stdin=asyncio.subprocess.DEVNULL,
+                env=self._build_env(env_overrides, include_resolved=False),
+                limit=STDOUT_BUFFER_LIMIT,
+            )
+        except FileNotFoundError:
+            raise RuntimeError(f"Executable not found: {argv[0]}")
+        except OSError as e:
+            raise RuntimeError(f"Failed to start command: {e}")
+
+        session = RunningSession(
+            session_id=session_id,
+            agent_name=key,
+            project_id=0,
+            project_slug="",
+            process=process,
+        )
+        session.key = key
+        self.running[key] = session
+        self.keep_awake.acquire()
+        session._reader_task = asyncio.create_task(
+            self._read_stdout(session), name=f"reader-{key}"
+        )
+        session._watchdog_task = asyncio.create_task(
+            self._watchdog(session, timeout_minutes), name=f"watchdog-{key}"
+        )
+        return session_id
+
+    def _parse_stream_json(self, raw_line: str) -> list[str]:
+        """Parse a stream-json line and return human-readable lines for display."""
+        try:
+            event = json.loads(raw_line)
+        except (json.JSONDecodeError, ValueError):
+            # Not JSON — pass through as-is
+            return [raw_line] if raw_line.strip() else []
+
+        etype = event.get("type", "")
+        subtype = event.get("subtype", "")
+        lines: list[str] = []
+
+        if etype == "system" and subtype == "init":
+            model = event.get("model", "unknown")
+            lines.append(f"[system] Session initialized, model: {model}")
+
+        elif etype == "assistant":
+            msg = event.get("message", {})
+            for block in msg.get("content", []):
+                btype = block.get("type", "")
+                if btype == "text":
+                    text = block.get("text", "")
+                    for text_line in text.splitlines():
+                        lines.append(text_line)
+                elif btype == "tool_use":
+                    tool_name = block.get("name", "unknown")
+                    tool_input = block.get("input", {})
+                    # Show a compact summary of the tool call
+                    if tool_name == "Bash":
+                        cmd = tool_input.get("command", "")
+                        lines.append(f"[tool] Bash: {cmd[:200]}")
+                    elif tool_name == "Read":
+                        path = tool_input.get("file_path", "")
+                        lines.append(f"[tool] Read: {path}")
+                    elif tool_name in ("Edit", "Write"):
+                        path = tool_input.get("file_path", "")
+                        lines.append(f"[tool] {tool_name}: {path}")
+                    elif tool_name == "Grep":
+                        pattern = tool_input.get("pattern", "")
+                        lines.append(f"[tool] Grep: {pattern}")
+                    elif tool_name == "Glob":
+                        pattern = tool_input.get("pattern", "")
+                        lines.append(f"[tool] Glob: {pattern}")
+                    elif tool_name == "TodoWrite":
+                        lines.append(f"[tool] TodoWrite")
+                    elif tool_name == "Skill":
+                        skill = tool_input.get("skill", "")
+                        lines.append(f"[tool] Skill: {skill}")
+                    elif tool_name in ("Agent", "spawn_agent", "SpawnAgent"):
+                        desc = tool_input.get("description", "")
+                        agent_type = (
+                            tool_input.get("subagent_type")
+                            or tool_input.get("agent_type")
+                            or tool_input.get("agent_role")
+                            or ""
+                        )
+                        if agent_type:
+                            lines.append(f'[tool] Agent: subagent_type="{agent_type}"')
+                        elif desc:
+                            lines.append(f"[tool] Agent: {desc}")
+                        else:
+                            lines.append("[tool] Agent")
+                    else:
+                        lines.append(f"[tool] {tool_name}")
+
+        elif etype == "tool_result":
+            # Optionally show truncated tool output
+            content = event.get("content", "")
+            if isinstance(content, str) and content.strip():
+                preview = content[:300].replace("\n", " ")
+                lines.append(f"  → {preview}")
+
+        elif etype == "result":
+            status = subtype or event.get("stop_reason", "")
+            duration = event.get("duration_ms", 0)
+            cost = event.get("total_cost_usd", 0)
+            lines.append(
+                f"[done] status={status} duration={duration}ms cost=${cost:.4f}"
+            )
+
+        return lines
+
+    async def _read_stdout(self, session: RunningSession) -> None:
+        """Read stdout line by line, parse stream-json, and broadcast."""
+        assert session.process.stdout is not None
+        stdout = session.process.stdout
+
+        def _emit(line: str) -> None:
+            session.output_lines.append(line)
+            if len(session.output_lines) > RING_BUFFER_SIZE:
+                session.output_lines.pop(0)
+            dead_queues = []
+            for q in session.subscribers:
+                try:
+                    q.put_nowait(line)
+                except asyncio.QueueFull:
+                    dead_queues.append(q)
+            for q in dead_queues:
+                session.subscribers.remove(q)
+
+        try:
+            while True:
+                try:
+                    line_bytes = await stdout.readline()
+                except asyncio.LimitOverrunError as e:
+                    # Слишком длинная строка stream-json (assistant-блок > limit).
+                    # Выкачиваем её до конца разделителя, чтобы не зациклиться,
+                    # помечаем потерю в логе терминала и продолжаем читать.
+                    try:
+                        await stdout.readexactly(e.consumed)
+                        await stdout.readuntil(b"\n")
+                    except asyncio.IncompleteReadError:
+                        # EOF посреди слишком длинной строки — нечего больше читать.
+                        break
+                    log.warning(
+                        "stdout reader: oversized line dropped for %s (>%d bytes)",
+                        session.agent_name, STDOUT_BUFFER_LIMIT,
+                    )
+                    _emit(
+                        f"[warn] пропущена слишком длинная строка stream-json "
+                        f"(> {STDOUT_BUFFER_LIMIT // (1024 * 1024)} MB)"
+                    )
+                    continue
+
+                if not line_bytes:
+                    break
+                # Любая прилетевшая строка — признак, что процесс жив:
+                # обновляем heartbeat для silence-watchdog'а.
+                session.last_stdout_at = time.time()
+                raw = line_bytes.decode("utf-8", errors="replace").rstrip("\n\r")
+                if not raw:
+                    continue
+
+                for line in self._parse_stream_json(raw):
+                    _emit(line)
+        except Exception as e:
+            log.error("stdout reader error for %s: %s", session.agent_name, e)
+        finally:
+            # Process finished — notify subscribers with sentinel
+            for q in session.subscribers:
+                try:
+                    q.put_nowait(None)  # None = stream ended
+                except asyncio.QueueFull:
+                    pass
+            await self._cleanup(session)
+
+    async def _watchdog(self, session: RunningSession, timeout_minutes: int) -> None:
+        """Kill process after `timeout_minutes` of stdout silence.
+
+        Семантика «макс. молчания», а не «макс. жизни»: пока CLI стримит
+        что угодно (assistant, tool_use, tool_result subagent'а) — процесс
+        живой. Убиваем только если ничего не приходило `timeout_minutes`.
+        Если процесс ждёт ответа на AskUserQuestion (есть pending в
+        orchestrator_questions) — это не молчание, а валидное состояние,
+        счётчик тишины сбрасывается.
+        """
+        timeout_sec = timeout_minutes * 60
+        # Шаг проверки: либо минута, либо весь таймаут (чтобы маленькие
+        # таймауты для тестов отрабатывали моментально).
+        step = min(60.0, timeout_sec)
+        try:
+            while True:
+                await asyncio.sleep(step)
+                if await self._has_pending_question(session):
+                    session.last_stdout_at = time.time()
+                    continue
+                idle = time.time() - session.last_stdout_at
+                if idle >= timeout_sec:
+                    log.warning(
+                        "Session %s for %s silent for %.0fs (>%dm) — killing",
+                        session.session_id, session.agent_name, idle, timeout_minutes,
+                    )
+                    await self._kill_process(session)
+                    return
+        except asyncio.CancelledError:
+            pass  # Normal — session finished before timeout
+
+    async def _has_pending_question(self, session: RunningSession) -> bool:
+        """Best-effort: проверяем есть ли pending вопросы для этой сессии.
+        Грубо — любой pending в БД считаем «своим». Точная привязка
+        session ↔ run_id не сохранена в RunningSession, и нам это
+        достаточно: ложно-позитивный исход (не убивать когда мог бы)
+        безопаснее, чем ложно-негативный (убить ждущую сессию)."""
+        if self.db is None:
+            return False
+        try:
+            rows = await self.db._fetchall(
+                "SELECT 1 FROM orchestrator_questions WHERE status='pending' LIMIT 1",
+                (),
+            )
+            return bool(rows)
+        except Exception as e:
+            log.warning("_has_pending_question failed: %s", e)
+            return False
+
+    async def _kill_process(self, session: RunningSession) -> None:
+        """Terminate then kill the process."""
+        proc = session.process
+        if proc.returncode is not None:
+            return  # Already finished
+        try:
+            proc.terminate()
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=3.0)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+        except ProcessLookupError:
+            pass
+
+    async def _cleanup(self, session: RunningSession) -> None:
+        """Remove session from running dict, cancel watchdog, reconcile DB."""
+        key = session.key or session.agent_name
+        if session._watchdog_task and not session._watchdog_task.done():
+            session._watchdog_task.cancel()
+        was_running = self.running.pop(key, None) is not None
+        if was_running:
+            self.keep_awake.release()
+        log.info("Session %s for %s cleaned up", session.session_id, key)
+        # Skip DB reconcile for command-style entries (e.g. 'cmd:tech-debt-scanner')
+        if self.db is None or key.startswith("cmd:"):
+            return
+        try:
+            # active_pairs: live (project_id, agent_name) tuples still running
+            active_pairs = [
+                (s.project_id, s.agent_name)
+                for s in self.running.values()
+                if not (s.key or "").startswith("cmd:")
+            ]
+            closed = await self.db.reconcile_stale_sessions(
+                active_pairs=active_pairs,
+                learning_notes_dir=self.learning_notes_dir,
+                grace_minutes=2,
+            )
+            if closed:
+                log.info("Auto-closed %d DB session(s) after %s exit", closed, key)
+        except Exception as e:
+            log.warning("reconcile after %s exit failed: %s", key, e)
 
     async def kill(self, key: str) -> bool:
-        raise NotImplementedError("ProcessManager.kill implemented in Wave 1")
+        """Kill a running session by composite key. Returns True if found."""
+        session = self.running.get(key)
+        if not session:
+            return False
+        await self._kill_process(session)
+        return True
 
-    async def reconcile_stale_sessions(self, active_pairs: list[tuple[int, str]]) -> int:
-        """active_pairs: list of (project_id, agent_name) tuples — see spec.
-        Wave 0 stub: noop."""
-        return 0
+    # Backward-compat alias (ALC name).
+    async def kill_session(self, key: str) -> bool:
+        return await self.kill(key)
+
+    def subscribe(self, key: str, catchup_lines: int = 100) -> tuple[list[str], asyncio.Queue] | None:
+        """Subscribe to a running session's stdout stream.
+
+        Returns (catchup_lines, queue) or None if session not running.
+        The queue yields str lines; None means stream ended.
+        """
+        session = self.running.get(key)
+        if not session:
+            return None
+        q: asyncio.Queue = asyncio.Queue(maxsize=500)
+        session.subscribers.append(q)
+        # Catch-up: last N lines from buffer
+        catchup = session.output_lines[-catchup_lines:]
+        return catchup, q
+
+    def get_running_agents(self) -> list[str]:
+        """Get list of currently running session keys."""
+        return list(self.running.keys())
+
+    def list_running(self) -> dict[str, RunningSession]:
+        """Snapshot of running sessions keyed by composite key."""
+        return dict(self.running)
+
+    async def stream_subscriber(self, key: str):
+        """Subscribe to live stdout lines of a running session.
+        Yields strings, or None when the stream ends."""
+        sess = self.running.get(key)
+        if sess is None:
+            return
+        q: asyncio.Queue = asyncio.Queue(maxsize=10000)
+        sess.subscribers.append(q)
+        try:
+            while True:
+                item = await q.get()
+                yield item
+                if item is None:
+                    break
+        finally:
+            try:
+                sess.subscribers.remove(q)
+            except ValueError:
+                pass
+
+    def get_session_output(self, key: str) -> list[str] | None:
+        """Get full buffered output for a running session."""
+        session = self.running.get(key)
+        if not session:
+            return None
+        return list(session.output_lines)
+
+    async def reconcile_stale_sessions(
+        self, active_pairs: list[tuple[int, str]]
+    ) -> int:
+        """Kill any in-memory session whose (project_id, agent_name) is not in active_pairs.
+
+        Skips command-style entries (cmd:*). Returns the number of sessions closed.
+        """
+        active_keys: set[str] = set()
+        for pid, name in active_pairs:
+            try:
+                proj = await self.projects.get_by_id(pid)
+            except Exception as e:
+                log.warning("reconcile_stale_sessions: get_by_id(%s) failed: %s", pid, e)
+                continue
+            if proj:
+                active_keys.add(f"{proj.slug}:{name}")
+        closed = 0
+        for key in list(self.running.keys()):
+            if key.startswith("cmd:"):
+                continue  # commands aren't tracked by rotation
+            if key not in active_keys:
+                try:
+                    if await self.kill(key):
+                        closed += 1
+                except Exception as e:
+                    log.warning("reconcile_stale_sessions: kill(%s) failed: %s", key, e)
+        return closed
+
+    async def kill_all(self) -> None:
+        """Kill all running sessions (used at shutdown)."""
+        keys = list(self.running.keys())
+        for key in keys:
+            await self.kill(key)
