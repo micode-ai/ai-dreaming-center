@@ -44,3 +44,23 @@ Run `python scripts/smoke_session.py` end-to-end: starts a session via `/api/ses
 | Empty DB → `curl /` | 303 to `/setup` | 303, location = /setup |
 | Toggle off project → re-boot → that project's nightly job is gone | n-1 jobs | (covered by per-project register/unregister hook in Phase 1.9 commit 5f9855e) |
 | Import via /setup or /projects → registers nightly job for new project | new job present | (covered by per-project register hook in Phase 1.9 commit 5f9855e) |
+
+## Wave 2 — Pipelines (lean) (verified)
+
+Run `python scripts/smoke_pipelines.py` end-to-end: 7 new pages return 200 with proper empty states; adding a custom_topic appears on kanban.
+
+| Check | Expected | Actual |
+|------|---------|--------|
+| `python scripts/check_i18n.py` | OK | `OK: locales have identical key sets` |
+| `curl /p/test/topics` | 200, weekly checklist (or empty hint) | 200 |
+| `curl /p/test/kanban` | 200, custom topics CRUD form | 200 |
+| `curl /p/test/notes` | 200, file list (or empty hint) | 200 |
+| `curl /p/test/findings` | 200, tech-debt list (or empty hint) | 200 |
+| `curl /p/test/tech-debt` | 200, aggregate (or empty hint) | 200 |
+| `curl /p/test/ideas` | 200, product ideas (or empty hint) | 200 |
+| `curl /p/test/wiki` | 200, wiki status (or empty hint) | 200 |
+| Add via /kanban/add → kanban list shows it | populated | `Kanban shows newly added topic (id=4a1b9477...)` |
+| Default scheduler state (11 projects imported) | 11 nightly + 1 reconcile + 0 weekly_* | `jobs by kind: {'nightly_learning_': 11, 'reconcile': 1}` |
+| Enable weekly_tech_debt_scan for one project | weekly_tech_debt_scan_<slug> registered | (covered by per-project register hook in Wave 2.5 commit 8bd34b8) |
+
+Wave 2 nav surface: project navigation now has Dashboard, Live, Rotation, Topics, Kanban, Notes, Findings, Tech-Debt, Ideas, Wiki, Settings (11 tabs).
