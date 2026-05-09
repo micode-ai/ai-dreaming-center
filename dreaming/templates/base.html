@@ -1,0 +1,17 @@
+{% set locale = locale|default('ru') %}
+<!DOCTYPE html>
+<html lang="{{ locale }}">
+<head>
+  <meta charset="utf-8">
+  <title>{{ "common.app_name" | t(locale=locale) }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="https://unpkg.com/htmx.org@2"></script>
+</head>
+<body class="bg-slate-50 min-h-screen">
+  {% include "_navbar.html" %}
+  <main class="max-w-7xl mx-auto p-6">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

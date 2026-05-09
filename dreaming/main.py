@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from dreaming.config import settings as load_settings
@@ -13,6 +13,10 @@ from dreaming.services.config_resolver import ConfigResolver
 from dreaming.services.i18n import I18n
 from dreaming.middleware.setup_gate import setup_gate_middleware
 from dreaming.middleware.project_resolver import project_resolver_middleware
+from dreaming.routes.root import router as root_router
+from dreaming.routes.setup import router as setup_router
+from dreaming.routes.projects import router as projects_router
+from dreaming.routes.settings import router as settings_router
 
 
 @asynccontextmanager
@@ -49,6 +53,8 @@ def get_resolver(request) -> ConfigResolver:
     return ConfigResolver(request.app.state.projects, request.app.state.settings)
 
 
-@app.get("/health")
-async def health() -> JSONResponse:
-    return JSONResponse({"ok": True})
+app.include_router(root_router)
+app.include_router(setup_router)
+app.include_router(projects_router)
+app.include_router(settings_router)
+app.mount("/static", StaticFiles(directory="dreaming/static"), name="static")

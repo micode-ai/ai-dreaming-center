@@ -1,0 +1,27 @@
+<nav class="bg-white border-b border-slate-200 shadow-sm">
+  <div class="max-w-7xl mx-auto p-4 flex items-center gap-4">
+    <a href="/" class="font-bold text-slate-900">{{ "common.app_name" | t(locale=locale) }}</a>
+    {% if projects %}
+    <select onchange="(()=>{const slug=event.target.value; if(slug==='*'){location.href='/'} else if(slug==='+'){location.href='/projects?new=1'} else {const cur=location.pathname; const m=cur.match(/^\/p\/[^\/]+(\/.*)?$/); location.href='/p/'+slug+(m && m[1] ? m[1] : '/');}})()"
+            class="border rounded px-2 py-1">
+      {% if request.state.project %}
+        <option disabled>{{ request.state.project.label }}</option>
+      {% endif %}
+      <option value="*">● {{ "navbar.all_projects" | t(locale=locale) }}</option>
+      {% for p in projects %}
+        <option value="{{ p.slug }}"{% if request.state.project and request.state.project.id == p.id %} selected{% endif %}>{{ p.label }}</option>
+      {% endfor %}
+      <option value="+">{{ "navbar.add_project" | t(locale=locale) }}</option>
+    </select>
+    {% endif %}
+    <div class="ml-auto flex items-center gap-2">
+      <a href="/projects" class="text-sm text-slate-600 hover:text-slate-900">{{ "projects.title" | t(locale=locale) }}</a>
+      <a href="/settings" class="text-sm text-slate-600 hover:text-slate-900">{{ "settings.title" | t(locale=locale) }}</a>
+      <form method="post" action="/locale" class="ml-2">
+        <input type="hidden" name="next" value="{{ request.url.path }}">
+        <button name="locale" value="{{ 'en' if locale=='ru' else 'ru' }}"
+                class="text-xs border rounded px-2 py-1">{{ 'EN' if locale=='ru' else 'RU' }}</button>
+      </form>
+    </div>
+  </div>
+</nav>

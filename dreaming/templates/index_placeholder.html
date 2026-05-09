@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-4">{{ "common.app_name" | t(locale=locale) }}</h1>
+<p class="muted">Wave 0 placeholder. Aggregated dashboard arrives in Wave 5.</p>
+<p class="mt-4">
+  <a class="text-blue-600 underline" href="/projects">{{ "projects.title" | t(locale=locale) }}</a>
+</p>
+{% endblock %}
