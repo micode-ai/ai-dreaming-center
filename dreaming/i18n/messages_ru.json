@@ -14,6 +14,8 @@
   "p.topics": "Темы",
   "p.kanban": "Канбан",
   "p.notes": "Конспекты",
+  "p.findings": "Findings",
+  "p.tech_debt": "Тех-долг",
   "p.settings": "Настройки",
   "p.metrics.success": "Успешные",
   "p.metrics.failed": "Сбой",

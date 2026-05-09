@@ -1,0 +1,36 @@
+{% extends "_project_layout.html" %}
+{% set active='tech_debt' %}
+{% block project_content %}
+{% if not td_dir_set %}
+<p class="muted">tech_debt_dir не настроен. См. <a class="text-blue-600 underline" href="/p/{{ project.slug }}/settings">Settings</a>.</p>
+{% elif not td_dir_exists %}
+<p class="muted">Каталог <code>{{ td_dir }}</code> не существует.</p>
+{% elif error %}
+<p class="text-sm text-red-700">Ошибка парсинга: <code>{{ error }}</code></p>
+{% else %}
+<div class="grid grid-cols-2 gap-6">
+  <div class="bg-white p-4 rounded shadow">
+    <div class="text-xs muted mb-1">Всего</div>
+    <div class="text-3xl font-bold">{{ total }}</div>
+  </div>
+  <div class="bg-white p-4 rounded shadow">
+    <div class="text-xs muted mb-2">По статусу</div>
+    {% for status, n in by_status %}
+      <div class="text-sm flex justify-between"><span class="font-mono text-xs">{{ status }}</span><span class="font-bold">{{ n }}</span></div>
+    {% endfor %}
+  </div>
+</div>
+
+<h2 class="font-semibold mt-6 mb-2">Top modules</h2>
+<table class="w-full bg-white rounded shadow text-sm">
+  <thead class="text-left border-b"><tr><th class="p-2">module</th><th class="p-2 text-right">count</th></tr></thead>
+  <tbody>
+  {% for mod, n in by_module %}
+  <tr class="border-b"><td class="p-2 font-mono text-xs">{{ mod }}</td><td class="p-2 text-right">{{ n }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<p class="text-xs muted mt-4">Источник: <code>{{ td_dir }}</code> · полный список: <a class="text-blue-600 underline" href="/p/{{ project.slug }}/findings">findings</a></p>
+{% endif %}
+{% endblock %}

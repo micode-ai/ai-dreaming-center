@@ -14,6 +14,8 @@
   "p.topics": "Topics",
   "p.kanban": "Kanban",
   "p.notes": "Notes",
+  "p.findings": "Findings",
+  "p.tech_debt": "Tech Debt",
   "p.settings": "Settings",
   "p.metrics.success": "Success",
   "p.metrics.failed": "Failed",
