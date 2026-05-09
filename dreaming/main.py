@@ -11,6 +11,9 @@ from dreaming.services.db import SqliteDB
 from dreaming.services.projects import ProjectsService
 from dreaming.services.config_resolver import ConfigResolver
 from dreaming.services.i18n import I18n
+from dreaming.services.process_manager import ProcessManager
+from dreaming.services.orchestration_hub import OrchestrationHub
+from dreaming.services.scheduler import build_scheduler
 from dreaming.middleware.setup_gate import setup_gate_middleware
 from dreaming.middleware.project_resolver import project_resolver_middleware
 from dreaming.routes.root import router as root_router
@@ -32,9 +35,16 @@ async def lifespan(app: FastAPI):
         return app.state.i18n.t(key, locale=locale, **fmt)
 
     app.state.templates.env.filters["t"] = _t
+    app.state.process_manager = ProcessManager(
+        app.state.settings, app.state.db, app.state.projects)
+    app.state.orchestration_hub = OrchestrationHub(app.state.db, app.state.projects)
+    app.state.scheduler = build_scheduler(app.state)
+    app.state.scheduler.start()
     try:
         yield
     finally:
+        # Cleanup runs even on exception during the yield body.
+        app.state.scheduler.shutdown(wait=False)
         await app.state.db.close()
 
 
