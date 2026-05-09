@@ -86,6 +86,10 @@ async def setup_post(request: Request):
                     default_slug = form.get(f"slug_{idx}", "").strip()
             except ValueError:
                 pass
-        await request.app.state.projects.import_from_scan(items, default_slug=default_slug)
+        created = await request.app.state.projects.import_from_scan(items, default_slug=default_slug)
+        if created:
+            from dreaming.services.scheduler import register_project_jobs
+            for proj in created:
+                await register_project_jobs(request.app.state.scheduler, request.app.state, proj)
 
     return RedirectResponse(url="/", status_code=303)

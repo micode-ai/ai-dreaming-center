@@ -13,7 +13,7 @@ from dreaming.services.config_resolver import ConfigResolver
 from dreaming.services.i18n import I18n
 from dreaming.services.process_manager import ProcessManager
 from dreaming.services.orchestration_hub import OrchestrationHub
-from dreaming.services.scheduler import build_scheduler
+from dreaming.services.scheduler import build_scheduler, register_project_jobs, unregister_project_jobs
 from dreaming.middleware.setup_gate import setup_gate_middleware
 from dreaming.middleware.project_resolver import project_resolver_middleware
 from dreaming.routes.root import router as root_router
@@ -42,6 +42,9 @@ async def lifespan(app: FastAPI):
     app.state.orchestration_hub = OrchestrationHub(app.state.db, app.state.projects)
     app.state.scheduler = build_scheduler(app.state)
     app.state.scheduler.start()
+    # Register per-project jobs for every enabled project
+    for proj in await app.state.projects.list_all(only_enabled=True):
+        await register_project_jobs(app.state.scheduler, app.state, proj)
     app.state.resolver_factory = get_resolver
     try:
         yield
