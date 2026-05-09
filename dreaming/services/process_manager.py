@@ -215,10 +215,12 @@ class ProcessManager:
 
     async def start_command(
         self,
+        project,
+        *,
         command_name: str,
         prompt: str,
         claude_path: str,
-        working_dir: str,
+        working_dir: str | None = None,
         model: str = "sonnet",
         max_turns: int = 25,
         timeout_minutes: int = 30,
@@ -229,16 +231,29 @@ class ProcessManager:
     ) -> str:
         """Start a claude CLI command/task (not a self-study session). Returns session_id.
 
-        Uses command_name as the key in self.running (prefixed with 'cmd:' to avoid conflicts).
+        Uses a composite key 'cmd:{project.slug}:{command_name}' in self.running so
+        the same command can run concurrently for different projects.
         """
-        # TODO Wave 2: scope command keys by project, e.g. f"cmd:{project.slug}:{command_name}"
-        key = f"cmd:{command_name}"
+        key = f"cmd:{project.slug}:{command_name}"
         if key in self.running:
-            raise RuntimeError(f"Command {command_name} is already running")
+            raise RuntimeError(
+                f"Command {command_name} is already running for project {project.slug}"
+            )
+        if working_dir is None:
+            working_dir = project.working_dir
+
+        # Pre-create DB session so we own its lifecycle (commands are visible in
+        # the sessions list with agent_name = composite key).
+        db_session_id: str | None = None
+        if self.db is not None and resume_session_id is None and session_id is None:
+            try:
+                db_session_id = await self.db.create_session(project.id, key, model)
+            except Exception as e:
+                log.warning("Failed to pre-create DB session for %s: %s", key, e)
 
         # session_id передаём в CLI как --session-id, чтобы потом дёргать --resume.
         # Если задан resume_session_id — это «второй ход» в существующей сессии.
-        session_id = resume_session_id or session_id or str(uuid4())
+        session_id = resume_session_id or session_id or db_session_id or str(uuid4())
 
         resolved_path = _resolve_claude_path(claude_path)
 
@@ -291,8 +306,8 @@ class ProcessManager:
         session = RunningSession(
             session_id=session_id,
             agent_name=key,
-            project_id=0,
-            project_slug="",
+            project_id=project.id,
+            project_slug=project.slug,
             process=process,
         )
         session.key = key
@@ -322,19 +337,27 @@ class ProcessManager:
 
     async def start_raw_command(
         self,
+        project,
+        *,
         command_name: str,
         argv: list[str],
-        working_dir: str,
+        working_dir: str | None = None,
         timeout_minutes: int = 30,
         env_overrides: dict[str, str] | None = None,
     ) -> str:
-        """Start an arbitrary CLI command and stream its stdout."""
-        # TODO Wave 2: scope command keys by project, e.g. f"cmd:{project.slug}:{command_name}"
-        key = f"cmd:{command_name}"
+        """Start an arbitrary CLI command and stream its stdout.
+
+        Composite key: 'cmd:{project.slug}:{command_name}'.
+        """
+        key = f"cmd:{project.slug}:{command_name}"
         if key in self.running:
-            raise RuntimeError(f"Command {command_name} is already running")
+            raise RuntimeError(
+                f"Command {command_name} is already running for project {project.slug}"
+            )
         if not argv:
             raise RuntimeError("Empty command argv")
+        if working_dir is None:
+            working_dir = project.working_dir
 
         session_id = str(uuid4())
         log.info("Starting raw command %s: %s", command_name, " ".join(argv[:8]))
@@ -357,8 +380,8 @@ class ProcessManager:
         session = RunningSession(
             session_id=session_id,
             agent_name=key,
-            project_id=0,
-            project_slug="",
+            project_id=project.id,
+            project_slug=project.slug,
             process=process,
         )
         session.key = key
