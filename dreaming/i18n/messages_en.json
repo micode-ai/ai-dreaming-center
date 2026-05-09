@@ -1,0 +1,11 @@
+{
+  "common.app_name": "AI Dreaming Center",
+  "common.locale.ru": "Русский",
+  "common.locale.en": "English",
+  "navbar.all_projects": "All Projects",
+  "navbar.add_project": "+ Add project",
+  "projects.title": "Projects",
+  "projects.empty": "No projects registered",
+  "setup.title": "First-Time Setup",
+  "settings.title": "Global Settings"
+}
