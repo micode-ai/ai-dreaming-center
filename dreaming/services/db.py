@@ -11,6 +11,8 @@ port in lockstep with the routes that need them.
 """
 from __future__ import annotations
 import logging
+import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 import aiosqlite
@@ -361,3 +363,161 @@ class SqliteDB:
     async def fetch_all(self, sql: str, params: tuple = ()) -> list:
         async with self._conn.execute(sql, params) as cur:
             return list(await cur.fetchall())
+
+    # ── Sessions (project-scoped) ─────────────────────────────────
+
+    async def create_session(self, project_id: int, agent_name: str, model: str = "sonnet") -> str:
+        """Insert a new running session, return its UUID."""
+        sid = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        await self.execute(
+            "INSERT INTO agent_learning_sessions "
+            "(id, project_id, agent_name, started_at, status, model) "
+            "VALUES (?, ?, ?, ?, 'running', ?)",
+            (sid, project_id, agent_name, now, model),
+        )
+        return sid
+
+    async def get_or_create_session(
+        self, project_id: int, agent_name: str,
+        model: str = "sonnet", reuse_window_sec: int = 120,
+    ) -> str:
+        """Reuse a fresh 'running' session for this (project, agent) if one exists, else create new."""
+        now = datetime.now(timezone.utc)
+        cutoff = (now - timedelta(seconds=reuse_window_sec)).isoformat()
+        row = await self.fetch_one(
+            "SELECT id FROM agent_learning_sessions "
+            "WHERE project_id=? AND agent_name=? AND status='running' AND started_at >= ? "
+            "ORDER BY started_at DESC LIMIT 1",
+            (project_id, agent_name, cutoff),
+        )
+        if row:
+            return row["id"]
+        return await self.create_session(project_id, agent_name, model)
+
+    async def finish_session(
+        self, session_id: str, status: str,
+        topic: str | None = None,
+        note_path: str | None = None,
+        entity_page: str | None = None,
+        confidence: float | None = None,
+        tokens_total: int | None = None,
+        error_message: str | None = None,
+    ) -> bool:
+        """Finish a session and update rotation last_studied_at. Returns True if found."""
+        now = datetime.now(timezone.utc).isoformat()
+        async with self._conn.execute(
+            "UPDATE agent_learning_sessions SET "
+            "finished_at=?, status=?, topic=?, note_path=?, entity_page=?, "
+            "confidence=?, tokens_total=?, error_message=? "
+            "WHERE id=?",
+            (now, status, topic, note_path, entity_page, confidence,
+             tokens_total, error_message, session_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        if n > 0:
+            row = await self.fetch_one(
+                "SELECT project_id, agent_name FROM agent_learning_sessions WHERE id=?",
+                (session_id,),
+            )
+            if row:
+                await self.execute(
+                    "UPDATE agent_learning_rotation SET last_studied_at=? "
+                    "WHERE project_id=? AND agent_name=?",
+                    (now, row["project_id"], row["agent_name"]),
+                )
+        return n > 0
+
+    async def cancel_session(self, session_id: str) -> bool:
+        """Mark a stuck 'running' session as cancelled."""
+        now = datetime.now(timezone.utc).isoformat()
+        async with self._conn.execute(
+            "UPDATE agent_learning_sessions SET finished_at=?, status='cancelled' "
+            "WHERE id=? AND (status='running' OR (status IS NULL AND finished_at IS NULL))",
+            (now, session_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
+    async def list_sessions(self, project_id: int, limit: int = 50) -> list:
+        return await self.fetch_all(
+            "SELECT * FROM agent_learning_sessions "
+            "WHERE project_id=? ORDER BY started_at DESC LIMIT ?",
+            (project_id, limit),
+        )
+
+    async def list_running_sessions(self, project_id: int) -> list:
+        return await self.fetch_all(
+            "SELECT * FROM agent_learning_sessions "
+            "WHERE project_id=? AND (status='running' OR (status IS NULL AND finished_at IS NULL)) "
+            "ORDER BY started_at DESC",
+            (project_id,),
+        )
+
+    async def week_stats(self, project_id: int) -> dict:
+        """Returns dict with success/no_gap/failed/timeout/running counts since Monday 00:00 UTC."""
+        now = datetime.now(timezone.utc)
+        monday = (now - timedelta(days=now.weekday())).replace(
+            hour=0, minute=0, second=0, microsecond=0,
+        )
+        row = await self.fetch_one(
+            """
+            SELECT
+                COALESCE(SUM(CASE WHEN status='success' THEN 1 ELSE 0 END), 0) AS success,
+                COALESCE(SUM(CASE WHEN status='no_gap' THEN 1 ELSE 0 END), 0) AS no_gap,
+                COALESCE(SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END), 0) AS failed,
+                COALESCE(SUM(CASE WHEN status='timeout' THEN 1 ELSE 0 END), 0) AS timeout,
+                COALESCE(SUM(CASE WHEN status='running' OR (status IS NULL AND finished_at IS NULL) THEN 1 ELSE 0 END), 0) AS running
+            FROM agent_learning_sessions
+            WHERE project_id=? AND started_at >= ?
+            """,
+            (project_id, monday.isoformat()),
+        )
+        return dict(row) if row else {}
+
+    # ── Rotation (project-scoped) ─────────────────────────────────
+
+    async def list_rotation(self, project_id: int) -> list:
+        return await self.fetch_all(
+            "SELECT * FROM agent_learning_rotation WHERE project_id=? "
+            "ORDER BY tier ASC, agent_name ASC",
+            (project_id,),
+        )
+
+    async def next_agents_for_nightly(self, project_id: int, count: int = 5) -> list:
+        """Pick top-N agents by oldest last_studied_at (NULL first), tier ASC, then name."""
+        return await self.fetch_all(
+            "SELECT * FROM agent_learning_rotation "
+            "WHERE project_id=? AND enabled=1 "
+            "ORDER BY last_studied_at IS NOT NULL, last_studied_at ASC, tier ASC, agent_name ASC "
+            "LIMIT ?",
+            (project_id, count),
+        )
+
+    async def upsert_agent_rotation(
+        self, project_id: int, agent_name: str,
+        tier: int = 2, last_studied_at: str | None = None,
+    ) -> None:
+        """Insert if not exists; never updates an existing row (mirrors ALC `add_agent` semantics)."""
+        await self.execute(
+            "INSERT OR IGNORE INTO agent_learning_rotation "
+            "(project_id, agent_name, tier, enabled, last_studied_at) "
+            "VALUES (?, ?, ?, 1, ?)",
+            (project_id, agent_name, tier, last_studied_at),
+        )
+
+    async def set_agent_tier(self, project_id: int, agent_name: str, tier: int) -> None:
+        await self.execute(
+            "UPDATE agent_learning_rotation SET tier=? "
+            "WHERE project_id=? AND agent_name=?",
+            (tier, project_id, agent_name),
+        )
+
+    async def set_agent_enabled(self, project_id: int, agent_name: str, enabled: bool) -> None:
+        await self.execute(
+            "UPDATE agent_learning_rotation SET enabled=? "
+            "WHERE project_id=? AND agent_name=?",
+            (1 if enabled else 0, project_id, agent_name),
+        )
