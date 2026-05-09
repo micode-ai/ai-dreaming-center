@@ -1,0 +1,3 @@
+/* Placeholder; full styling in Wave 5. Tailwind via CDN handles most cases. */
+body { font-family: system-ui, sans-serif; }
+.muted { color: #64748b; }
