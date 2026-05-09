@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="{{ locale }}">
+<head>
+  <meta charset="utf-8">
+  <title>{{ "setup.title" | t(locale=locale) }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50">
+<main class="max-w-3xl mx-auto p-8">
+  <h1 class="text-3xl font-bold mb-6">{{ "setup.title" | t(locale=locale) }}</h1>
+
+  <form method="post" action="/setup" class="space-y-6">
+    <section class="bg-white p-6 rounded shadow">
+      <h2 class="text-xl font-semibold mb-3">1. Глобальные настройки</h2>
+      <label class="block mb-3">
+        <span class="text-sm">claude_path</span>
+        <input name="claude_path" value="{{ defaults.claude_path }}" class="block w-full border rounded p-2">
+      </label>
+      <label class="block mb-3">
+        <span class="text-sm">projects_root</span>
+        <input name="projects_root" value="{{ defaults.projects_root }}" class="block w-full border rounded p-2">
+      </label>
+      <label class="block">
+        <span class="text-sm">default_locale</span>
+        <select name="default_locale" class="block w-full border rounded p-2">
+          <option value="ru" {% if defaults.default_locale=='ru' %}selected{% endif %}>Русский</option>
+          <option value="en" {% if defaults.default_locale=='en' %}selected{% endif %}>English</option>
+        </select>
+      </label>
+    </section>
+
+    {% if scan %}
+    <section class="bg-white p-6 rounded shadow">
+      <h2 class="text-xl font-semibold mb-3">2. Найденные проекты в {{ scan_root }}</h2>
+      <table class="w-full text-sm">
+        <thead><tr class="text-left border-b">
+          <th class="p-1">включить</th>
+          <th class="p-1">по&nbsp;умолч.</th>
+          <th class="p-1">slug</th>
+          <th class="p-1">label</th>
+          <th class="p-1">путь</th>
+          <th class="p-1">.claude</th>
+        </tr></thead>
+        <tbody>
+        {% for it in scan %}
+        <tr class="border-b">
+          <td class="p-1"><input type="checkbox" name="enabled_{{ loop.index0 }}" {% if it.has_claude %}checked{% endif %}></td>
+          <td class="p-1"><input type="radio" name="default_idx" value="{{ loop.index0 }}" {% if loop.first %}checked{% endif %}></td>
+          <td class="p-1"><input name="slug_{{ loop.index0 }}" value="{{ it.suggested_slug }}" class="border rounded p-1 w-full"></td>
+          <td class="p-1"><input name="label_{{ loop.index0 }}" value="{{ it.suggested_label }}" class="border rounded p-1 w-full"></td>
+          <td class="p-1"><input name="path_{{ loop.index0 }}" value="{{ it.path }}" class="border rounded p-1 w-full" readonly></td>
+          <td class="p-1">{{ "✓" if it.has_claude else "" }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <input type="hidden" name="scan_count" value="{{ scan|length }}">
+      <p class="text-sm muted mt-3">{{ scan|length }} проектов найдено. Включённые — будут импортированы.</p>
+    </section>
+    <button class="bg-blue-600 text-white px-4 py-2 rounded">Сохранить и импортировать</button>
+    {% else %}
+    <button name="action" value="scan" class="bg-blue-600 text-white px-4 py-2 rounded">Просканировать projects_root</button>
+    {% endif %}
+  </form>
+</main>
+</body>
+</html>
