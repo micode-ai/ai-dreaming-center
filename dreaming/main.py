@@ -20,6 +20,7 @@ from dreaming.routes.root import router as root_router
 from dreaming.routes.setup import router as setup_router
 from dreaming.routes.projects import router as projects_router
 from dreaming.routes.settings import router as settings_router
+from dreaming.routes.api import router as api_router
 
 
 @asynccontextmanager
@@ -68,4 +69,5 @@ app.include_router(root_router)
 app.include_router(setup_router)
 app.include_router(projects_router)
 app.include_router(settings_router)
+app.include_router(api_router)
 app.mount("/static", StaticFiles(directory="dreaming/static"), name="static")
