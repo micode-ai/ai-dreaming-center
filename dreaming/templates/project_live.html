@@ -1,0 +1,30 @@
+{% extends "_project_layout.html" %}
+{% set active='live' %}
+{% block project_content %}
+{% if active_runs %}
+<div class="space-y-4">
+{% for key, agent in active_runs %}
+  <div class="bg-white rounded shadow p-3">
+    <div class="flex items-baseline gap-3 mb-2">
+      <h2 class="font-semibold">{{ agent }}</h2>
+      <span class="font-mono text-xs muted">{{ key }}</span>
+      <form method="post" action="/p/{{ project.slug }}/live/kill/{{ agent }}" class="ml-auto">
+        <button class="text-xs px-2 py-1 border rounded text-red-600">Kill</button>
+      </form>
+    </div>
+    <pre id="log-{{ agent }}" class="bg-slate-900 text-slate-100 rounded p-3 overflow-auto max-h-96 text-xs"></pre>
+    <script>
+      (() => {
+        const target = document.getElementById('log-{{ agent }}');
+        const es = new EventSource('/p/{{ project.slug }}/live/stream/{{ agent }}');
+        es.addEventListener('log', e => { target.textContent += e.data + "\n"; target.scrollTop = target.scrollHeight; });
+        es.addEventListener('end', () => { es.close(); target.textContent += "\n[stream ended]\n"; });
+      })();
+    </script>
+  </div>
+{% endfor %}
+</div>
+{% else %}
+<p class="muted">{{ "p.no_active_runs" | t(locale=locale) }}</p>
+{% endif %}
+{% endblock %}

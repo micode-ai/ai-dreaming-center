@@ -1,0 +1,48 @@
+{% extends "_project_layout.html" %}
+{% set active='rotation' %}
+{% block project_content %}
+<p class="muted mb-3">{{ rotation|length }} agents in DB; {{ fs_count }} on disk in {{ project.working_dir }}/.claude/agents/</p>
+<table class="w-full bg-white rounded shadow text-sm">
+  <thead class="text-left border-b"><tr>
+    <th class="p-2">agent</th>
+    <th class="p-2">tier</th>
+    <th class="p-2">enabled</th>
+    <th class="p-2">last_studied</th>
+    <th class="p-2"></th>
+  </tr></thead>
+  <tbody>
+  {% for r in rotation %}
+  <tr class="border-b">
+    <td class="p-2 font-mono">{{ r.agent_name }}</td>
+    <td class="p-2">
+      <form method="post" action="/p/{{ project.slug }}/rotation/tier" class="inline">
+        <input type="hidden" name="agent_name" value="{{ r.agent_name }}">
+        <select name="tier" onchange="this.form.submit()" class="border rounded p-1 text-xs">
+          <option value="1" {% if r.tier==1 %}selected{% endif %}>P1</option>
+          <option value="2" {% if r.tier==2 %}selected{% endif %}>P2</option>
+          <option value="3" {% if r.tier==3 %}selected{% endif %}>P3</option>
+        </select>
+      </form>
+    </td>
+    <td class="p-2">
+      <form method="post" action="/p/{{ project.slug }}/rotation/toggle" class="inline">
+        <input type="hidden" name="agent_name" value="{{ r.agent_name }}">
+        <button class="text-xs px-2 py-1 border rounded">{{ "✓" if r.enabled else "—" }}</button>
+      </form>
+    </td>
+    <td class="p-2 text-xs muted">{{ r.last_studied_at or '—' }}</td>
+    <td class="p-2">
+      {% set running_key = project.slug ~ ":" ~ r.agent_name %}
+      {% if running_key in running_keys %}
+        <span class="text-xs text-amber-600">running…</span>
+      {% else %}
+        <form method="post" action="/p/{{ project.slug }}/rotation/start/{{ r.agent_name }}" class="inline">
+          <button class="text-xs bg-blue-600 text-white rounded px-2 py-1">Start session</button>
+        </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

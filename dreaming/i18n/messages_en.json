@@ -7,5 +7,20 @@
   "projects.title": "Projects",
   "projects.empty": "No projects registered",
   "setup.title": "First-Time Setup",
-  "settings.title": "Global Settings"
+  "settings.title": "Global Settings",
+  "p.dashboard": "Dashboard",
+  "p.live": "Live Log",
+  "p.rotation": "Rotation",
+  "p.settings": "Settings",
+  "p.metrics.success": "Success",
+  "p.metrics.failed": "Failed",
+  "p.metrics.timeout": "Timeout",
+  "p.recent_sessions": "Recent sessions",
+  "p.col.agent": "Agent",
+  "p.col.status": "Status",
+  "p.col.topic": "Topic",
+  "p.col.started": "Started at",
+  "p.no_sessions_yet": "No sessions yet",
+  "p.active_runs": "Active runs",
+  "p.no_active_runs": "Nothing running"
 }
