@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from dreaming.config import settings as load_settings
 from dreaming.services.db import SqliteDB
 from dreaming.services.projects import ProjectsService
+from dreaming.services.config_resolver import ConfigResolver
 
 
 @asynccontextmanager
@@ -22,6 +23,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="AI Dreaming Center", lifespan=lifespan)
+
+
+def get_resolver(request) -> ConfigResolver:
+    """Per-request factory; fresh resolver per request — caches project_settings."""
+    return ConfigResolver(request.app.state.projects, request.app.state.settings)
 
 
 @app.get("/health")
