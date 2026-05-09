@@ -25,12 +25,24 @@ async def projects_toggle(request: Request, project_id: int):
     p = await request.app.state.projects.get_by_id(project_id)
     if not p:
         raise HTTPException(404)
-    await request.app.state.projects.update(project_id, enabled=not p.enabled)
+    new_enabled = not p.enabled
+    await request.app.state.projects.update(project_id, enabled=new_enabled)
+    refreshed = await request.app.state.projects.get_by_id(project_id)
+    if refreshed:
+        from dreaming.services.scheduler import register_project_jobs, unregister_project_jobs
+        if new_enabled:
+            await register_project_jobs(request.app.state.scheduler, request.app.state, refreshed)
+        else:
+            await unregister_project_jobs(request.app.state.scheduler, refreshed)
     return RedirectResponse("/projects", status_code=303)
 
 
 @router.post("/projects/{project_id}/delete")
 async def projects_delete(request: Request, project_id: int):
+    p = await request.app.state.projects.get_by_id(project_id)
+    if p:
+        from dreaming.services.scheduler import unregister_project_jobs
+        await unregister_project_jobs(request.app.state.scheduler, p)
     await request.app.state.projects.delete(project_id)
     return RedirectResponse("/projects", status_code=303)
 
@@ -45,5 +57,9 @@ async def projects_import(request: Request, root: str = Form(...)):
          "working_dir": m["path"], "enabled": True}
         for m in items_meta
     ]
-    await request.app.state.projects.import_from_scan(items)
+    created = await request.app.state.projects.import_from_scan(items)
+    if created:
+        from dreaming.services.scheduler import register_project_jobs
+        for proj in created:
+            await register_project_jobs(request.app.state.scheduler, request.app.state, proj)
     return RedirectResponse("/projects", status_code=303)
