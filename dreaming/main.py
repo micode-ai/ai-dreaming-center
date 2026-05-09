@@ -1,6 +1,7 @@
 """ai-dreaming-center FastAPI entry point."""
 from __future__ import annotations
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -9,6 +10,7 @@ from dreaming.config import settings as load_settings
 from dreaming.services.db import SqliteDB
 from dreaming.services.projects import ProjectsService
 from dreaming.services.config_resolver import ConfigResolver
+from dreaming.services.i18n import I18n
 from dreaming.middleware.setup_gate import setup_gate_middleware
 from dreaming.middleware.project_resolver import project_resolver_middleware
 
@@ -20,6 +22,12 @@ async def lifespan(app: FastAPI):
     await app.state.db.connect()
     app.state.projects = ProjectsService(app.state.db)
     app.state.templates = Jinja2Templates(directory="dreaming/templates")
+    app.state.i18n = I18n(Path("dreaming/i18n"))
+
+    def _t(key: str, locale: str | None = None, **fmt) -> str:
+        return app.state.i18n.t(key, locale=locale, **fmt)
+
+    app.state.templates.env.filters["t"] = _t
     try:
         yield
     finally:
