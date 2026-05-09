@@ -3,11 +3,14 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from fastapi.templating import Jinja2Templates
 
 from dreaming.config import settings as load_settings
 from dreaming.services.db import SqliteDB
 from dreaming.services.projects import ProjectsService
 from dreaming.services.config_resolver import ConfigResolver
+from dreaming.middleware.setup_gate import setup_gate_middleware
+from dreaming.middleware.project_resolver import project_resolver_middleware
 
 
 @asynccontextmanager
@@ -16,6 +19,7 @@ async def lifespan(app: FastAPI):
     app.state.db = SqliteDB(app.state.settings.db_path)
     await app.state.db.connect()
     app.state.projects = ProjectsService(app.state.db)
+    app.state.templates = Jinja2Templates(directory="dreaming/templates")
     try:
         yield
     finally:
@@ -23,6 +27,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="AI Dreaming Center", lifespan=lifespan)
+
+
+# Middleware order matters: Starlette runs registered-LAST FIRST on the way in.
+# We want setup_gate as the OUTER (runs first; redirects to /setup when DB empty),
+# and project_resolver as INNER (sets request.state.project for /p/{slug}/).
+app.middleware("http")(project_resolver_middleware)
+app.middleware("http")(setup_gate_middleware)
 
 
 def get_resolver(request) -> ConfigResolver:

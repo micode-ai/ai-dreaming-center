@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Проект не найден</title></head>
+<body style="font-family:sans-serif;max-width:600px;margin:80px auto;">
+<h1>Проект «{{ slug }}» не найден</h1>
+{% if is_disabled %}
+<p>Этот проект отключён в реестре.</p>
+{% else %}
+<p>Проверьте slug или зарегистрируйте проект.</p>
+{% endif %}
+<p><a href="/projects">→ к списку проектов</a></p>
+</body>
+</html>
