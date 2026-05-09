@@ -1,0 +1,365 @@
+"""SQLite async client for ai-dreaming-center.
+
+Greenfield schema: forks ALC's _SCHEMA verbatim; injects project_id where the
+spec requires; new projects + project_settings registries on top.
+
+Wave 0 exposes only generic helpers (`execute`, `fetch_one`, `fetch_all`).
+ALC's full db.py has ~50 domain methods (`finish_session`, `set_agent_tier`,
+`create_orchestration_run`, `append_orchestration_message`,
+`insert_ai_usage_events`, `reconcile_stale_sessions`, ...) which Wave 1+ will
+port in lockstep with the routes that need them.
+"""
+from __future__ import annotations
+import json
+import logging
+import uuid
+from pathlib import Path
+from typing import Any
+import aiosqlite
+
+log = logging.getLogger(__name__)
+
+
+_SCHEMA = """
+-- + dreaming: project registry
+CREATE TABLE IF NOT EXISTS projects (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug         TEXT UNIQUE NOT NULL,
+    label        TEXT NOT NULL,
+    working_dir  TEXT NOT NULL,
+    enabled      INTEGER NOT NULL DEFAULT 1,
+    is_default   INTEGER NOT NULL DEFAULT 0,
+    sort_order   INTEGER NOT NULL DEFAULT 0,
+    color        TEXT,
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_projects_enabled ON projects(enabled, sort_order);
+
+-- + dreaming: KV overrides per project
+CREATE TABLE IF NOT EXISTS project_settings (
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    key        TEXT NOT NULL,
+    value      TEXT NOT NULL,
+    PRIMARY KEY (project_id, key)
+);
+
+-- == ALC tables (verbatim columns) + project_id ============================
+
+CREATE TABLE IF NOT EXISTS agent_learning_sessions (
+    id TEXT PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    agent_name TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    status TEXT,
+    tokens_total INTEGER,
+    model TEXT,
+    topic TEXT,
+    note_path TEXT,
+    error_message TEXT,
+    entity_page TEXT,
+    confidence REAL
+);
+CREATE INDEX IF NOT EXISTS idx_als_agent ON agent_learning_sessions (agent_name);
+CREATE INDEX IF NOT EXISTS idx_als_started ON agent_learning_sessions (started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_als_project_started
+    ON agent_learning_sessions (project_id, started_at DESC);
+
+-- + dreaming: PK rebuilt as (project_id, agent_name)
+CREATE TABLE IF NOT EXISTS agent_learning_rotation (
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    agent_name TEXT NOT NULL,
+    tier INTEGER DEFAULT 2,
+    last_studied_at TEXT,
+    enabled INTEGER DEFAULT 1,
+    PRIMARY KEY (project_id, agent_name)
+);
+
+CREATE TABLE IF NOT EXISTS custom_topics (
+    id TEXT PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    module TEXT DEFAULT '',
+    target_agents TEXT DEFAULT '',
+    question TEXT DEFAULT '',
+    why_important TEXT DEFAULT '',
+    created_at TEXT NOT NULL,
+    active INTEGER DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_topics_project_active
+    ON custom_topics (project_id, active);
+
+CREATE TABLE IF NOT EXISTS orchestrator_runs (
+    id TEXT PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    external_id TEXT,
+    goal TEXT NOT NULL,
+    status TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    error_message TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_or_runs_started ON orchestrator_runs (started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_or_runs_project_started
+    ON orchestrator_runs (project_id, started_at DESC);
+
+CREATE TABLE IF NOT EXISTS orchestrator_nodes (
+    id TEXT PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    run_id TEXT NOT NULL,
+    external_id TEXT,
+    parent_node_id TEXT,
+    agent_name TEXT NOT NULL,
+    role TEXT NOT NULL,
+    status TEXT NOT NULL,
+    current_action TEXT,
+    progress REAL,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    last_heartbeat_at TEXT,
+    FOREIGN KEY(run_id) REFERENCES orchestrator_runs(id)
+);
+CREATE INDEX IF NOT EXISTS idx_or_nodes_run ON orchestrator_nodes (run_id);
+CREATE INDEX IF NOT EXISTS idx_or_nodes_parent ON orchestrator_nodes (parent_node_id);
+CREATE INDEX IF NOT EXISTS idx_or_nodes_project_run
+    ON orchestrator_nodes (project_id, run_id);
+
+CREATE TABLE IF NOT EXISTS orchestrator_messages (
+    id TEXT PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    run_id TEXT NOT NULL,
+    node_id TEXT NOT NULL,
+    ts TEXT NOT NULL,
+    author TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    text TEXT NOT NULL,
+    delivery_status TEXT,
+    client_message_id TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_or_msg_node_ts ON orchestrator_messages (node_id, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_or_msg_project_node_ts
+    ON orchestrator_messages (project_id, node_id, ts DESC);
+
+-- NOT denormalized: project reached via JOIN to orchestrator_runs
+CREATE TABLE IF NOT EXISTS orchestrator_events (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    ts TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    payload_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_or_evt_run_ts ON orchestrator_events (run_id, ts DESC);
+
+-- NOT denormalized
+CREATE TABLE IF NOT EXISTS orchestrator_stages (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    stage_index INTEGER NOT NULL,
+    stage_key TEXT NOT NULL,
+    label TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    iteration INTEGER NOT NULL DEFAULT 1,
+    started_at TEXT,
+    finished_at TEXT,
+    FOREIGN KEY(run_id) REFERENCES orchestrator_runs(id)
+);
+CREATE INDEX IF NOT EXISTS idx_or_stages_run ON orchestrator_stages (run_id, stage_index);
+
+-- NOT denormalized
+CREATE TABLE IF NOT EXISTS orchestrator_gate_verdicts (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    stage_id TEXT NOT NULL,
+    verdict TEXT NOT NULL,
+    returned_to_stage_id TEXT,
+    iteration INTEGER NOT NULL DEFAULT 1,
+    comment TEXT,
+    decided_by_node_id TEXT,
+    ts TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_or_verdicts_run ON orchestrator_gate_verdicts (run_id, ts DESC);
+
+-- NOT denormalized
+CREATE TABLE IF NOT EXISTS orchestrator_artifacts (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    stage_id TEXT,
+    node_id TEXT,
+    kind TEXT NOT NULL,
+    title TEXT NOT NULL,
+    url TEXT,
+    content_preview TEXT,
+    ts TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_or_artifacts_run ON orchestrator_artifacts (run_id, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_or_artifacts_stage ON orchestrator_artifacts (stage_id);
+
+CREATE TABLE IF NOT EXISTS ai_usage_events (
+    message_id TEXT PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    ts TEXT NOT NULL,
+    ts_date TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    project_slug TEXT NOT NULL,
+    project_cwd TEXT,
+    git_branch TEXT,
+    model TEXT,
+    is_sidechain INTEGER NOT NULL DEFAULT 0,
+    agent_id TEXT,
+    input_tokens INTEGER DEFAULT 0,
+    output_tokens INTEGER DEFAULT 0,
+    cache_read_tokens INTEGER DEFAULT 0,
+    cache_creation_tokens INTEGER DEFAULT 0,
+    source_file TEXT NOT NULL,
+    source_line INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_aue_ts_date   ON ai_usage_events (ts_date);
+CREATE INDEX IF NOT EXISTS idx_aue_project   ON ai_usage_events (project_slug, ts_date);
+CREATE INDEX IF NOT EXISTS idx_aue_model     ON ai_usage_events (model, ts_date);
+CREATE INDEX IF NOT EXISTS idx_aue_session   ON ai_usage_events (session_id);
+CREATE INDEX IF NOT EXISTS idx_aue_sidechain ON ai_usage_events (is_sidechain, ts_date);
+CREATE INDEX IF NOT EXISTS idx_aue_dreaming_project_ts
+    ON ai_usage_events (project_id, ts_date);
+
+-- + dreaming: PK rebuilt as (project_id, path); rest of columns verbatim
+CREATE TABLE IF NOT EXISTS ai_usage_files (
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    path TEXT NOT NULL,
+    project_slug TEXT NOT NULL,
+    is_subagent INTEGER NOT NULL DEFAULT 0,
+    byte_offset INTEGER NOT NULL DEFAULT 0,
+    file_size INTEGER NOT NULL DEFAULT 0,
+    mtime REAL NOT NULL DEFAULT 0,
+    lines_parsed INTEGER NOT NULL DEFAULT 0,
+    events_inserted INTEGER NOT NULL DEFAULT 0,
+    parse_errors INTEGER NOT NULL DEFAULT 0,
+    is_missing INTEGER NOT NULL DEFAULT 0,
+    last_scanned_at TEXT,
+    PRIMARY KEY (project_id, path)
+);
+CREATE INDEX IF NOT EXISTS idx_auf_project ON ai_usage_files (project_slug);
+
+CREATE TABLE IF NOT EXISTS orchestrator_tts_messages (
+    id TEXT PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    run_id TEXT NOT NULL,
+    node_id TEXT,
+    agent_name TEXT,
+    channel TEXT NOT NULL,
+    text TEXT NOT NULL,
+    ts TEXT NOT NULL,
+    dedup_hash TEXT NOT NULL UNIQUE,
+    cleared INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY(run_id) REFERENCES orchestrator_runs(id)
+);
+CREATE INDEX IF NOT EXISTS idx_or_tts_run_ts ON orchestrator_tts_messages (run_id, ts);
+CREATE INDEX IF NOT EXISTS idx_or_tts_project_ts
+    ON orchestrator_tts_messages (project_id, ts DESC);
+"""
+
+
+class SqliteDB:
+    """Async SQLite wrapper with a single persistent connection (WAL mode)."""
+
+    def __init__(self, path: str):
+        self._path = path
+        self._conn: aiosqlite.Connection | None = None
+
+    async def connect(self) -> None:
+        Path(self._path).parent.mkdir(parents=True, exist_ok=True)
+        self._conn = await aiosqlite.connect(self._path)
+        self._conn.row_factory = aiosqlite.Row
+        # PRAGMAs MUST run outside of executescript (which wraps statements in
+        # a transaction; PRAGMA journal_mode is a no-op inside a transaction).
+        await self._conn.execute("PRAGMA journal_mode=WAL;")
+        await self._conn.execute("PRAGMA foreign_keys=ON;")
+        await self._conn.executescript(_SCHEMA)
+        await self._migrate_orchestration()
+        await self._conn.commit()
+        log.info("SQLite connected: %s", self._path)
+
+    async def _migrate_orchestration(self) -> None:
+        """Idempotent migrations for orchestration extensions (stage_id on nodes,
+        artifact dedup, orchestrator_questions table). Greenfield-safe."""
+        async with self._conn.execute("PRAGMA table_info(orchestrator_nodes)") as cur:
+            cols = {row[1] for row in await cur.fetchall()}
+        if "stage_id" not in cols:
+            try:
+                await self._conn.execute(
+                    "ALTER TABLE orchestrator_nodes ADD COLUMN stage_id TEXT"
+                )
+            except Exception as e:
+                log.warning("Failed to add stage_id column: %s", e)
+
+        async with self._conn.execute(
+            "PRAGMA table_info(orchestrator_artifacts)"
+        ) as cur:
+            art_cols = {row[1] for row in await cur.fetchall()}
+        if "dedup_hash" not in art_cols:
+            try:
+                await self._conn.execute(
+                    "ALTER TABLE orchestrator_artifacts ADD COLUMN dedup_hash TEXT"
+                )
+            except Exception as e:
+                log.warning("Failed to add dedup_hash column: %s", e)
+        try:
+            await self._conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_or_artifacts_dedup "
+                "ON orchestrator_artifacts (run_id, dedup_hash) "
+                "WHERE dedup_hash IS NOT NULL"
+            )
+            await self._conn.commit()
+        except Exception as e:
+            log.warning("Failed to create idx_or_artifacts_dedup: %s", e)
+
+        try:
+            await self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS orchestrator_questions (
+                    id TEXT PRIMARY KEY,
+                    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                    run_id TEXT NOT NULL,
+                    node_id TEXT NOT NULL,
+                    tool_use_id TEXT NOT NULL UNIQUE,
+                    questions_json TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    asked_at TEXT NOT NULL,
+                    answered_at TEXT,
+                    answer_text TEXT,
+                    tts_reminded_at TEXT
+                )
+                """
+            )
+            await self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_questions_run "
+                "ON orchestrator_questions(run_id, status)"
+            )
+            await self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_questions_pending "
+                "ON orchestrator_questions(status, asked_at)"
+            )
+            await self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_questions_project_run_status "
+                "ON orchestrator_questions(project_id, run_id, status)"
+            )
+            await self._conn.commit()
+        except Exception as e:
+            log.warning("Failed to create orchestrator_questions table: %s", e)
+
+    async def close(self) -> None:
+        if self._conn:
+            await self._conn.close()
+            self._conn = None
+
+    async def execute(self, sql: str, params: tuple = ()) -> None:
+        await self._conn.execute(sql, params)
+        await self._conn.commit()
+
+    async def fetch_one(self, sql: str, params: tuple = ()):
+        async with self._conn.execute(sql, params) as cur:
+            return await cur.fetchone()
+
+    async def fetch_all(self, sql: str, params: tuple = ()) -> list:
+        async with self._conn.execute(sql, params) as cur:
+            return list(await cur.fetchall())

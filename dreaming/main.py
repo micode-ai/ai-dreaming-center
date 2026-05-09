@@ -5,12 +5,18 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from dreaming.config import settings as load_settings
+from dreaming.services.db import SqliteDB
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.settings = load_settings()
-    yield
+    app.state.db = SqliteDB(app.state.settings.db_path)
+    await app.state.db.connect()
+    try:
+        yield
+    finally:
+        await app.state.db.close()
 
 
 app = FastAPI(title="AI Dreaming Center", lifespan=lifespan)
