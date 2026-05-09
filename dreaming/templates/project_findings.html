@@ -21,15 +21,27 @@
     <th class="p-2">status</th>
     <th class="p-2">priority</th>
     <th class="p-2">module</th>
+    <th class="p-2"></th>
   </tr></thead>
   <tbody>
   {% for it in items %}
   <tr class="border-b">
-    <td class="p-2 font-mono text-xs">{{ it.id or it.slug or '—' }}</td>
+    <td class="p-2 font-mono text-xs"><a class="text-blue-600 underline" href="/p/{{ project.slug }}/findings/{{ it.id }}">{{ it.id or it.slug or '—' }}</a></td>
     <td class="p-2">{{ it.title or '—' }}</td>
     <td class="p-2 text-xs"><span class="font-mono">{{ it.status or '—' }}</span></td>
     <td class="p-2 text-xs">{{ it.priority or '—' }}</td>
     <td class="p-2 text-xs muted">{{ it.module or '' }}</td>
+    <td class="p-2 text-xs whitespace-nowrap">
+      {% if it.status != 'closed' %}
+      <form method="post" action="/p/{{ project.slug }}/findings/{{ it.id }}/close" class="inline">
+        <button class="text-xs px-2 py-1 border rounded">close</button>
+      </form>
+      {% endif %}
+      <form method="post" action="/p/{{ project.slug }}/findings/{{ it.id }}/delete" class="inline"
+            onsubmit="return confirm('Удалить {{ it.id }}?')">
+        <button class="text-xs px-2 py-1 border rounded text-red-600">delete</button>
+      </form>
+    </td>
   </tr>
   {% endfor %}
   </tbody>

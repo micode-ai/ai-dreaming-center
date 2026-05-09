@@ -8,7 +8,10 @@
 </div>
 {% elif not status.exists %}
 <p class="muted">Wiki не найдена. Каталог <code>{{ status.wiki_dir }}</code> не существует.</p>
-<p class="text-xs muted mt-2">Wiki bootstrap-команда — Wave 2.5; пока создай руками или укажи существующий путь.</p>
+<p class="text-xs muted mt-2">Можно запустить bootstrap прямо из UI — Claude CLI выполнит <code>/wiki-bootstrap</code> в рабочем каталоге проекта.</p>
+<form method="post" action="/p/{{ project.slug }}/wiki/bootstrap" class="mt-4">
+  <button class="bg-blue-600 text-white text-sm rounded px-3 py-1">Run /wiki-bootstrap (запустит claude)</button>
+</form>
 {% else %}
 <div class="bg-white p-4 rounded shadow">
   <p class="text-sm muted">Источник: <code>{{ status.wiki_dir }}</code></p>
