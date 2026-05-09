@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+venv/
+data/
+config.yaml
+.idea/
+.vscode/
+*.db
+*.db-shm
+*.db-wal

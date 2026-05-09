@@ -1,0 +1,61 @@
+# AI Dreaming Center Configuration
+# Copy this to config.yaml and adjust values for your environment.
+
+# --- Database ---
+db_path: "data/dreaming.db"               # SQLite file (relative to app root or absolute)
+
+# --- Claude CLI ---
+claude_path: "claude"                    # Path to claude CLI (or just "claude" if in PATH)
+projects_root: "D:\\Work\\micode"        # Root directory for project discovery
+orchestration_local_runner: "claude"     # claude | codex | continue
+codex_path: "codex"                      # used when orchestration_local_runner=codex
+codex_api_key: ""
+continue_path: ".continue\\continue.cmd"
+model_backend_profile: "native"          # native | openrouter | openai_proxy
+anthropic_base_url: ""
+anthropic_auth_token: ""
+anthropic_api_key: ""
+openai_proxy_base_url: ""
+openai_proxy_api_key: ""
+model: "sonnet"                          # Claude model: sonnet / haiku / opus
+max_turns: 25
+timeout_minutes: 20
+self_study_command: "/self-study"
+question_reminder_minutes: 15
+question_expire_minutes: 60
+
+# --- Scheduling ---
+cron_expression: "0 2 * * *"
+cron_enabled: true
+agents_per_night: 5
+max_concurrent: 2
+wait_between_sec: 5
+
+# --- Paths ---
+obsidian_vault: ""
+agents_dir: ""
+tech_debt_dir: ""
+contracts_dir: ""
+
+# --- Jira integration ---
+jira_url: ""
+jira_email: ""
+jira_api_token: ""
+jira_project_key: ""
+jira_user_account_id: ""
+
+# --- Harness integration (orchestration UI) ---
+harness_base_url: ""
+harness_api_key: ""
+harness_timeout_sec: 30
+harness_stream_enabled: true
+harness_start_path: "/api/orchestration/start"
+harness_events_stream_path: "/api/orchestration/{run_id}/stream"
+harness_events_path: "/api/orchestration/{run_id}/events"
+harness_send_input_path: "/api/orchestration/{run_id}/nodes/{node_id}/message"
+harness_verify_tls: true
+
+# --- Server ---
+host: "0.0.0.0"
+port: 8086
+default_locale: "ru"
