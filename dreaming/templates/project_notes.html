@@ -1,0 +1,23 @@
+{% extends "_project_layout.html" %}
+{% set active='notes' %}
+{% block project_content %}
+<p class="text-xs muted mb-3">Источник: <code>{{ notes_dir }}</code> {% if not exists %}<span class="text-red-600">(каталог не существует)</span>{% endif %}</p>
+{% if files %}
+<table class="w-full bg-white rounded shadow text-sm">
+  <thead class="text-left border-b"><tr>
+    <th class="p-2">путь</th>
+    <th class="p-2 text-right">размер</th>
+  </tr></thead>
+  <tbody>
+  {% for f in files %}
+  <tr class="border-b">
+    <td class="p-2"><a class="text-blue-600 underline font-mono text-xs" href="/p/{{ project.slug }}/notes/raw?path={{ f.relative_path }}">{{ f.relative_path }}</a></td>
+    <td class="p-2 text-right text-xs muted">{{ f.size }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Конспектов нет. Они появляются после успешных self-study сессий (записываются в этот каталог).</p>
+{% endif %}
+{% endblock %}
