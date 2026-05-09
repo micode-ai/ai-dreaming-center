@@ -16,6 +16,8 @@
   "p.notes": "Notes",
   "p.findings": "Findings",
   "p.tech_debt": "Tech Debt",
+  "p.ideas": "Product Ideas",
+  "p.wiki": "Wiki",
   "p.settings": "Settings",
   "p.metrics.success": "Success",
   "p.metrics.failed": "Failed",

@@ -1,0 +1,50 @@
+{% extends "_project_layout.html" %}
+{% set active='ideas' %}
+{% block project_content %}
+{% if not ideas_dir_set %}
+<div class="bg-amber-50 border border-amber-200 rounded p-4 mb-4">
+  <p class="text-sm">Каталог product-ideas не настроен.</p>
+  <p class="text-xs muted mt-2">Зайди в <a class="text-blue-600 underline" href="/p/{{ project.slug }}/settings">Settings</a> и пропиши <code>product_ideas_dir</code>.</p>
+</div>
+{% elif not ideas_dir_exists %}
+<p class="muted">Каталог <code>{{ ideas_dir }}</code> не существует.</p>
+{% elif error %}
+<p class="text-sm text-red-700">Ошибка парсинга: <code>{{ error }}</code></p>
+{% elif items %}
+<div class="mb-3 flex items-center gap-3">
+  <p class="text-xs muted">{{ items|length }} ideas in <code>{{ ideas_dir }}</code></p>
+  {% if statuses %}
+  <form method="get" class="ml-auto">
+    <select name="status" onchange="this.form.submit()" class="border rounded p-1 text-xs">
+      <option value="">все статусы</option>
+      {% for s in statuses %}
+      <option value="{{ s }}" {% if s==selected_status %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </form>
+  {% endif %}
+</div>
+<table class="w-full bg-white rounded shadow text-sm">
+  <thead class="text-left border-b"><tr>
+    <th class="p-2">id</th>
+    <th class="p-2">title</th>
+    <th class="p-2">status</th>
+    <th class="p-2">priority</th>
+    <th class="p-2">jira</th>
+  </tr></thead>
+  <tbody>
+  {% for it in items %}
+  <tr class="border-b">
+    <td class="p-2 font-mono text-xs">{{ it.id or it.slug or '—' }}</td>
+    <td class="p-2">{{ it.title or '—' }}</td>
+    <td class="p-2 text-xs"><span class="font-mono">{{ it.status or '—' }}</span></td>
+    <td class="p-2 text-xs">{{ it.priority or '—' }}</td>
+    <td class="p-2 font-mono text-xs">{{ it.jira_ticket or '' }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">В <code>{{ ideas_dir }}</code> нет markdown файлов.</p>
+{% endif %}
+{% endblock %}

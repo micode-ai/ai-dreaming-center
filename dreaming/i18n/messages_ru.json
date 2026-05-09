@@ -16,6 +16,8 @@
   "p.notes": "Конспекты",
   "p.findings": "Findings",
   "p.tech_debt": "Тех-долг",
+  "p.ideas": "Идеи продукта",
+  "p.wiki": "Wiki",
   "p.settings": "Настройки",
   "p.metrics.success": "Успешные",
   "p.metrics.failed": "Сбой",
