@@ -7,5 +7,20 @@
   "projects.title": "Проекты",
   "projects.empty": "Нет зарегистрированных проектов",
   "setup.title": "Первичная настройка",
-  "settings.title": "Глобальные настройки"
+  "settings.title": "Глобальные настройки",
+  "p.dashboard": "Панель",
+  "p.live": "Логи",
+  "p.rotation": "Ротация",
+  "p.settings": "Настройки",
+  "p.metrics.success": "Успешные",
+  "p.metrics.failed": "Сбой",
+  "p.metrics.timeout": "Таймаут",
+  "p.recent_sessions": "Последние сессии",
+  "p.col.agent": "Агент",
+  "p.col.status": "Статус",
+  "p.col.topic": "Тема",
+  "p.col.started": "Начало",
+  "p.no_sessions_yet": "Сессий ещё нет",
+  "p.active_runs": "Активные сессии",
+  "p.no_active_runs": "Ничего не запущено"
 }

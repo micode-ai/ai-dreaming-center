@@ -1,0 +1,49 @@
+{% extends "_project_layout.html" %}
+{% set active='dashboard' %}
+{% block project_content %}
+<div class="grid grid-cols-3 gap-4 mb-6">
+  <div class="bg-white p-4 rounded shadow">
+    <div class="text-xs muted">{{ "p.metrics.success" | t(locale=locale) }}</div>
+    <div class="text-3xl font-bold text-green-700">{{ stats.success or 0 }}</div>
+  </div>
+  <div class="bg-white p-4 rounded shadow">
+    <div class="text-xs muted">{{ "p.metrics.failed" | t(locale=locale) }}</div>
+    <div class="text-3xl font-bold text-red-700">{{ stats.failed or 0 }}</div>
+  </div>
+  <div class="bg-white p-4 rounded shadow">
+    <div class="text-xs muted">{{ "p.metrics.timeout" | t(locale=locale) }}</div>
+    <div class="text-3xl font-bold text-amber-700">{{ stats.timeout or 0 }}</div>
+  </div>
+</div>
+
+<h2 class="font-semibold mb-2">{{ "p.recent_sessions" | t(locale=locale) }}</h2>
+<table class="w-full bg-white rounded shadow text-sm">
+  <thead class="text-left border-b"><tr>
+    <th class="p-2">{{ "p.col.agent" | t(locale=locale) }}</th>
+    <th class="p-2">{{ "p.col.status" | t(locale=locale) }}</th>
+    <th class="p-2">{{ "p.col.topic" | t(locale=locale) }}</th>
+    <th class="p-2">{{ "p.col.started" | t(locale=locale) }}</th>
+  </tr></thead>
+  <tbody>
+  {% for s in sessions %}
+  <tr class="border-b">
+    <td class="p-2 font-mono">{{ s.agent_name }}</td>
+    <td class="p-2">{{ s.status or '—' }}</td>
+    <td class="p-2 text-xs">{{ s.topic or '' }}</td>
+    <td class="p-2 text-xs muted">{{ s.started_at }}</td>
+  </tr>
+  {% else %}
+  <tr><td class="p-3 muted" colspan="4">{{ "p.no_sessions_yet" | t(locale=locale) }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2 class="font-semibold mt-6 mb-2">{{ "p.active_runs" | t(locale=locale) }}</h2>
+{% if active_keys %}
+<ul class="bg-white rounded shadow p-2">
+  {% for key in active_keys %}<li class="font-mono text-sm">{{ key }}</li>{% endfor %}
+</ul>
+{% else %}
+<p class="muted">{{ "p.no_active_runs" | t(locale=locale) }}</p>
+{% endif %}
+{% endblock %}
