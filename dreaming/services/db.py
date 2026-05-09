@@ -10,9 +10,7 @@ ALC's full db.py has ~50 domain methods (`finish_session`, `set_agent_tier`,
 port in lockstep with the routes that need them.
 """
 from __future__ import annotations
-import json
 import logging
-import uuid
 from pathlib import Path
 from typing import Any
 import aiosqlite
