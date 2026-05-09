@@ -1,0 +1,23 @@
+{% extends "_project_layout.html" %}
+{% set active='settings' %}
+{% block project_content %}
+<p class="muted mb-3">Wave 1 minimal: 5 keys. Wave 2 will expose all ~80 keys.</p>
+<form method="post" action="/p/{{ project.slug }}/settings" class="space-y-4 bg-white p-4 rounded shadow max-w-2xl">
+{% for r in rows %}
+  <div class="border-b pb-3">
+    <div class="text-sm font-mono mb-1">{{ r.key }}</div>
+    <div class="text-xs muted mb-2">global: <code>{{ r.global }}</code></div>
+    <label class="inline-flex items-center mr-3 text-sm">
+      <input type="radio" name="action_{{ r.key }}" value="inherit" {% if not r.is_overridden %}checked{% endif %}>
+      <span class="ml-1">inherit</span>
+    </label>
+    <label class="inline-flex items-center text-sm">
+      <input type="radio" name="action_{{ r.key }}" value="override" {% if r.is_overridden %}checked{% endif %}>
+      <span class="ml-1">override:</span>
+      <input name="value_{{ r.key }}" value="{{ r.override if r.is_overridden else '' }}" class="border rounded p-1 ml-2 font-mono text-sm">
+    </label>
+  </div>
+{% endfor %}
+<button class="bg-blue-600 text-white rounded px-3 py-1">Save</button>
+</form>
+{% endblock %}
