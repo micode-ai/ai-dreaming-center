@@ -39,7 +39,15 @@
     <td class="p-2">{{ it.title or '—' }}</td>
     <td class="p-2 text-xs"><span class="font-mono">{{ it.status or '—' }}</span></td>
     <td class="p-2 text-xs">{{ it.priority or '—' }}</td>
-    <td class="p-2 font-mono text-xs">{{ it.jira_ticket or '' }}</td>
+    <td class="p-2 font-mono text-xs">
+      {% if it.jira_ticket %}
+      <span>{{ it.jira_ticket }}</span>
+      {% else %}
+      <form method="post" action="/p/{{ project.slug }}/ideas/{{ it.id or it.slug }}/jira" class="inline">
+        <button class="text-xs px-2 py-1 border rounded text-blue-600">→ Jira</button>
+      </form>
+      {% endif %}
+    </td>
   </tr>
   {% endfor %}
   </tbody>

@@ -1,0 +1,29 @@
+{% extends "_project_layout.html" %}
+{% set active='findings' %}
+{% block project_content %}
+<a href="/p/{{ project.slug }}/findings" class="text-sm text-blue-600 underline">← к списку</a>
+
+{% if not item %}
+<p class="muted mt-4">Item <code>{{ item_id }}</code> не найден в <code>{{ td_dir }}</code>.</p>
+{% else %}
+<h1 class="text-2xl font-bold mt-3">{{ item.title or item_id }}</h1>
+<div class="flex gap-3 text-xs mt-2">
+  <span class="font-mono">id: {{ item.id or item_id }}</span>
+  <span>status: <span class="font-mono">{{ item.status or '—' }}</span></span>
+  <span>priority: {{ item.priority or '—' }}</span>
+  <span>module: {{ item.module or '—' }}</span>
+</div>
+<div class="mt-4 flex gap-2">
+  {% if item.status != 'closed' %}
+  <form method="post" action="/p/{{ project.slug }}/findings/{{ item_id }}/close" class="inline">
+    <button class="text-sm px-3 py-1 border rounded">close (status → closed)</button>
+  </form>
+  {% endif %}
+  <form method="post" action="/p/{{ project.slug }}/findings/{{ item_id }}/delete" class="inline"
+        onsubmit="return confirm('Удалить {{ item_id }}?')">
+    <button class="text-sm px-3 py-1 border rounded text-red-600">delete file</button>
+  </form>
+</div>
+<pre class="mt-6 bg-white p-4 rounded shadow whitespace-pre-wrap text-sm font-mono">{{ body_md or '(пустое тело)' }}</pre>
+{% endif %}
+{% endblock %}

@@ -188,6 +188,59 @@ def parse_releases(tech_debt_dir: str) -> list[ReleaseItem]:
     return out
 
 
+def close_tech_debt_item(td_dir: str, item_id: str) -> bool:
+    """Mark TD as closed by rewriting frontmatter to set status=closed.
+
+    Wave 2.5 minimal: searches for {item_id}.md in td_dir and td_dir/items/.
+    Returns True if the file was found and updated, False otherwise.
+    """
+    base = Path(td_dir)
+    target = None
+    for p in [base / f"{item_id}.md", base / "items" / f"{item_id}.md"]:
+        if p.exists():
+            target = p
+            break
+    if target is None:
+        # Fallback: try to resolve via parser (handles TD-NNN-slug.md naming)
+        item = read_tech_debt_item(td_dir, item_id)
+        if item is None or not item.file_path:
+            return False
+        target = Path(item.file_path)
+        if not target.exists():
+            return False
+    text = target.read_text(encoding="utf-8")
+    new_text, n = re.subn(r"(?m)^status:\s*.*$", "status: closed", text, count=1)
+    if n == 0:
+        if text.startswith("---\n"):
+            end = text.find("\n---", 4)
+            if end > 0:
+                new_text = text[:end] + "\nstatus: closed" + text[end:]
+            else:
+                new_text = text
+        else:
+            new_text = "---\nstatus: closed\n---\n\n" + text
+    target.write_text(new_text, encoding="utf-8")
+    return True
+
+
+def delete_tech_debt_item(td_dir: str, item_id: str) -> bool:
+    """Delete the markdown file for a TD item. Returns True if deleted."""
+    base = Path(td_dir)
+    for p in [base / f"{item_id}.md", base / "items" / f"{item_id}.md"]:
+        if p.exists():
+            p.unlink()
+            return True
+    # Fallback: try to resolve via parser
+    item = read_tech_debt_item(td_dir, item_id)
+    if item is None or not item.file_path:
+        return False
+    target = Path(item.file_path)
+    if target.exists():
+        target.unlink()
+        return True
+    return False
+
+
 def find_td_file(tech_debt_dir: str, td_id: str) -> Path | None:
     """Find a TD-*.md file by id (TD-NNN). Returns first match or None."""
     items_dir = Path(tech_debt_dir) / "items"
