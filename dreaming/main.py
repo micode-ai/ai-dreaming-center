@@ -40,6 +40,7 @@ async def lifespan(app: FastAPI):
     app.state.orchestration_hub = OrchestrationHub(app.state.db, app.state.projects)
     app.state.scheduler = build_scheduler(app.state)
     app.state.scheduler.start()
+    app.state.resolver_factory = get_resolver
     try:
         yield
     finally:
