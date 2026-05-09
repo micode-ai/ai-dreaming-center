@@ -26,7 +26,7 @@ class ProcessManager:
         raise NotImplementedError("ProcessManager.start_command implemented in Wave 1")
 
     async def kill(self, key: str) -> bool:
-        return False
+        raise NotImplementedError("ProcessManager.kill implemented in Wave 1")
 
     async def reconcile_stale_sessions(self, active_pairs: list[tuple[int, str]]) -> int:
         """active_pairs: list of (project_id, agent_name) tuples — see spec.
