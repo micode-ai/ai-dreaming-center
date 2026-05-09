@@ -1,0 +1,41 @@
+{% extends "_project_layout.html" %}
+{% set active='kanban' %}
+{% block project_content %}
+<form method="post" action="/p/{{ project.slug }}/kanban/add" class="bg-white p-4 rounded shadow mb-6 grid grid-cols-2 gap-3">
+  <input name="title" placeholder="Заголовок темы" required class="border rounded p-2 col-span-2">
+  <input name="module" placeholder="модуль (опц.)" class="border rounded p-2">
+  <input name="target_agents" placeholder="агенты, через запятую (или пусто=всем)" class="border rounded p-2">
+  <textarea name="question" placeholder="Что именно изучить" class="border rounded p-2 col-span-2"></textarea>
+  <textarea name="why_important" placeholder="Почему важно" class="border rounded p-2 col-span-2"></textarea>
+  <button class="bg-blue-600 text-white rounded p-2 col-span-2">Добавить</button>
+</form>
+
+{% if topics %}
+<table class="w-full bg-white rounded shadow text-sm">
+  <thead class="text-left border-b"><tr>
+    <th class="p-2">Заголовок</th>
+    <th class="p-2">Модуль</th>
+    <th class="p-2">Агенты</th>
+    <th class="p-2">active</th>
+    <th class="p-2"></th>
+  </tr></thead>
+  <tbody>
+  {% for t in topics %}
+  <tr class="border-b">
+    <td class="p-2">{{ t.title }}</td>
+    <td class="p-2 font-mono text-xs">{{ t.module or '' }}</td>
+    <td class="p-2 font-mono text-xs">{{ t.target_agents or '*' }}</td>
+    <td class="p-2">{{ "✓" if t.active else "—" }}</td>
+    <td class="p-2">
+      <form method="post" action="/p/{{ project.slug }}/kanban/{{ t.id }}/delete" class="inline">
+        <button class="text-xs text-red-600 underline">delete</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Нет custom topics. Добавь выше — они подмешаются в prompt nightly_learning.</p>
+{% endif %}
+{% endblock %}

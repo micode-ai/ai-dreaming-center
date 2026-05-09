@@ -521,3 +521,46 @@ class SqliteDB:
             "WHERE project_id=? AND agent_name=?",
             (1 if enabled else 0, project_id, agent_name),
         )
+
+    # ── Custom Topics (project-scoped) ─────────────────────────────────
+
+    async def list_custom_topics(self, project_id: int, active_only: bool = True) -> list:
+        sql = "SELECT * FROM custom_topics WHERE project_id=?"
+        params: tuple = (project_id,)
+        if active_only:
+            sql += " AND active=1"
+        sql += " ORDER BY created_at DESC"
+        return await self.fetch_all(sql, params)
+
+    async def list_custom_topics_for_agent(self, project_id: int, agent_name: str) -> list:
+        return await self.fetch_all(
+            "SELECT * FROM custom_topics WHERE project_id=? AND active=1 "
+            "AND (target_agents='' OR target_agents LIKE ? OR target_agents LIKE ? "
+            "OR target_agents LIKE ? OR target_agents=?) "
+            "ORDER BY created_at DESC",
+            (project_id, f"%,{agent_name},%", f"{agent_name},%",
+             f"%,{agent_name}", agent_name),
+        )
+
+    async def add_custom_topic(
+        self, project_id: int, title: str, module: str = "",
+        target_agents: str = "", question: str = "", why_important: str = "",
+    ) -> str:
+        tid = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        await self.execute(
+            "INSERT INTO custom_topics "
+            "(id, project_id, title, module, target_agents, question, why_important, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (tid, project_id, title, module, target_agents, question, why_important, now),
+        )
+        return tid
+
+    async def delete_custom_topic(self, project_id: int, topic_id: str) -> bool:
+        async with self._conn.execute(
+            "DELETE FROM custom_topics WHERE project_id=? AND id=?",
+            (project_id, topic_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
