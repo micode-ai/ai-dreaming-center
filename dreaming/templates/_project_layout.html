@@ -21,6 +21,10 @@
      href="/p/{{ project.slug }}/findings">{{ "p.findings" | t(locale=locale) }}</a>
   <a class="py-2 {% if active=='tech_debt' %}border-b-2 border-blue-600 text-blue-700 font-semibold{% else %}text-slate-600 hover:text-slate-900{% endif %}"
      href="/p/{{ project.slug }}/tech-debt">{{ "p.tech_debt" | t(locale=locale) }}</a>
+  <a class="py-2 {% if active=='ideas' %}border-b-2 border-blue-600 text-blue-700 font-semibold{% else %}text-slate-600 hover:text-slate-900{% endif %}"
+     href="/p/{{ project.slug }}/ideas">{{ "p.ideas" | t(locale=locale) }}</a>
+  <a class="py-2 {% if active=='wiki' %}border-b-2 border-blue-600 text-blue-700 font-semibold{% else %}text-slate-600 hover:text-slate-900{% endif %}"
+     href="/p/{{ project.slug }}/wiki">{{ "p.wiki" | t(locale=locale) }}</a>
   <a class="py-2 {% if active=='settings' %}border-b-2 border-blue-600 text-blue-700 font-semibold{% else %}text-slate-600 hover:text-slate-900{% endif %}"
      href="/p/{{ project.slug }}/settings">{{ "p.settings" | t(locale=locale) }}</a>
 </nav>
