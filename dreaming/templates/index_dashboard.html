@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="mb-6 flex items-baseline gap-4">
+  <h1 class="text-3xl font-bold">{{ "common.app_name" | t(locale=locale) }}</h1>
+  <span class="text-sm muted">{{ projects|length }} active projects</span>
+</header>
+
+<!-- Top-line metrics -->
+<div class="grid grid-cols-6 gap-3 mb-6">
+  <div class="bg-white p-3 rounded shadow"><div class="text-xs muted">{{ "p.metrics.success" | t(locale=locale) }} (week)</div><div class="text-2xl font-bold text-green-700">{{ totals.success }}</div></div>
+  <div class="bg-white p-3 rounded shadow"><div class="text-xs muted">{{ "p.metrics.failed" | t(locale=locale) }} (week)</div><div class="text-2xl font-bold text-red-700">{{ totals.failed }}</div></div>
+  <div class="bg-white p-3 rounded shadow"><div class="text-xs muted">{{ "p.metrics.timeout" | t(locale=locale) }} (week)</div><div class="text-2xl font-bold text-amber-700">{{ totals.timeout }}</div></div>
+  <div class="bg-white p-3 rounded shadow"><div class="text-xs muted">running now</div><div class="text-2xl font-bold text-blue-700">{{ totals.running }}</div></div>
+  <div class="bg-white p-3 rounded shadow"><div class="text-xs muted">{{ "p.tech_debt" | t(locale=locale) }}</div><div class="text-2xl font-bold">{{ totals.td }}</div></div>
+  <div class="bg-white p-3 rounded shadow"><div class="text-xs muted">{{ "p.ideas" | t(locale=locale) }}</div><div class="text-2xl font-bold">{{ totals.ideas }}</div></div>
+</div>
+
+<div class="grid grid-cols-3 gap-4">
+  <!-- Project cards (2 cols) -->
+  <div class="col-span-2 grid grid-cols-2 gap-4">
+  {% for c in cards %}
+    {% set p = c.project %}
+    <a href="/p/{{ p.slug }}/" class="bg-white p-4 rounded shadow hover:bg-slate-100">
+      <div class="flex items-baseline justify-between mb-2">
+        <h2 class="font-bold">{{ p.label }}</h2>
+        <span class="text-xs font-mono text-slate-400">{{ p.slug }}</span>
+      </div>
+      <div class="grid grid-cols-4 gap-2 text-center">
+        <div><div class="text-xs muted">ok</div><div class="font-bold text-green-700">{{ c.stats.success or 0 }}</div></div>
+        <div><div class="text-xs muted">fail</div><div class="font-bold text-red-700">{{ c.stats.failed or 0 }}</div></div>
+        <div><div class="text-xs muted">timeout</div><div class="font-bold text-amber-700">{{ c.stats.timeout or 0 }}</div></div>
+        <div><div class="text-xs muted">running</div><div class="font-bold text-blue-700">{{ c.running }}</div></div>
+      </div>
+      <div class="mt-3 flex gap-3 text-xs">
+        <span>{{ "p.tech_debt" | t(locale=locale) }}: <strong>{{ c.td_count }}</strong></span>
+        <span>{{ "p.ideas" | t(locale=locale) }}: <strong>{{ c.ideas_count }}</strong></span>
+        <span>{{ "p.wiki" | t(locale=locale) }}: <strong>{{ "✓" if c.wiki_present else "—" }}</strong></span>
+      </div>
+    </a>
+  {% endfor %}
+  </div>
+
+  <!-- Right rail: active runs -->
+  <aside class="bg-white p-4 rounded shadow">
+    <h3 class="font-semibold mb-3">{{ "p.active_runs" | t(locale=locale) }}</h3>
+    {% if active_runs %}
+    <ul class="text-sm space-y-1">
+    {% for r in active_runs %}
+      <li class="font-mono text-xs"><a class="text-blue-600 underline" href="/p/{{ r.slug }}/live">{{ r.slug }}:{{ r.agent }}</a></li>
+    {% endfor %}
+    </ul>
+    {% else %}
+    <p class="muted text-sm">{{ "p.no_active_runs" | t(locale=locale) }}</p>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

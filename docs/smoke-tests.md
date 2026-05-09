@@ -64,3 +64,19 @@ Run `python scripts/smoke_pipelines.py` end-to-end: 7 new pages return 200 with 
 | Enable weekly_tech_debt_scan for one project | weekly_tech_debt_scan_<slug> registered | (covered by per-project register hook in Wave 2.5 commit 8bd34b8) |
 
 Wave 2 nav surface: project navigation now has Dashboard, Live, Rotation, Topics, Kanban, Notes, Findings, Tech-Debt, Ideas, Wiki, Settings (11 tabs).
+
+## Wave 5 — Aggregated dashboard (verified)
+
+Replaces the Wave 0 placeholder at `/` with a cross-project dashboard: top-line metrics across all enabled projects, per-project cards (success/fail/timeout/running + tech-debt/ideas/wiki indicators), and a right-rail "Active runs" panel. README.md and CLAUDE.md finalized.
+
+| Check | Expected | Actual |
+|------|---------|--------|
+| `python scripts/check_i18n.py` | OK | `OK: locales have identical key sets` |
+| `python scripts/smoke_setup.py` (clean run) | imports 11 projects, idempotent | `Scanned: 11 dirs; Before: 0; created: 11; after: 11; idempotency re-run: 11 (unchanged OK)` |
+| `curl /` | 200, 11 project cards | status = 200; project cards = 11 |
+| `/` top-line metrics (ok + timeout) | present | True |
+| `/` Tech Debt label (RU or EN) | present | True (Tech Debt / Тех-долг) |
+| `/` Active runs section (RU or EN) | present | True (Active runs / Активные сессии) |
+| `curl /p/mi-code-ai/` | 200, body contains slug | 200, has 'mi-code-ai' = True |
+
+Per-project routes still functional (no regression). Tagged as `wave-5`.
