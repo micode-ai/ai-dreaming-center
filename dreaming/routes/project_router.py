@@ -14,6 +14,10 @@ from dreaming.routes.project_tech_debt import router as tech_debt_router
 from dreaming.routes.project_ideas import router as ideas_router
 from dreaming.routes.project_wiki import router as wiki_router
 from dreaming.routes.project_ai_usage import router as ai_usage_router
+from dreaming.routes.project_evolutions import router as evolutions_router
+from dreaming.routes.project_loops import router as loops_router
+from dreaming.routes.project_plans import router as plans_router
+from dreaming.routes.project_cascade_costs import router as cascade_costs_router
 
 
 router = APIRouter()
@@ -28,4 +32,8 @@ router.include_router(tech_debt_router)
 router.include_router(ideas_router)
 router.include_router(wiki_router)
 router.include_router(ai_usage_router)
+router.include_router(evolutions_router)
+router.include_router(loops_router)
+router.include_router(plans_router)
+router.include_router(cascade_costs_router)
 router.include_router(project_settings_router)

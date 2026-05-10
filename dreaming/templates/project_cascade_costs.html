@@ -1,0 +1,40 @@
+{% extends "_project_layout.html" %}
+{% set active='cascade_costs' %}
+{% block project_content %}
+{% if error %}
+<p class="text-sm text-red-700">Ошибка: <code>{{ error }}</code></p>
+{% elif rows %}
+<div class="grid grid-cols-2 gap-4 mb-4">
+  <div class="bg-white p-3 rounded shadow">
+    <div class="text-xs muted">Runs (latest 50)</div>
+    <div class="text-2xl font-bold">{{ rows|length }}</div>
+  </div>
+  <div class="bg-white p-3 rounded shadow">
+    <div class="text-xs muted">Total cost USD</div>
+    <div class="text-2xl font-bold">${{ "%.4f" | format(total_cost) }}</div>
+  </div>
+</div>
+<table class="w-full bg-white rounded shadow text-sm">
+  <thead class="text-left border-b"><tr>
+    <th class="p-2">run_id</th>
+    <th class="p-2">goal</th>
+    <th class="p-2">status</th>
+    <th class="p-2 text-right">events</th>
+    <th class="p-2 text-right">cost USD</th>
+  </tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr class="border-b">
+    <td class="p-2 font-mono text-xs">{{ r.run_id[:8] }}…</td>
+    <td class="p-2 text-xs">{{ r.goal[:80] }}</td>
+    <td class="p-2 text-xs">{{ r.status }}</td>
+    <td class="p-2 text-right text-xs">{{ r.event_count }}</td>
+    <td class="p-2 text-right">${{ "%.4f" | format(r.total_cost_usd) }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Нет orchestration runs. Cascade pipelines поднимаются в Wave 3.</p>
+{% endif %}
+{% endblock %}
