@@ -24,14 +24,21 @@ def _save_global_yaml(values: dict) -> None:
 @router.get("/setup")
 async def setup_get(request: Request):
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
+    s = request.app.state.settings
+    defaults = type("D", (), dict(
+        claude_path=getattr(s, "claude_path", "") or "claude",
+        projects_root=getattr(s, "projects_root", "") or r"D:\Work\micode",
+        default_locale=getattr(s, "default_locale", "ru") or "ru",
+    ))()
     return request.app.state.templates.TemplateResponse(
         request,
         "setup.html",
         {
-            "defaults": request.app.state.settings,
+            "defaults": defaults,
             "scan": None,
             "scan_root": None,
             "locale": locale,
+            "scan_error": None,
         },
     )
 
@@ -45,6 +52,11 @@ async def setup_post(request: Request):
     if action == "scan":
         root = (form.get("projects_root") or "").strip()
         scan = ProjectsService.scan_projects_root(root) if root else []
+        scan_error = None
+        if not root:
+            scan_error = "projects_root не указан — впиши абсолютный путь, например D:\\Work\\micode"
+        elif not scan:
+            scan_error = f"В каталоге {root} не найдено подпапок (или каталог не существует)"
         defaults = type("D", (), dict(
             claude_path=form.get("claude_path", request.app.state.settings.claude_path),
             projects_root=root or request.app.state.settings.projects_root,
@@ -53,7 +65,13 @@ async def setup_post(request: Request):
         return request.app.state.templates.TemplateResponse(
             request,
             "setup.html",
-            {"defaults": defaults, "scan": scan, "scan_root": root, "locale": locale},
+            {
+                "defaults": defaults,
+                "scan": scan if scan else None,
+                "scan_root": root,
+                "scan_error": scan_error,
+                "locale": locale,
+            },
         )
 
     globals_to_save = {

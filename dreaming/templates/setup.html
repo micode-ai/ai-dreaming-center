@@ -29,6 +29,10 @@
       </label>
     </section>
 
+    {% if scan_error %}
+    <div class="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">{{ scan_error }}</div>
+    {% endif %}
+
     {% if scan %}
     <section class="bg-white p-6 rounded shadow">
       <h2 class="text-xl font-semibold mb-3">2. Найденные проекты в {{ scan_root }}</h2>
@@ -59,6 +63,7 @@
     </section>
     <button class="bg-blue-600 text-white px-4 py-2 rounded">Сохранить и импортировать</button>
     {% else %}
+    <p class="text-xs muted">После клика страница перезагрузится и покажет таблицу найденных каталогов. Если ничего не найдено — увидишь красную плашку с причиной.</p>
     <button name="action" value="scan" class="bg-blue-600 text-white px-4 py-2 rounded">Просканировать projects_root</button>
     {% endif %}
   </form>
