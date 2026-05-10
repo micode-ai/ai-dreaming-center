@@ -2,6 +2,18 @@
 
 Карта документов под `docs/`. Если ты знакомишься с кодовой базой впервые — читай в порядке списка. Все ссылки — относительные от этого файла.
 
+## User documentation
+
+End-user-oriented guides under `docs/user/`. Read these if you want to USE the tool, not modify it.
+
+- [user/README.md](user/README.md) — index of user-facing docs
+- [user/getting-started.md](user/getting-started.md) — first-time setup walkthrough
+- [user/overview.md](user/overview.md) — what is AI Dreaming Center, who it's for
+- [user/faq.md](user/faq.md) — frequently asked questions
+- [user/glossary.md](user/glossary.md) — terminology
+
+Per-feature user guides under `user/features/`; typical workflows under `user/workflows/`.
+
 ## Назначение проекта
 
 `ai-dreaming-center` (DC) — мульти-проектный FastAPI-дашборд, который оркеструет команды агентов Claude CLI поверх произвольного множества локальных проектов. Это форк `agent-learning-center` (ALC), расширенный first-class multi-project поддержкой, оркестрацией Романа (cascade pipelines), сборкой AI Usage и unified analytics.
