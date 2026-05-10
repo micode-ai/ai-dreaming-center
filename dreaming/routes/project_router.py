@@ -18,6 +18,7 @@ from dreaming.routes.project_evolutions import router as evolutions_router
 from dreaming.routes.project_loops import router as loops_router
 from dreaming.routes.project_plans import router as plans_router
 from dreaming.routes.project_cascade_costs import router as cascade_costs_router
+from dreaming.routes.project_orchestration import router as orchestration_router
 
 
 router = APIRouter()
@@ -36,4 +37,5 @@ router.include_router(evolutions_router)
 router.include_router(loops_router)
 router.include_router(plans_router)
 router.include_router(cascade_costs_router)
+router.include_router(orchestration_router)
 router.include_router(project_settings_router)

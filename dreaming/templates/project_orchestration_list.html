@@ -1,0 +1,33 @@
+{% extends "_project_layout.html" %}
+{% set active='orchestration' %}
+{% block project_content %}
+<form method="post" action="/p/{{ project.slug }}/orchestration/start" class="bg-white p-4 rounded shadow mb-6 flex gap-3">
+  <input name="goal" placeholder="Цель Roman-сессии (например: «декомпозируй фичу X»)" required class="flex-1 border rounded p-2">
+  <button class="bg-blue-600 text-white rounded px-4 py-2">Start Roman</button>
+</form>
+
+{% if runs %}
+<table class="w-full bg-white rounded shadow text-sm">
+  <thead class="text-left border-b"><tr>
+    <th class="p-2">run_id</th>
+    <th class="p-2">goal</th>
+    <th class="p-2">status</th>
+    <th class="p-2">started</th>
+    <th class="p-2">finished</th>
+  </tr></thead>
+  <tbody>
+  {% for r in runs %}
+  <tr class="border-b">
+    <td class="p-2 font-mono text-xs"><a class="text-blue-600 underline" href="/p/{{ project.slug }}/orchestration/{{ r.id }}">{{ r.id[:8] }}…</a></td>
+    <td class="p-2 text-xs">{{ r.goal[:80] }}</td>
+    <td class="p-2"><span class="font-mono text-xs {% if r.status=='running' %}text-amber-700{% elif r.status=='completed' %}text-green-700{% elif r.status=='failed' %}text-red-700{% endif %}">{{ r.status }}</span></td>
+    <td class="p-2 text-xs muted">{{ r.started_at }}</td>
+    <td class="p-2 text-xs muted">{{ r.finished_at or '—' }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Нет orchestration runs пока. Запусти Roman через форму выше.</p>
+{% endif %}
+{% endblock %}

@@ -9,6 +9,7 @@
   "setup.title": "First-Time Setup",
   "settings.title": "Global Settings",
   "p.dashboard": "Dashboard",
+  "p.orchestration": "Orchestration",
   "p.live": "Live Log",
   "p.rotation": "Rotation",
   "p.topics": "Topics",

@@ -9,6 +9,7 @@
   "setup.title": "Первичная настройка",
   "settings.title": "Глобальные настройки",
   "p.dashboard": "Панель",
+  "p.orchestration": "Оркестрация",
   "p.live": "Логи",
   "p.rotation": "Ротация",
   "p.topics": "Темы",
