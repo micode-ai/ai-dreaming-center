@@ -24,6 +24,16 @@ def _job_id(kind: str, slug: str) -> str:
     return f"{kind}_{slug}"
 
 
+async def _ai_usage_ingest_job(app_state):
+    """Ingest Claude Code session JSONLs into ai_usage_events."""
+    from dreaming.services.ai_usage_parser import ingest_ai_usage
+    try:
+        result = await ingest_ai_usage(app_state.db, app_state.projects)
+        log.info("ai_usage_ingest: %s", result)
+    except Exception as e:
+        log.warning("ai_usage_ingest failed: %s", e)
+
+
 async def _reconcile_job(app_state):
     """Build (project_id, agent_name) pairs from currently-running keys, then
     ask ProcessManager to close orphans."""
@@ -213,5 +223,9 @@ def build_scheduler(app_state) -> AsyncIOScheduler:
     sched.add_job(
         _reconcile_job, "interval", minutes=5, args=[app_state],
         id="reconcile_stale_sessions",
+    )
+    sched.add_job(
+        _ai_usage_ingest_job, "interval", minutes=5, args=[app_state],
+        id="ai_usage_ingest",
     )
     return sched
