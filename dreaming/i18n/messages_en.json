@@ -24,6 +24,8 @@
   "p.loops": "Loops",
   "p.plans": "Plans",
   "p.cascade_costs": "Cascade Costs",
+  "p.contracts": "Contracts",
+  "p.sidecar_findings": "Sidecar Findings",
   "p.settings": "Settings",
   "p.metrics.success": "Success",
   "p.metrics.failed": "Failed",

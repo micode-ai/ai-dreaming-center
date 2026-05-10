@@ -24,6 +24,8 @@
   "p.loops": "Циклы",
   "p.plans": "Планы",
   "p.cascade_costs": "Каскад-затраты",
+  "p.contracts": "Контракты",
+  "p.sidecar_findings": "Sidecar findings",
   "p.settings": "Настройки",
   "p.metrics.success": "Успешные",
   "p.metrics.failed": "Сбой",

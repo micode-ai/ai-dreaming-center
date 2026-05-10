@@ -1,0 +1,49 @@
+{% extends "_project_layout.html" %}
+{% set active='sidecar_findings' %}
+{% block project_content %}
+{% if not sidecar_dir_set %}
+<p class="muted">sidecar_findings_dir не настроен. См. Settings.</p>
+{% elif not exists %}
+<p class="muted">Каталог <code>{{ sidecar_dir }}</code> не существует.</p>
+{% elif error %}
+<p class="text-sm text-red-700">Ошибка: <code>{{ error }}</code></p>
+{% elif items %}
+<div class="mb-3 flex items-center gap-3">
+  <p class="text-xs muted">{{ items|length }} findings in <code>{{ sidecar_dir }}</code></p>
+  {% if severities %}
+  <form method="get" class="ml-auto">
+    <select name="severity" onchange="this.form.submit()" class="border rounded p-1 text-xs">
+      <option value="">все severities</option>
+      {% for s in severities %}<option value="{{ s }}" {% if s==selected_severity %}selected{% endif %}>{{ s }}</option>{% endfor %}
+    </select>
+  </form>
+  {% endif %}
+</div>
+<table class="w-full bg-white rounded shadow text-sm">
+  <thead class="text-left border-b"><tr>
+    <th class="p-2">reviewer</th>
+    <th class="p-2">id</th>
+    <th class="p-2">title</th>
+    <th class="p-2">severity</th>
+    <th class="p-2">module</th>
+    <th class="p-2">file</th>
+    <th class="p-2">rule</th>
+  </tr></thead>
+  <tbody>
+  {% for it in items %}
+  <tr class="border-b">
+    <td class="p-2 font-mono text-xs">{{ it.reviewer }}</td>
+    <td class="p-2 font-mono text-xs">{{ it.id }}</td>
+    <td class="p-2 text-xs">{{ it.title }}</td>
+    <td class="p-2"><span class="font-mono text-xs">{{ it.severity }}</span></td>
+    <td class="p-2 text-xs">{{ it.module }}</td>
+    <td class="p-2 font-mono text-xs muted">{{ it.file }}</td>
+    <td class="p-2 font-mono text-xs muted">{{ it.rule }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Нет findings.</p>
+{% endif %}
+{% endblock %}
