@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-4">AI Usage — все проекты</h1>
+{% if summary.error %}
+<p class="text-red-700 text-sm">Ошибка: <code>{{ summary.error }}</code></p>
+{% else %}
+<div class="grid grid-cols-4 gap-3 mb-6">
+  <div class="bg-white p-3 rounded shadow">
+    <div class="text-xs muted">7d input</div>
+    <div class="text-2xl font-bold">{{ summary.last_7d.input_tokens or 0 }}</div>
+  </div>
+  <div class="bg-white p-3 rounded shadow">
+    <div class="text-xs muted">7d output</div>
+    <div class="text-2xl font-bold">{{ summary.last_7d.output_tokens or 0 }}</div>
+  </div>
+  <div class="bg-white p-3 rounded shadow">
+    <div class="text-xs muted">30d total</div>
+    <div class="text-2xl font-bold">{{ summary.last_30d.total_tokens or 0 }}</div>
+  </div>
+  <div class="bg-white p-3 rounded shadow">
+    <div class="text-xs muted">events total</div>
+    <div class="text-2xl font-bold">{{ summary.events_total or 0 }}</div>
+  </div>
+</div>
+{% if summary.by_project %}
+<h2 class="font-semibold mb-2">By project (last 30d)</h2>
+<table class="w-full bg-white rounded shadow text-sm">
+  <thead class="text-left border-b"><tr>
+    <th class="p-2">project</th>
+    <th class="p-2 text-right">input</th>
+    <th class="p-2 text-right">output</th>
+    <th class="p-2 text-right">events</th>
+  </tr></thead>
+  <tbody>
+  {% for p in summary.by_project %}
+  <tr class="border-b">
+    <td class="p-2 font-mono text-xs">
+      {% if p.slug %}<a class="text-blue-600 underline" href="/p/{{ p.slug }}/ai-usage">{{ p.slug }}</a>
+      {% else %}<span class="muted">__unmapped__</span>{% endif %}
+    </td>
+    <td class="p-2 text-right">{{ p.input_tokens or 0 }}</td>
+    <td class="p-2 text-right">{{ p.output_tokens or 0 }}</td>
+    <td class="p-2 text-right">{{ p.events or 0 }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Нет данных пока.</p>
+{% endif %}
+{% endif %}
+{% endblock %}

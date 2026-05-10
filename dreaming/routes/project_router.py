@@ -13,6 +13,7 @@ from dreaming.routes.project_findings import router as findings_router
 from dreaming.routes.project_tech_debt import router as tech_debt_router
 from dreaming.routes.project_ideas import router as ideas_router
 from dreaming.routes.project_wiki import router as wiki_router
+from dreaming.routes.project_ai_usage import router as ai_usage_router
 
 
 router = APIRouter()
@@ -26,4 +27,5 @@ router.include_router(findings_router)
 router.include_router(tech_debt_router)
 router.include_router(ideas_router)
 router.include_router(wiki_router)
+router.include_router(ai_usage_router)
 router.include_router(project_settings_router)

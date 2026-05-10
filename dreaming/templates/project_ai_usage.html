@@ -1,0 +1,51 @@
+{% extends "_project_layout.html" %}
+{% set active='ai_usage' %}
+{% block project_content %}
+{% if summary.error %}
+<p class="text-red-700 text-sm">Ошибка: <code>{{ summary.error }}</code></p>
+{% else %}
+<div class="grid grid-cols-4 gap-3 mb-6">
+  <div class="bg-white p-3 rounded shadow">
+    <div class="text-xs muted">Last 7d input</div>
+    <div class="text-2xl font-bold">{{ summary.last_7d.input_tokens or 0 }}</div>
+  </div>
+  <div class="bg-white p-3 rounded shadow">
+    <div class="text-xs muted">Last 7d output</div>
+    <div class="text-2xl font-bold">{{ summary.last_7d.output_tokens or 0 }}</div>
+  </div>
+  <div class="bg-white p-3 rounded shadow">
+    <div class="text-xs muted">Last 7d cache (read)</div>
+    <div class="text-2xl font-bold">{{ summary.last_7d.cache_read_tokens or 0 }}</div>
+  </div>
+  <div class="bg-white p-3 rounded shadow">
+    <div class="text-xs muted">Last 30d total</div>
+    <div class="text-2xl font-bold">{{ summary.last_30d.total_tokens or 0 }}</div>
+  </div>
+</div>
+{% if summary.by_model %}
+<h2 class="font-semibold mb-2">By model (last 30d)</h2>
+<table class="w-full bg-white rounded shadow text-sm">
+  <thead class="text-left border-b"><tr>
+    <th class="p-2">model</th>
+    <th class="p-2 text-right">input</th>
+    <th class="p-2 text-right">output</th>
+    <th class="p-2 text-right">cache_read</th>
+    <th class="p-2 text-right">events</th>
+  </tr></thead>
+  <tbody>
+  {% for m in summary.by_model %}
+  <tr class="border-b">
+    <td class="p-2 font-mono text-xs">{{ m.model or '—' }}</td>
+    <td class="p-2 text-right">{{ m.input_tokens or 0 }}</td>
+    <td class="p-2 text-right">{{ m.output_tokens or 0 }}</td>
+    <td class="p-2 text-right">{{ m.cache_read_tokens or 0 }}</td>
+    <td class="p-2 text-right">{{ m.events or 0 }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Нет данных. Запусти ingest или подожди следующий тик cron'а.</p>
+{% endif %}
+{% endif %}
+{% endblock %}

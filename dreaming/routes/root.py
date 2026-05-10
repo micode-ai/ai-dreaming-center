@@ -106,6 +106,23 @@ async def index(request: Request):
     )
 
 
+@router.get("/ai-usage")
+async def global_ai_usage(request: Request):
+    db = request.app.state.db
+    from dreaming.services.ai_usage_stats import global_summary
+    try:
+        summary = await global_summary(db)
+    except Exception as e:
+        summary = {"error": f"{type(e).__name__}: {e}"}
+    locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
+    projects = await request.app.state.projects.list_all(only_enabled=True)
+    return request.app.state.templates.TemplateResponse(
+        request,
+        "global_ai_usage.html",
+        {"summary": summary, "projects": projects, "locale": locale},
+    )
+
+
 @router.post("/locale")
 async def set_locale(request: Request, locale: str = Form(...), next: str = Form("/")):
     if locale not in ("ru", "en"):
