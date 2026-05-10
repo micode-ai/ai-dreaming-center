@@ -153,3 +153,168 @@ async def orchestration_finish(request: Request, run_id: str, payload: OrchFinis
     if ok:
         await hub.append_event(run_id, "run_finished", {"status": payload.status})
     return JSONResponse({"ok": ok})
+
+
+# ── Cascade API (Wave 3.8) ──────────────────────────
+
+class CascadeStartIn(BaseModel):
+    project_slug: str | None = None
+    goal: str
+    external_id: str | None = None
+    stages: list[dict] | None = None  # [{"key": "contract", "label": "..."}]
+
+
+class CascadeStageStartIn(BaseModel):
+    stage_key: str
+    label: str | None = None
+    iteration: int = 1
+
+
+class CascadeStageFinishIn(BaseModel):
+    stage_key: str
+    status: str = "completed"
+
+
+class CascadeGateIn(BaseModel):
+    stage_key: str
+    verdict: str  # "approve" | "return-to-stage" | "reject"
+    returned_to_stage_key: str | None = None
+    iteration: int = 1
+    comment: str | None = None
+    decided_by_node_id: str | None = None
+
+
+class CascadeArtifactIn(BaseModel):
+    kind: str          # "module" | "page" | "doc" | etc.
+    title: str
+    stage_key: str | None = None
+    node_id: str | None = None
+    url: str | None = None
+    content_preview: str | None = None
+    dedup_hash: str | None = None
+
+
+class CascadeMessageIn(BaseModel):
+    node_id: str | None = None
+    author: str = "agent"
+    kind: str = "text"
+    text: str
+    stage_key: str | None = None  # if set and node_id is None, server picks any node tied to that stage
+
+
+@router.post("/cascade/init")
+async def cascade_init(request: Request, payload: CascadeStartIn):
+    project = await _resolve_project(request, payload.project_slug)
+    hub = request.app.state.orchestration_hub
+    existing = await hub.has_running_run(project.id)
+    if existing:
+        raise HTTPException(status_code=409, detail={"error": "another run already running",
+                                                     "run_id": existing})
+    run_id = await hub.create_run(project.id, payload.goal, external_id=payload.external_id)
+    root_node_id = await hub.create_node(run_id, project.id, agent_name="roman", role="orchestrator",
+                                         external_id=payload.external_id)
+    stages = payload.stages or [
+        {"key": "contract", "label": "Contract"},
+        {"key": "design", "label": "Design"},
+        {"key": "implementation", "label": "Implementation"},
+        {"key": "review", "label": "Review"},
+        {"key": "qa", "label": "QA"},
+    ]
+    stage_ids = []
+    for i, s in enumerate(stages):
+        sid = await hub.ensure_stage(run_id, i, s["key"], s.get("label", s["key"].title()))
+        stage_ids.append({"key": s["key"], "id": sid})
+    await hub.append_event(run_id, "cascade_init",
+                           {"goal": payload.goal, "stages": [s["key"] for s in stages]})
+    return JSONResponse({"run_id": run_id, "root_node_id": root_node_id, "stages": stage_ids})
+
+
+async def _resolve_stage(hub, run_id: str, stage_key: str) -> str:
+    rows = await hub.list_stages(run_id)
+    for r in rows:
+        if r["stage_key"] == stage_key:
+            return r["id"]
+    raise HTTPException(status_code=404, detail=f"stage '{stage_key}' not found in run {run_id}")
+
+
+@router.post("/cascade/{run_id}/stage/start")
+async def cascade_stage_start(request: Request, run_id: str, payload: CascadeStageStartIn):
+    hub = request.app.state.orchestration_hub
+    sid = await _resolve_stage(hub, run_id, payload.stage_key)
+    await hub.start_stage(sid)
+    await hub.append_event(run_id, "cascade_stage_started",
+                           {"stage_key": payload.stage_key, "iteration": payload.iteration})
+    return JSONResponse({"stage_id": sid})
+
+
+@router.post("/cascade/{run_id}/stage/finish")
+async def cascade_stage_finish(request: Request, run_id: str, payload: CascadeStageFinishIn):
+    hub = request.app.state.orchestration_hub
+    sid = await _resolve_stage(hub, run_id, payload.stage_key)
+    await hub.finish_stage(sid, status=payload.status)
+    await hub.append_event(run_id, "cascade_stage_finished",
+                           {"stage_key": payload.stage_key, "status": payload.status})
+    return JSONResponse({"ok": True})
+
+
+@router.post("/cascade/{run_id}/gate")
+async def cascade_gate(request: Request, run_id: str, payload: CascadeGateIn):
+    hub = request.app.state.orchestration_hub
+    sid = await _resolve_stage(hub, run_id, payload.stage_key)
+    return_to_sid = None
+    if payload.returned_to_stage_key:
+        return_to_sid = await _resolve_stage(hub, run_id, payload.returned_to_stage_key)
+    v_id = await hub.record_gate_verdict(
+        run_id=run_id, stage_id=sid, verdict=payload.verdict,
+        returned_to_stage_id=return_to_sid, iteration=payload.iteration,
+        comment=payload.comment, decided_by_node_id=payload.decided_by_node_id,
+    )
+    await hub.append_event(run_id, "cascade_gate",
+                           {"stage_key": payload.stage_key, "verdict": payload.verdict,
+                            "returned_to": payload.returned_to_stage_key})
+    return JSONResponse({"verdict_id": v_id})
+
+
+@router.post("/cascade/{run_id}/artifact")
+async def cascade_artifact(request: Request, run_id: str, payload: CascadeArtifactIn):
+    hub = request.app.state.orchestration_hub
+    stage_id = None
+    if payload.stage_key:
+        stage_id = await _resolve_stage(hub, run_id, payload.stage_key)
+    a_id = await hub.append_artifact(
+        run_id=run_id, kind=payload.kind, title=payload.title,
+        stage_id=stage_id, node_id=payload.node_id, url=payload.url,
+        content_preview=payload.content_preview, dedup_hash=payload.dedup_hash,
+    )
+    if a_id is None:
+        return JSONResponse({"id": None, "deduped": True})
+    return JSONResponse({"id": a_id, "deduped": False})
+
+
+@router.post("/cascade/{run_id}/message")
+async def cascade_message(request: Request, run_id: str, payload: CascadeMessageIn):
+    hub = request.app.state.orchestration_hub
+    run = await hub.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404)
+    node_id = payload.node_id
+    if node_id is None:
+        # No explicit node — use the root_node (first node of the run)
+        nodes = await hub.list_nodes(run_id)
+        if not nodes:
+            raise HTTPException(status_code=400, detail="no nodes in run; pass node_id")
+        node_id = nodes[0]["id"]
+    msg_id = await hub.append_message(
+        run_id=run_id, node_id=node_id, project_id=run["project_id"],
+        author=payload.author, kind=payload.kind, text=payload.text,
+    )
+    return JSONResponse({"id": msg_id})
+
+
+@router.post("/cascade/{run_id}/finish")
+async def cascade_finish(request: Request, run_id: str):
+    hub = request.app.state.orchestration_hub
+    ok = await hub.finish_run(run_id, status="completed")
+    if ok:
+        await hub.append_event(run_id, "cascade_finished", {})
+    return JSONResponse({"ok": ok})

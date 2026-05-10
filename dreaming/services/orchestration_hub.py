@@ -138,3 +138,98 @@ class OrchestrationHub:
             "ORDER BY ts ASC LIMIT ?",
             (run_id, limit),
         )
+
+    # ── Stages ───────────────────────────────────────
+
+    async def ensure_stage(
+        self, run_id: str, stage_index: int, stage_key: str, label: str,
+    ) -> str:
+        """Idempotent — returns stage_id (existing or new)."""
+        existing = await self.db.fetch_one(
+            "SELECT id FROM orchestrator_stages WHERE run_id=? AND stage_key=?",
+            (run_id, stage_key),
+        )
+        if existing:
+            return existing["id"]
+        stage_id = str(uuid.uuid4())
+        await self.db.execute(
+            "INSERT INTO orchestrator_stages (id, run_id, stage_index, stage_key, label, status) "
+            "VALUES (?, ?, ?, ?, ?, 'pending')",
+            (stage_id, run_id, stage_index, stage_key, label),
+        )
+        return stage_id
+
+    async def start_stage(self, stage_id: str) -> None:
+        await self.db.execute(
+            "UPDATE orchestrator_stages SET status='running', started_at=? WHERE id=?",
+            (_now(), stage_id),
+        )
+
+    async def finish_stage(self, stage_id: str, status: str = "completed") -> None:
+        await self.db.execute(
+            "UPDATE orchestrator_stages SET status=?, finished_at=? WHERE id=?",
+            (status, _now(), stage_id),
+        )
+
+    async def list_stages(self, run_id: str) -> list:
+        return await self.db.fetch_all(
+            "SELECT * FROM orchestrator_stages WHERE run_id=? ORDER BY stage_index ASC",
+            (run_id,),
+        )
+
+    async def get_stage(self, stage_id: str):
+        return await self.db.fetch_one(
+            "SELECT * FROM orchestrator_stages WHERE id=?", (stage_id,))
+
+    # ── Gate verdicts ────────────────────────────────
+
+    async def record_gate_verdict(
+        self, run_id: str, stage_id: str, verdict: str,
+        returned_to_stage_id: str | None = None,
+        iteration: int = 1, comment: str | None = None,
+        decided_by_node_id: str | None = None,
+    ) -> str:
+        v_id = str(uuid.uuid4())
+        await self.db.execute(
+            "INSERT INTO orchestrator_gate_verdicts "
+            "(id, run_id, stage_id, verdict, returned_to_stage_id, iteration, comment, decided_by_node_id, ts) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (v_id, run_id, stage_id, verdict, returned_to_stage_id, iteration,
+             comment, decided_by_node_id, _now()),
+        )
+        return v_id
+
+    async def list_gate_verdicts(self, run_id: str) -> list:
+        return await self.db.fetch_all(
+            "SELECT * FROM orchestrator_gate_verdicts WHERE run_id=? ORDER BY ts ASC",
+            (run_id,),
+        )
+
+    # ── Artifacts ────────────────────────────────────
+
+    async def append_artifact(
+        self, run_id: str, kind: str, title: str,
+        stage_id: str | None = None, node_id: str | None = None,
+        url: str | None = None, content_preview: str | None = None,
+        dedup_hash: str | None = None,
+    ) -> str | None:
+        """Insert artifact; if dedup_hash collides on (run_id, dedup_hash), return None."""
+        a_id = str(uuid.uuid4())
+        try:
+            await self.db.execute(
+                "INSERT INTO orchestrator_artifacts "
+                "(id, run_id, stage_id, node_id, kind, title, url, content_preview, ts, dedup_hash) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (a_id, run_id, stage_id, node_id, kind, title, url,
+                 content_preview, _now(), dedup_hash),
+            )
+            return a_id
+        except Exception:
+            # Most likely UNIQUE constraint on (run_id, dedup_hash)
+            return None
+
+    async def list_artifacts(self, run_id: str) -> list:
+        return await self.db.fetch_all(
+            "SELECT * FROM orchestrator_artifacts WHERE run_id=? ORDER BY ts DESC",
+            (run_id,),
+        )

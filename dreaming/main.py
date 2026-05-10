@@ -13,6 +13,7 @@ from dreaming.services.config_resolver import ConfigResolver
 from dreaming.services.i18n import I18n
 from dreaming.services.process_manager import ProcessManager
 from dreaming.services.orchestration_hub import OrchestrationHub
+from dreaming.services.harness_client import HarnessClientCache
 from dreaming.services.scheduler import build_scheduler, register_project_jobs, unregister_project_jobs
 from dreaming.middleware.setup_gate import setup_gate_middleware
 from dreaming.middleware.project_resolver import project_resolver_middleware
@@ -40,6 +41,7 @@ async def lifespan(app: FastAPI):
     app.state.process_manager = ProcessManager(
         app.state.settings, app.state.db, app.state.projects)
     app.state.orchestration_hub = OrchestrationHub(app.state.db, app.state.projects)
+    app.state.harness_clients = HarnessClientCache()
     app.state.scheduler = build_scheduler(app.state)
     app.state.scheduler.start()
     # Register per-project jobs for every enabled project
