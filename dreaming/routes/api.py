@@ -1,6 +1,7 @@
 """REST API for slash-command callbacks. Multi-tenant via project_slug body."""
 from __future__ import annotations
 import logging
+import uuid
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -99,11 +100,15 @@ async def orchestration_start(request: Request, payload: OrchStartIn):
                 detail={"error": "another orchestration run is already running for this project",
                         "run_id": existing},
             )
-    run_id = await hub.create_run(project.id, payload.goal, external_id=payload.external_id)
+    # Default external_id to a fresh UUID so the run is resumable later
+    # (Wave 3.7 — form-based start always sets one; mirror that here for
+    # external API callers too).
+    external_id = payload.external_id or str(uuid.uuid4())
+    run_id = await hub.create_run(project.id, payload.goal, external_id=external_id)
     # Auto-create the Roman root node
     node_id = await hub.create_node(
         run_id, project.id, agent_name="roman", role="orchestrator",
-        external_id=payload.external_id,
+        external_id=external_id,
     )
     await hub.append_event(run_id, "run_started",
                            {"project_slug": project.slug, "goal": payload.goal})

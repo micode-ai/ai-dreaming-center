@@ -7,20 +7,30 @@
   <h1 class="text-xl font-bold">{{ run.goal }}</h1>
   <div class="text-xs muted mt-1">
     <span class="font-mono">{{ run.id }}</span> ·
-    <span class="font-mono {% if run.status=='running' %}text-amber-700{% elif run.status=='completed' %}text-green-700{% elif run.status=='failed' %}text-red-700{% endif %}">{{ run.status }}</span> ·
+    <span id="run-status" class="font-mono {% if run.status=='running' %}text-amber-700{% elif run.status=='completed' %}text-green-700{% elif run.status=='failed' %}text-red-700{% endif %}">{{ run.status }}</span> ·
     started {{ run.started_at }}
     {% if run.finished_at %} · finished {{ run.finished_at }}{% endif %}
+    {% if run.external_id %} · session <span class="font-mono">{{ run.external_id[:8] }}…</span>{% endif %}
   </div>
-  {% if run.status == 'running' %}
-  <form method="post" action="/p/{{ project.slug }}/orchestration/{{ run.id }}/finish" class="mt-2 inline">
-    <button class="text-xs px-3 py-1 border rounded">Mark completed</button>
-  </form>
-  {% endif %}
+  <div class="mt-2 flex gap-2">
+    {% if run.status == 'running' %}
+    <form method="post" action="/p/{{ project.slug }}/orchestration/{{ run.id }}/finish" class="inline">
+      <button class="text-xs px-3 py-1 border rounded">Mark completed</button>
+    </form>
+    {% else %}
+      {% if run.external_id %}
+      <form method="post" action="/p/{{ project.slug }}/orchestration/{{ run.id }}/resume" class="inline flex gap-2">
+        <input name="prompt" placeholder="Что дальше? (опц.)" class="border rounded p-1 text-xs w-64">
+        <button class="text-xs px-3 py-1 border rounded">Resume</button>
+      </form>
+      {% endif %}
+    {% endif %}
+  </div>
 </header>
 
-<h2 class="font-semibold mb-2">Nodes ({{ nodes|length }})</h2>
+<h2 class="font-semibold mb-2">Nodes (<span id="node-count">{{ nodes|length }}</span>)</h2>
 {% if nodes %}
-<table class="w-full bg-white rounded shadow text-sm mb-6">
+<table id="nodes-table" class="w-full bg-white rounded shadow text-sm mb-6">
   <thead class="text-left border-b"><tr>
     <th class="p-2">agent</th>
     <th class="p-2">role</th>
@@ -39,10 +49,11 @@
   </tbody>
 </table>
 {% else %}
-<p class="muted text-sm mb-6">Нет nodes.</p>
+<p class="muted text-sm mb-6" id="no-nodes">Нет nodes пока.{% if run.status=='running' %} Watcher активен — подождём ещё пару секунд…{% endif %}</p>
 {% endif %}
 
-<h2 class="font-semibold mb-2">Messages ({{ messages|length }})</h2>
+<h2 class="font-semibold mb-2">Messages (<span id="msg-count">{{ messages|length }}</span>)</h2>
+<div id="messages">
 {% if messages %}
 <div class="space-y-2">
 {% for m in messages %}
@@ -57,11 +68,56 @@
 {% endfor %}
 </div>
 {% else %}
-<p class="muted text-sm">Нет messages.</p>
+<p class="muted text-sm">Нет messages пока.</p>
 {% endif %}
+</div>
 
-<details class="mt-6 text-xs">
-  <summary class="muted cursor-pointer">Raw events</summary>
-  <p class="muted mt-2">Wave 3 lean: real-time SSE/poll, sub-agent watcher и cascade — отдельная сессия. Сейчас только manual messages через API.</p>
-</details>
+<script>
+(() => {
+  // Poll every 2s while running. Stop when status leaves 'running'.
+  const runId = "{{ run.id }}";
+  const slug = "{{ project.slug }}";
+  let lastNodeCount = {{ nodes|length }};
+  let lastMsgCount = {{ messages|length }};
+  let lastStatus = "{{ run.status }}";
+
+  async function poll() {
+    try {
+      const r = await fetch(`/p/${slug}/orchestration/${runId}/refresh`);
+      if (!r.ok) return;
+      const data = await r.json();
+      const statusEl = document.getElementById('run-status');
+      if (statusEl) statusEl.textContent = data.status;
+      const nc = document.getElementById('node-count');
+      if (nc) nc.textContent = data.node_count;
+      const mc = document.getElementById('msg-count');
+      if (mc) mc.textContent = data.message_count;
+      // If counts changed, reload to render new rows.
+      if (data.node_count !== lastNodeCount || data.message_count !== lastMsgCount) {
+        location.reload();
+        return;
+      }
+      lastNodeCount = data.node_count;
+      lastMsgCount = data.message_count;
+      // If status flipped from running, reload to update buttons.
+      if (data.status !== 'running' && lastStatus === 'running') {
+        location.reload();
+        return;
+      }
+      lastStatus = data.status;
+      if (data.status === 'running') {
+        setTimeout(poll, 2000);
+      }
+    } catch (e) {
+      console.warn('poll error', e);
+      setTimeout(poll, 5000);
+    }
+  }
+
+  if (lastStatus === 'running') {
+    setTimeout(poll, 2000);
+  }
+})();
+</script>
+
 {% endblock %}
