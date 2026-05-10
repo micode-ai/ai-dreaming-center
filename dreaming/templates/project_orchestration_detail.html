@@ -1,0 +1,67 @@
+{% extends "_project_layout.html" %}
+{% set active='orchestration' %}
+{% block project_content %}
+<a href="/p/{{ project.slug }}/orchestration" class="text-sm text-blue-600 underline">← к списку runs</a>
+
+<header class="mt-3 mb-4">
+  <h1 class="text-xl font-bold">{{ run.goal }}</h1>
+  <div class="text-xs muted mt-1">
+    <span class="font-mono">{{ run.id }}</span> ·
+    <span class="font-mono {% if run.status=='running' %}text-amber-700{% elif run.status=='completed' %}text-green-700{% elif run.status=='failed' %}text-red-700{% endif %}">{{ run.status }}</span> ·
+    started {{ run.started_at }}
+    {% if run.finished_at %} · finished {{ run.finished_at }}{% endif %}
+  </div>
+  {% if run.status == 'running' %}
+  <form method="post" action="/p/{{ project.slug }}/orchestration/{{ run.id }}/finish" class="mt-2 inline">
+    <button class="text-xs px-3 py-1 border rounded">Mark completed</button>
+  </form>
+  {% endif %}
+</header>
+
+<h2 class="font-semibold mb-2">Nodes ({{ nodes|length }})</h2>
+{% if nodes %}
+<table class="w-full bg-white rounded shadow text-sm mb-6">
+  <thead class="text-left border-b"><tr>
+    <th class="p-2">agent</th>
+    <th class="p-2">role</th>
+    <th class="p-2">status</th>
+    <th class="p-2">started</th>
+  </tr></thead>
+  <tbody>
+  {% for n in nodes %}
+  <tr class="border-b">
+    <td class="p-2 font-mono text-xs">{{ n.agent_name }}</td>
+    <td class="p-2 text-xs">{{ n.role }}</td>
+    <td class="p-2 text-xs">{{ n.status }}</td>
+    <td class="p-2 text-xs muted">{{ n.started_at }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted text-sm mb-6">Нет nodes.</p>
+{% endif %}
+
+<h2 class="font-semibold mb-2">Messages ({{ messages|length }})</h2>
+{% if messages %}
+<div class="space-y-2">
+{% for m in messages %}
+  <div class="bg-white rounded shadow p-3">
+    <div class="text-xs muted mb-1">
+      <span class="font-mono">{{ m.author }}</span> ·
+      <span class="font-mono">{{ m.kind }}</span> ·
+      {{ m.ts }}
+    </div>
+    <pre class="whitespace-pre-wrap text-sm font-mono">{{ m.text }}</pre>
+  </div>
+{% endfor %}
+</div>
+{% else %}
+<p class="muted text-sm">Нет messages.</p>
+{% endif %}
+
+<details class="mt-6 text-xs">
+  <summary class="muted cursor-pointer">Raw events</summary>
+  <p class="muted mt-2">Wave 3 lean: real-time SSE/poll, sub-agent watcher и cascade — отдельная сессия. Сейчас только manual messages через API.</p>
+</details>
+{% endblock %}
