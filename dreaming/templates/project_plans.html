@@ -1,0 +1,40 @@
+{% extends "_project_layout.html" %}
+{% set active='plans' %}
+{% block project_content %}
+{% if not plans_dir_set %}
+<p class="muted">plans_dir не настроен. См. Settings.</p>
+{% elif not exists %}
+<p class="muted">Каталог <code>{{ plans_dir }}</code> не существует.</p>
+{% elif error %}
+<p class="text-sm text-red-700">Ошибка: <code>{{ error }}</code></p>
+{% elif items %}
+<p class="text-xs muted mb-3">{{ items|length }} plans in <code>{{ plans_dir }}</code></p>
+<table class="w-full bg-white rounded shadow text-sm">
+  <thead class="text-left border-b"><tr>
+    <th class="p-2">name</th>
+    <th class="p-2">title</th>
+    <th class="p-2">status</th>
+    <th class="p-2">progress</th>
+  </tr></thead>
+  <tbody>
+  {% for it in items %}
+  <tr class="border-b">
+    <td class="p-2 font-mono text-xs">{{ it.name }}</td>
+    <td class="p-2 text-xs">{{ it.title }}</td>
+    <td class="p-2"><span class="font-mono text-xs">{{ it.status }}</span></td>
+    <td class="p-2">
+      <div class="flex items-center gap-2">
+        <div class="bg-slate-200 rounded h-2 w-32 overflow-hidden">
+          <div class="bg-green-500 h-full" style="width:{{ it.progress_pct }}%"></div>
+        </div>
+        <span class="text-xs muted">{{ it.done }}/{{ it.done + it.todo }}</span>
+      </div>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Нет plan-файлов.</p>
+{% endif %}
+{% endblock %}

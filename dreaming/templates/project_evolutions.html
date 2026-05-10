@@ -1,0 +1,34 @@
+{% extends "_project_layout.html" %}
+{% set active='evolutions' %}
+{% block project_content %}
+{% if not exists %}
+<p class="muted">Каталог <code>{{ evolutions_dir }}</code> не существует.</p>
+<p class="text-xs muted">Переопредели <code>evolutions_dir</code> или <code>context_overrides_dir</code> в Settings, или создай папку.</p>
+{% elif error %}
+<p class="text-sm text-red-700">Ошибка: <code>{{ error }}</code></p>
+{% elif items %}
+<p class="text-xs muted mb-3">{{ items|length }} evolutions in <code>{{ evolutions_dir }}</code></p>
+<table class="w-full bg-white rounded shadow text-sm">
+  <thead class="text-left border-b"><tr>
+    <th class="p-2">agent</th>
+    <th class="p-2">name</th>
+    <th class="p-2">status</th>
+    <th class="p-2">conflict</th>
+    <th class="p-2">title</th>
+  </tr></thead>
+  <tbody>
+  {% for it in items %}
+  <tr class="border-b">
+    <td class="p-2 font-mono text-xs">{{ it.agent_name }}</td>
+    <td class="p-2 font-mono text-xs">{{ it.name }}</td>
+    <td class="p-2"><span class="font-mono text-xs">{{ it.status }}</span></td>
+    <td class="p-2">{{ "⚠" if it.has_conflict else "" }}</td>
+    <td class="p-2 text-xs">{{ it.title or '' }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Нет evolution-файлов в <code>{{ evolutions_dir }}</code>.</p>
+{% endif %}
+{% endblock %}
