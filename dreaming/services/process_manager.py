@@ -591,7 +591,7 @@ class ProcessManager:
         if self.db is None:
             return False
         try:
-            rows = await self.db._fetchall(
+            rows = await self.db.fetch_all(
                 "SELECT 1 FROM orchestrator_questions WHERE status='pending' LIMIT 1",
                 (),
             )
