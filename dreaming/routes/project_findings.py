@@ -1,10 +1,16 @@
-"""GET /p/{slug}/findings — flat tech-debt list + detail page + bulk close/delete."""
+"""GET /p/{slug}/findings — flat tech-debt list + detail page + bulk close/delete.
+
+POST /p/{slug}/findings/{id}/status   — change status (open|in-progress|closed|...)
+POST /p/{slug}/findings/{id}/github   — create GitHub issue + persist URL
+POST /p/{slug}/findings/{id}/orchestrate — send to Roman as orchestration goal
+"""
 from __future__ import annotations
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from dreaming.services import autoconfig
+from dreaming.services.frontmatter_io import set_frontmatter_field, find_md_file
 
 
 router = APIRouter()
@@ -104,3 +110,109 @@ async def findings_delete(request: Request, slug: str, item_id: str):
         from dreaming.services.tech_debt import delete_tech_debt_item
         delete_tech_debt_item(td_dir, item_id)
     return RedirectResponse(f"/p/{project.slug}/findings", status_code=303)
+
+
+@router.post("/p/{slug}/findings/{item_id}/status")
+async def findings_set_status(
+    request: Request, slug: str, item_id: str, status: str = Form(...),
+):
+    """Rewrite frontmatter `status:` line. Accepts any value — open / in-progress
+    / closed / dropped / blocked / ... — caller's responsibility to pick sane values."""
+    project = request.state.project
+    resolver = request.app.state.resolver_factory(request)
+    td_dir = await resolver.get(project, "tech_debt_dir", "")
+    value = status.strip()
+    if td_dir and value:
+        from dreaming.services.tech_debt import read_tech_debt_item
+        item = read_tech_debt_item(td_dir, item_id)
+        fp = getattr(item, "file_path", None) if item else None
+        path = find_md_file(td_dir, item_id, fallback_paths=[fp] if fp else None)
+        if path is not None:
+            set_frontmatter_field(path, "status", value)
+    return RedirectResponse(f"/p/{project.slug}/findings", status_code=303)
+
+
+@router.post("/p/{slug}/findings/{item_id}/github")
+async def findings_create_github(request: Request, slug: str, item_id: str):
+    """Create a GitHub issue from this finding and persist its URL into frontmatter."""
+    project = request.state.project
+    resolver = request.app.state.resolver_factory(request)
+    td_dir = await resolver.get(project, "tech_debt_dir", "")
+    if not td_dir:
+        raise HTTPException(status_code=400, detail="tech_debt_dir not set")
+    from dreaming.services.tech_debt import read_tech_debt_item, read_td
+    item = read_tech_debt_item(td_dir, item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail=f"finding {item_id} not found")
+    item_dict = dict(item.__dict__) if hasattr(item, "__dict__") else (item if isinstance(item, dict) else {})
+    title = item_dict.get("title") or item_id
+    fp = item_dict.get("file_path")
+    body_md = ""
+    if fp:
+        try:
+            _, body_md = read_td(fp)
+        except Exception:
+            body_md = ""
+    dc_url = f"http://localhost:{request.app.state.settings.port}/p/{project.slug}/findings/{item_id}"
+    issue_body = (
+        f"From AI Dreaming Center finding `{item_id}` — {dc_url}\n\n"
+        f"{body_md[:5000]}"
+    )
+    labels = ["tech-debt"]
+    if item_dict.get("priority"):
+        labels.append(f"priority:{item_dict['priority']}".lower())
+    repo_override = await resolver.get(project, "github_repo", None) or None
+    from dreaming.services.github_issues import create_issue, GitHubIssueError
+    try:
+        result = await create_issue(
+            working_dir=project.working_dir,
+            repo_override=repo_override,
+            title=f"[{project.slug}] {title}",
+            body=issue_body,
+            labels=labels,
+        )
+    except GitHubIssueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    path = find_md_file(td_dir, item_id, fallback_paths=[fp] if fp else None)
+    if path is not None:
+        set_frontmatter_field(path, "github_issue", result["url"])
+    return RedirectResponse(f"/p/{project.slug}/findings", status_code=303)
+
+
+@router.post("/p/{slug}/findings/{item_id}/orchestrate")
+async def findings_send_to_orchestration(request: Request, slug: str, item_id: str):
+    """Spawn Roman with this finding as the orchestration goal."""
+    project = request.state.project
+    resolver = request.app.state.resolver_factory(request)
+    td_dir = await resolver.get(project, "tech_debt_dir", "")
+    if not td_dir:
+        raise HTTPException(status_code=400, detail="tech_debt_dir not set")
+    from dreaming.services.tech_debt import read_tech_debt_item, read_td
+    item = read_tech_debt_item(td_dir, item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail=f"finding {item_id} not found")
+    item_dict = dict(item.__dict__) if hasattr(item, "__dict__") else {}
+    title = item_dict.get("title") or item_id
+    fp = item_dict.get("file_path")
+    body_md = ""
+    if fp:
+        try:
+            _, body_md = read_td(fp)
+        except Exception:
+            body_md = ""
+    goal = (
+        f"Реши tech-debt: «{title}» (id `{item_id}`).\n\n"
+        f"{body_md[:4000]}\n\n"
+        f"Когда закончишь, обнови frontmatter `status:` в "
+        f"`{fp or (td_dir + '/' + item_id + '.md')}` на `closed` "
+        f"(или `dropped`, если решил, что это не баг)."
+    )
+    from dreaming.services.orchestration_dispatch import start_orchestration_run
+    result = await start_orchestration_run(request.app.state, project, goal)
+    # Persist a backlink so the finding remembers which run took it on.
+    path = find_md_file(td_dir, item_id, fallback_paths=[fp] if fp else None)
+    if path is not None:
+        set_frontmatter_field(path, "orchestration_run", result["run_id"])
+    return RedirectResponse(
+        f"/p/{project.slug}/orchestration/{result['run_id']}", status_code=303,
+    )
