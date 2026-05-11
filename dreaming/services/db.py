@@ -462,6 +462,146 @@ class SqliteDB:
         await self._conn.commit()
         return n
 
+    # ── orchestrator_questions (AskUserQuestion plumbing) ─────────────
+
+    async def create_question(
+        self,
+        *,
+        project_id: int,
+        run_id: str | None,
+        node_id: str | None,
+        tool_use_id: str,
+        questions_json: str,
+    ) -> str:
+        """Insert a pending question. Returns the question id.
+
+        `tool_use_id` is UNIQUE — if claude calls AskUserQuestion with the same
+        tool_use_id twice (e.g. on resume), we return the existing row's id
+        instead of erroring.
+        """
+        existing = await self.fetch_one(
+            "SELECT id FROM orchestrator_questions WHERE tool_use_id=?",
+            (tool_use_id,),
+        )
+        if existing:
+            return existing["id"]
+        from uuid import uuid4
+        qid = str(uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        await self._conn.execute(
+            "INSERT INTO orchestrator_questions "
+            "(id, project_id, run_id, node_id, tool_use_id, questions_json, "
+            " status, asked_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)",
+            (qid, project_id, run_id or "", node_id or "", tool_use_id,
+             questions_json, now),
+        )
+        await self._conn.commit()
+        return qid
+
+    async def answer_question(
+        self, question_id: str, *, answer_text: str, status: str = "answered",
+    ) -> bool:
+        """Mark a question answered (or 'cancelled' / 'dismissed').
+        Returns True if a pending row was found and updated."""
+        now = datetime.now(timezone.utc).isoformat()
+        async with self._conn.execute(
+            "UPDATE orchestrator_questions "
+            "SET status=?, answered_at=?, answer_text=? "
+            "WHERE id=? AND status='pending'",
+            (status, now, answer_text, question_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
+    async def get_question(self, question_id: str) -> dict | None:
+        row = await self.fetch_one(
+            "SELECT * FROM orchestrator_questions WHERE id=?", (question_id,),
+        )
+        return dict(row) if row else None
+
+    async def list_questions(
+        self, project_id: int, *, status: str | None = None, limit: int = 100,
+    ) -> list:
+        if status:
+            return await self.fetch_all(
+                "SELECT * FROM orchestrator_questions "
+                "WHERE project_id=? AND status=? "
+                "ORDER BY asked_at DESC LIMIT ?",
+                (project_id, status, limit),
+            )
+        return await self.fetch_all(
+            "SELECT * FROM orchestrator_questions "
+            "WHERE project_id=? ORDER BY asked_at DESC LIMIT ?",
+            (project_id, limit),
+        )
+
+    async def reconcile_stale_sessions(
+        self,
+        active_pairs: list[tuple[int, str]],
+        learning_notes_dir: str | None = None,
+        grace_minutes: int = 2,
+    ) -> int:
+        """Close orphan running rows whose process is gone.
+
+        `active_pairs` — currently-alive `(project_id, agent_name)` tuples from
+        `pm.running` (caller provides). Anything in DB with status=running and
+        started_at older than `grace_minutes` that's NOT in active_pairs is
+        considered an orphan.
+
+        For each orphan:
+          - if a note file already exists on disk at the row's `note_path`
+            (relative to learning_notes_dir or absolute), mark `success` —
+            the slash command did the work but failed to POST /finish;
+          - otherwise mark `cancelled`.
+
+        Returns the count of rows closed.
+        """
+        from pathlib import Path
+        now_dt = datetime.now(timezone.utc)
+        cutoff = (now_dt - timedelta(minutes=grace_minutes)).isoformat()
+        rows = await self.fetch_all(
+            "SELECT id, project_id, agent_name, note_path FROM agent_learning_sessions "
+            "WHERE (status='running' OR (status IS NULL AND finished_at IS NULL)) "
+            "AND started_at < ?",
+            (cutoff,),
+        )
+        active_set = {(int(pid), name) for pid, name in active_pairs}
+        now_iso = now_dt.isoformat()
+        closed = 0
+        for row in rows:
+            pair = (int(row["project_id"]), row["agent_name"])
+            if pair in active_set:
+                continue
+            note_path = row["note_path"]
+            success = False
+            if note_path:
+                p = Path(note_path)
+                if not p.is_absolute() and learning_notes_dir:
+                    p = Path(learning_notes_dir) / note_path
+                try:
+                    if p.exists():
+                        success = True
+                except OSError:
+                    pass
+            status = "success" if success else "cancelled"
+            async with self._conn.execute(
+                "UPDATE agent_learning_sessions SET finished_at=?, status=? "
+                "WHERE id=? AND (status='running' OR (status IS NULL AND finished_at IS NULL))",
+                (now_iso, status, row["id"]),
+            ) as cur:
+                if cur.rowcount > 0:
+                    closed += 1
+                    if status == "success":
+                        await self._conn.execute(
+                            "UPDATE agent_learning_rotation SET last_studied_at=? "
+                            "WHERE project_id=? AND agent_name=?",
+                            (now_iso, row["project_id"], row["agent_name"]),
+                        )
+        await self._conn.commit()
+        return closed
+
     async def list_sessions(self, project_id: int, limit: int = 50) -> list:
         return await self.fetch_all(
             "SELECT * FROM agent_learning_sessions "

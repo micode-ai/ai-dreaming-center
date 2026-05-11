@@ -49,6 +49,53 @@ async def session_start(request: Request, payload: SessionStartIn):
     return JSONResponse({"id": sid})
 
 
+class QuestionCreateIn(BaseModel):
+    project_slug: str | None = None
+    run_id: str | None = None
+    node_id: str | None = None
+    tool_use_id: str
+    question: str
+    options: list[str] | None = None
+
+
+@router.post("/questions/create")
+async def question_create(request: Request, payload: QuestionCreateIn):
+    """Claude (via slash-command Bash) POSTs here when it wants to ask the user
+    a question. Body has `tool_use_id` (unique per claude tool call), `question`
+    text, and optional `options`. Stores a pending row in
+    `orchestrator_questions`; ProcessManager watchdog detects it and refrains
+    from killing the session for silence."""
+    project = await _resolve_project(request, payload.project_slug)
+    import json
+    qjson = json.dumps({
+        "question": payload.question,
+        "options": payload.options or [],
+    }, ensure_ascii=False)
+    qid = await request.app.state.db.create_question(
+        project_id=project.id,
+        run_id=payload.run_id,
+        node_id=payload.node_id,
+        tool_use_id=payload.tool_use_id,
+        questions_json=qjson,
+    )
+    return JSONResponse({"id": qid, "status": "pending"})
+
+
+@router.get("/questions/{question_id}/poll")
+async def question_poll(request: Request, question_id: str):
+    """Claude polls this until status != pending; then reads answer_text.
+    Returns {status, answer_text} or 404 if no such question."""
+    row = await request.app.state.db.get_question(question_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="question not found")
+    return JSONResponse({
+        "id": row["id"],
+        "status": row["status"],
+        "answer_text": row.get("answer_text") or "",
+        "answered_at": row.get("answered_at"),
+    })
+
+
 @router.post("/session/finish")
 async def session_finish(request: Request, payload: SessionFinishIn):
     db = request.app.state.db
