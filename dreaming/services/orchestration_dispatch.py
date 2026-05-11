@@ -94,8 +94,11 @@ async def start_orchestration_run(
             claude_path=getattr(settings, "claude_path", "claude"),
             working_dir=project.working_dir,
             model=getattr(settings, "model", "sonnet"),
-            max_turns=getattr(settings, "max_turns", 50),
-            timeout_minutes=getattr(settings, "timeout_minutes", 60),
+            # Roman + subagents take many more turns than a single self-study.
+            # Use dedicated orchestration_* settings so the user can scale this
+            # independently of the self-study budget.
+            max_turns=getattr(settings, "orchestration_max_turns", 150),
+            timeout_minutes=getattr(settings, "orchestration_timeout_minutes", 120),
             session_id=claude_session_id,
             # Multi-line goals get TRUNCATED at the first newline when passed
             # as a positional argv to claude.cmd on Windows. interactive_stdin
