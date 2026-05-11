@@ -33,6 +33,8 @@ class TechDebtItem:
     confidence: str = ""
     release: str = ""
     jira: str | None = None
+    github_issue: str | None = None
+    orchestration_run: str | None = None
     closed_at: str = ""
     verified_at: str = ""
     closed_by: str = ""
@@ -129,6 +131,8 @@ def parse_tech_debt(tech_debt_dir: str) -> list[TechDebtItem]:
                 confidence=str(fm.get("confidence", "")),
                 release=str(fm.get("release", "")),
                 jira=jira,
+                github_issue=str(fm.get("github_issue") or "") or None,
+                orchestration_run=str(fm.get("orchestration_run") or "") or None,
                 closed_at=_norm_date(fm.get("closed_at")),
                 verified_at=_norm_date(fm.get("verified_at")),
                 closed_by=str(fm.get("closed_by") or ""),

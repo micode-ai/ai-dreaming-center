@@ -13,7 +13,20 @@
   <span>priority: {{ item.priority or '—' }}</span>
   <span>module: {{ item.module or '—' }}</span>
 </div>
-<div class="mt-4 flex gap-2">
+<div class="mt-4 flex flex-wrap gap-2 items-center">
+  <form method="post" action="/p/{{ project.slug }}/findings/{{ item_id }}/orchestrate" class="inline"
+        onsubmit="return confirm('Запустить Roman с этим finding как целью?');">
+    <button class="text-sm px-3 py-1 rounded bg-purple-600 text-white font-semibold">Дать Roman'у разобраться</button>
+  </form>
+  {% if not item.github_issue %}
+  <form method="post" action="/p/{{ project.slug }}/findings/{{ item_id }}/github" class="inline"
+        onsubmit="return confirm('Создать GitHub issue из этого finding?');">
+    <button class="text-sm px-3 py-1 border border-slate-500 text-slate-700 rounded">→ Создать GitHub issue</button>
+  </form>
+  {% else %}
+  <a target="_blank" href="{{ item.github_issue }}"
+     class="text-sm px-3 py-1 border border-slate-300 text-slate-700 rounded">GitHub issue #{{ item.github_issue.split('/')[-1] }}</a>
+  {% endif %}
   {% if item.status != 'closed' %}
   <form method="post" action="/p/{{ project.slug }}/findings/{{ item_id }}/close" class="inline">
     <button class="text-sm px-3 py-1 border rounded">close (status → closed)</button>
@@ -24,6 +37,12 @@
     <button class="text-sm px-3 py-1 border rounded text-red-600">delete file</button>
   </form>
 </div>
+{% if item.orchestration_run %}
+<p class="mt-2 text-xs muted">
+  Уже запускался Roman:
+  <a class="text-blue-600 underline" href="/p/{{ project.slug }}/orchestration/{{ item.orchestration_run }}">run {{ item.orchestration_run[:8] }}…</a>
+</p>
+{% endif %}
 <pre class="mt-6 bg-white p-4 rounded shadow whitespace-pre-wrap text-sm font-mono">{{ body_md or '(пустое тело)' }}</pre>
 {% endif %}
 {% endblock %}

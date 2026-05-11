@@ -40,6 +40,8 @@ class ProductIdeaItem:
     jira_epic: str | None = None
     jira_task: str | None = None
     jira_ticket: str | None = None
+    github_issue: str | None = None
+    orchestration_run: str | None = None
     value_hypothesis: str = ""
     file_path: str = ""
 
@@ -100,6 +102,18 @@ def list_product_ideas(product_ideas_dir: str) -> list[ProductIdeaItem]:
             else:
                 jira_ticket = str(jira_ticket)
 
+            github_issue = fm.get("github_issue")
+            if github_issue in (None, "", "null"):
+                github_issue = None
+            else:
+                github_issue = str(github_issue)
+
+            orchestration_run = fm.get("orchestration_run")
+            if orchestration_run in (None, "", "null"):
+                orchestration_run = None
+            else:
+                orchestration_run = str(orchestration_run)
+
             items.append(ProductIdeaItem(
                 id=str(fm.get("id", "")),
                 title=str(fm.get("title", path.stem)),
@@ -118,6 +132,8 @@ def list_product_ideas(product_ideas_dir: str) -> list[ProductIdeaItem]:
                 jira_epic=jira_epic,
                 jira_task=jira_task,
                 jira_ticket=jira_ticket,
+                github_issue=github_issue,
+                orchestration_run=orchestration_run,
                 value_hypothesis=str(fm.get("value_hypothesis", "")),
                 file_path=str(path.resolve()),
             ))
