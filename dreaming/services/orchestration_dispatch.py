@@ -97,6 +97,11 @@ async def start_orchestration_run(
             max_turns=getattr(settings, "max_turns", 50),
             timeout_minutes=getattr(settings, "timeout_minutes", 60),
             session_id=claude_session_id,
+            # Multi-line goals get TRUNCATED at the first newline when passed
+            # as a positional argv to claude.cmd on Windows. interactive_stdin
+            # sidesteps that by sending the prompt as a stream-json user
+            # message after spawn — the entire wrapped_goal arrives intact.
+            interactive_stdin=True,
             env_overrides={
                 "DREAMING_PROJECT_SLUG": project.slug,
                 "DREAMING_API_URL": f"http://localhost:{settings.port}",
