@@ -1,12 +1,41 @@
-"""GET /p/{slug}/loops — reflex-loop dashboard."""
+"""GET /p/{slug}/loops — reflex-loop dashboard.
+
+POST /p/{slug}/loops/bootstrap — run /loops-bootstrap slash-command via Claude CLI.
+"""
 from __future__ import annotations
 from pathlib import Path
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import RedirectResponse
 
 from dreaming.services import autoconfig
 
 
 router = APIRouter()
+
+
+@router.post("/p/{slug}/loops/bootstrap")
+async def loops_bootstrap(request: Request, slug: str):
+    project = request.state.project
+    pm = request.app.state.process_manager
+    settings = request.app.state.settings
+    try:
+        await pm.start_command(
+            project,
+            command_name="loops-bootstrap",
+            prompt="/loops-bootstrap",
+            claude_path=getattr(settings, "claude_path", "claude"),
+            working_dir=project.working_dir,
+            model=getattr(settings, "model", "sonnet"),
+            max_turns=getattr(settings, "max_turns", 50),
+            timeout_minutes=getattr(settings, "timeout_minutes", 60),
+            env_overrides={
+                "DREAMING_PROJECT_SLUG": project.slug,
+                "DREAMING_API_URL": f"http://localhost:{settings.port}",
+            },
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return RedirectResponse(f"/p/{project.slug}/live", status_code=303)
 
 
 @router.get("/p/{slug}/loops")
