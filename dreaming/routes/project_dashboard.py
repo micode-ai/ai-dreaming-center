@@ -19,7 +19,14 @@ async def dashboard(request: Request, slug: str):
     stats = await db.week_stats(project.id)
     sessions = await db.list_sessions(project.id, limit=20)
     pfx = f"{project.slug}:"
-    active_keys = [k for k in pm.list_running().keys() if k.startswith(pfx)]
+    cmd_pfx = f"cmd:{project.slug}:"
+    # Include both self-study and command-style keys; the template constructs
+    # the right form per row (cmd:* sessions store the full composite key as
+    # agent_name in the DB).
+    active_keys = [
+        k for k in pm.list_running().keys()
+        if k.startswith(pfx) or k.startswith(cmd_pfx)
+    ]
     active_key_set = set(active_keys)
 
     # Bootstrap health: starter-kit + autoconfig
@@ -72,7 +79,9 @@ async def _stop_one(request: Request, project, session_id: str) -> None:
     )
     if row is None:
         raise HTTPException(status_code=404, detail="session not found for this project")
-    key = f"{project.slug}:{row['agent_name']}"
+    name = row["agent_name"]
+    # cmd:* sessions already store the full composite key in agent_name.
+    key = name if name.startswith("cmd:") else f"{project.slug}:{name}"
     if key in pm.list_running():
         await pm.kill(key)  # _cleanup() will mark the DB row
     else:
@@ -96,7 +105,8 @@ async def session_delete(request: Request, slug: str, session_id: str):
     )
     if row is None:
         raise HTTPException(status_code=404, detail="session not found for this project")
-    key = f"{project.slug}:{row['agent_name']}"
+    name = row["agent_name"]
+    key = name if name.startswith("cmd:") else f"{project.slug}:{name}"
     if key in pm.list_running():
         await pm.kill(key)  # never delete a row while its process is still alive
     await db.delete_session(session_id)
