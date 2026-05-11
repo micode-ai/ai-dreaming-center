@@ -49,7 +49,7 @@
 
 {% set ns = namespace(stale_orphans=0) %}
 {% for s in sessions %}
-  {% set key = project.slug ~ ":" ~ s.agent_name %}
+  {% set key = s.agent_name if s.agent_name.startswith("cmd:") else (project.slug ~ ":" ~ s.agent_name) %}
   {% if s.status == 'running' and key not in active_key_set %}
     {% set ns.stale_orphans = ns.stale_orphans + 1 %}
   {% endif %}
@@ -79,7 +79,7 @@
   </tr></thead>
   <tbody>
   {% for s in sessions %}
-  {% set key = project.slug ~ ":" ~ s.agent_name %}
+  {% set key = s.agent_name if s.agent_name.startswith("cmd:") else (project.slug ~ ":" ~ s.agent_name) %}
   {% set is_live = key in active_key_set %}
   {% set is_running_row = s.status == 'running' %}
   <tr class="border-b">
