@@ -39,7 +39,7 @@ users.
    ```markdown
    ---
    id: {slug}
-   title: {one-line title}
+   title: '{one-line title — see YAML escaping note below}'
    status: idea           # idea | exploring | approved | building | shipped | dropped
    priority: P2           # P1 high / P2 normal / P3 nice-to-have
    created_at: {YYYY-MM-DD}
@@ -63,6 +63,18 @@ users.
    ## Cost estimate
    One sentence: rough effort (hours / days / weeks).
    ```
+
+**YAML escaping note (critical — otherwise the DC parser drops the file
+silently):**
+
+   - **Always wrap the title in single quotes.** Frontmatter is YAML — a
+     bare value can't contain `"`, `:`, `?`, or `—` safely. Single-quote
+     the whole title and you're fine: `title: 'Foo "bar" baz'`.
+   - If the title itself contains a single quote, double it: `'don''t'`.
+   - Don't mix quotes (`title: "foo" — bar` is invalid — anything after
+     the closing `"` makes YAML angry).
+   - Other fields (`id`, `status`, `priority`, `created_at`) are simple
+     alphanumeric or date — no quoting needed.
 
 5. **Don't duplicate** — read existing files in `docs/product-ideas/`
    first; skip ideas already filed.

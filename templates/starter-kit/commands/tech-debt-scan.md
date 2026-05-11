@@ -36,10 +36,10 @@ write per-item Markdown files into `docs/tech-debt/`.
    ```markdown
    ---
    id: {slug}
-   title: {short one-line title}
+   title: '{short one-line title — wrap in single quotes}'
    status: open
    priority: P2     # P1 hot / P2 normal / P3 nice-to-have
-   module: {top-level module or package, e.g. "apps/api"}
+   module: '{top-level module or package, e.g. apps/api}'
    created_at: {YYYY-MM-DD}
    ---
 
@@ -62,6 +62,12 @@ write per-item Markdown files into `docs/tech-debt/`.
 
    Front-matter is parsed by the DC tech-debt page. Keep `id` matching the
    filename (without `.md`).
+
+   **YAML escaping (critical — broken frontmatter is silently dropped by
+   the parser):** always wrap `title` and `module` in single quotes. A bare
+   value can't safely contain `"`, `:`, `?`, or `—`. Inside single-quoted
+   YAML strings, a single quote is doubled (`'don''t'`). Don't mix quotes
+   (e.g. `title: "foo" — bar` is invalid YAML).
 
 4. **Don't duplicate** — read existing files in `docs/tech-debt/` first; if
    an item is already filed, skip it.
