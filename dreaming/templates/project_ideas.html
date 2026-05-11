@@ -1,13 +1,11 @@
 {% extends "_project_layout.html" %}
+{% from "_autoconfig_banner.html" import autoconfig_banner %}
 {% set active='ideas' %}
 {% block project_content %}
 {% if not ideas_dir_set %}
-<div class="bg-amber-50 border border-amber-200 rounded p-4 mb-4">
-  <p class="text-sm">Каталог product-ideas не настроен.</p>
-  <p class="text-xs muted mt-2">Зайди в <a class="text-blue-600 underline" href="/p/{{ project.slug }}/settings">Settings</a> и пропиши <code>product_ideas_dir</code>.</p>
-</div>
+{{ autoconfig_banner(project, "product_ideas_dir", autoconfig_default, "Product-ideas") }}
 {% elif not ideas_dir_exists %}
-<p class="muted">Каталог <code>{{ ideas_dir }}</code> не существует.</p>
+{{ autoconfig_banner(project, "product_ideas_dir", ideas_dir, "Product-ideas") }}
 {% elif error %}
 <p class="text-sm text-red-700">Ошибка парсинга: <code>{{ error }}</code></p>
 {% elif items %}

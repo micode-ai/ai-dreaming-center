@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from fastapi import APIRouter, Request
 
+from dreaming.services import autoconfig
+
 
 router = APIRouter()
 
@@ -30,5 +32,6 @@ async def plans_page(request: Request, slug: str):
         {"project": project, "items": items, "plans_dir": plans_dir,
          "plans_dir_set": bool(plans_dir),
          "exists": bool(plans_dir) and Path(plans_dir).exists(),
+         "autoconfig_default": autoconfig.default_abs(project, "plans_dir"),
          "error": error, "projects": projects, "locale": locale},
     )

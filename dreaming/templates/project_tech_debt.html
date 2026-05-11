@@ -1,10 +1,11 @@
 {% extends "_project_layout.html" %}
+{% from "_autoconfig_banner.html" import autoconfig_banner %}
 {% set active='tech_debt' %}
 {% block project_content %}
 {% if not td_dir_set %}
-<p class="muted">tech_debt_dir не настроен. См. <a class="text-blue-600 underline" href="/p/{{ project.slug }}/settings">Settings</a>.</p>
+{{ autoconfig_banner(project, "tech_debt_dir", autoconfig_default, "Tech-debt") }}
 {% elif not td_dir_exists %}
-<p class="muted">Каталог <code>{{ td_dir }}</code> не существует.</p>
+{{ autoconfig_banner(project, "tech_debt_dir", td_dir, "Tech-debt") }}
 {% elif error %}
 <p class="text-sm text-red-700">Ошибка парсинга: <code>{{ error }}</code></p>
 {% else %}

@@ -2,12 +2,36 @@
 {% set active='topics' %}
 {% block project_content %}
 {% if not found %}
-<p class="muted">Weekly checklist не найден. Ожидаемые пути:</p>
-<ul class="muted text-xs font-mono ml-4">
-  <li>{{ project.working_dir }}/.claude/agents/lessons/_weekly-learning-checklist.md</li>
-  <li>{{ project.working_dir }}/.claude/agents/_weekly-learning-checklist.md</li>
-</ul>
-<p class="muted mt-4">Создаётся через agent-team-starter-kit. Подробнее в spec.</p>
+  {% if can_install_checklist %}
+    <div class="mb-4 p-4 border border-amber-400 bg-amber-50 rounded">
+      <p class="font-semibold text-amber-900 mb-1">Weekly checklist ещё не создан</p>
+      <p class="text-sm text-amber-900 mb-2">
+        Это файл со списком тем, которые агенты будут изучать на этой неделе.
+        Он лежит в проекте по пути
+        <code class="text-xs">{{ project.working_dir }}/.claude/agents/lessons/_weekly-learning-checklist.md</code>.
+        Сейчас его нет — поэтому страница «Темы» пустая, а <code>nightly_learning</code>
+        запускает агентов без подсказок про темы.
+      </p>
+      <p class="text-sm text-amber-900 mb-3">
+        Создам заготовку из шаблона. Дальше ты сможешь открыть файл в редакторе
+        и вписать темы под каждого агента (формат <code>## agent-name</code> →
+        <code>- тема</code>).
+      </p>
+      <form method="post" action="/p/{{ project.slug }}/starter-kit/install">
+        <input type="hidden" name="redirect_to" value="/p/{{ project.slug }}/topics">
+        <button class="text-sm bg-amber-600 text-white rounded px-3 py-1">
+          Создать заготовку checklist
+        </button>
+      </form>
+    </div>
+  {% else %}
+    <p class="muted">Weekly checklist не найден. Ожидаемые пути:</p>
+    <ul class="muted text-xs font-mono ml-4">
+      <li>{{ project.working_dir }}/.claude/agents/lessons/_weekly-learning-checklist.md</li>
+      <li>{{ project.working_dir }}/.claude/agents/_weekly-learning-checklist.md</li>
+    </ul>
+    <p class="muted mt-4">Шаблон для автоматической установки не найден в <code>templates/starter-kit/</code>.</p>
+  {% endif %}
 {% elif items %}
 <p class="text-xs muted mb-3">Источник: <code>{{ checklist_path }}</code></p>
 <div class="bg-white rounded shadow p-4 space-y-1 text-sm font-mono">
@@ -20,6 +44,23 @@
 {% endfor %}
 </div>
 {% else %}
-<p class="muted">Файл найден, но parser ничего не извлёк.</p>
+<div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
+  <p class="font-semibold text-sky-900 mb-1">Файл-заготовка создан, но тем пока нет</p>
+  <p class="text-sm text-sky-900 mb-2">
+    Файл: <code class="text-xs">{{ checklist_path }}</code>.
+    Открой его в редакторе и впиши темы в таком формате:
+  </p>
+  <pre class="text-xs bg-white border rounded p-2 mb-2">## aba-architect
+- ревью миграции accounts→users
+- проверить spec под новый payment-flow
+
+## frontend-architect
+- consistency Modal в новых формах</pre>
+  <p class="text-xs text-sky-900">
+    После сохранения обнови эту страницу — увидишь свои темы.
+    Секции <code>## Приоритет недели</code> и <code>## Общие (любой агент)</code>
+    парсер пропускает, они только для человеческих заметок.
+  </p>
+</div>
 {% endif %}
 {% endblock %}
