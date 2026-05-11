@@ -23,9 +23,14 @@ async def orchestration_list(request: Request, slug: str):
         for key, sess in pm.list_running().items()
         if key.startswith(f"cmd:{slug}:roman-")
     }
+    def _ext(r):
+        try:
+            return r["external_id"] or ""
+        except (IndexError, KeyError):
+            return ""
     stale_running = sum(
         1 for r in runs
-        if r["status"] == "running" and (r.get("external_id") or "") not in live_session_ids
+        if r["status"] == "running" and _ext(r) not in live_session_ids
     )
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
     projects = await request.app.state.projects.list_all(only_enabled=True)
