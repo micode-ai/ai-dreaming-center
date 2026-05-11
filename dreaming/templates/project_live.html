@@ -3,10 +3,11 @@
 {% block project_content %}
 {% if active_runs %}
 <div class="space-y-4">
-{% for key, agent in active_runs %}
+{% for key, agent, is_cmd in active_runs %}
   <div class="bg-white rounded shadow p-3">
     <div class="flex items-baseline gap-3 mb-2">
       <h2 class="font-semibold">{{ agent }}</h2>
+      {% if is_cmd %}<span class="text-xs bg-slate-200 text-slate-700 rounded px-2 py-0.5 font-mono">command</span>{% endif %}
       <span class="font-mono text-xs muted">{{ key }}</span>
       <form method="post" action="/p/{{ project.slug }}/live/kill/{{ agent }}" class="ml-auto">
         <button class="text-xs px-2 py-1 border rounded text-red-600">Kill</button>
