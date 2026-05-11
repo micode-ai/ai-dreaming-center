@@ -142,12 +142,38 @@ Source: [`project_rotation.py`](../../dreaming/routes/project_rotation.py).
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/p/{slug}/rotation` | Roster. On entry auto-adds agents from `list_agent_names(working_dir)` if missing in DB. |
+| GET | `/p/{slug}/rotation` | Roster. On entry auto-adds agents from `list_agent_names(working_dir)` if missing in DB. Passes `kit_status` to the template (see below). |
 | POST | `/p/{slug}/rotation/tier` form `agent_name=&tier=` | Tier ∈ {1, 2, 3}. |
 | POST | `/p/{slug}/rotation/toggle` form `agent_name=` | Toggle enabled. |
 | POST | `/p/{slug}/rotation/start/{agent}` | Start self-study session, redirect to `/p/{slug}/live`. 409 if already running. |
 
 `/rotation/start/{agent}` always passes env `DREAMING_PROJECT_SLUG` and `DREAMING_API_URL=http://localhost:{port}`.
+
+### Starter-kit
+
+Source: [`project_rotation.py`](../../dreaming/routes/project_rotation.py) (installer endpoint lives here for historical reasons — the path itself is neutral).
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/p/{slug}/starter-kit/install` form `force=&redirect_to=` | Copies `templates/starter-kit/**` into `{working_dir}/.claude/`. `force=1` overwrites, otherwise skip-if-exists. Redirects to `redirect_to` or Referer (same-origin: only `/p/{slug}*`). |
+
+Used by both the Rotation page and the Topics page — each sends its own `redirect_to` so the user lands back where they started.
+
+See [`services.md#starter_kitpy--slash-command-installer`](services.md#starter_kitpy--slash-command-installer) and [`user/features/out-of-the-box.md#starter-kit`](user/features/out-of-the-box.md#starter-kit).
+
+### Dashboard actions
+
+Source: [`project_dashboard.py`](../../dreaming/routes/project_dashboard.py).
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/p/{slug}/` | Dashboard. Passes `sessions`, `active_keys`, `active_key_set`, `kit_status`, `missing_dirs`, `bootstrap_needed` to the template. |
+| POST | `/p/{slug}/bootstrap-all` | Master "out of the box" button: `starter_kit.install(force=False)` + `autoconfig.apply_all_defaults(skip_existing=True)`. Idempotent. Same-origin redirect to Referer. |
+| POST | `/p/{slug}/sessions/{session_id}/stop` | Stop: if the process is alive — `pm.kill(key)`, otherwise `db.cancel_session(session_id)` (orphan). Redirects to `/p/{slug}/`. |
+| POST | `/p/{slug}/sessions/{session_id}/delete` | Delete: kills the process if alive, then `db.delete_session(session_id)`. 404 if the row doesn't belong to this project. |
+| POST | `/p/{slug}/sessions/force-close-stale` | Mass-marks every running row for this project as `cancelled` via `db.cancel_stale_running(project_id)`. Does not touch live processes. |
+
+See [`user/features/out-of-the-box.md#session-controls`](user/features/out-of-the-box.md#session-controls).
 
 ### Settings (per-project)
 
@@ -157,8 +183,9 @@ Source: [`project_settings.py`](../../dreaming/routes/project_settings.py).
 |---|---|---|
 | GET | `/p/{slug}/settings` | Form, renders `is_overridden` + global value + override value for each key in SETTINGS_GROUPS. |
 | POST | `/p/{slug}/settings` | Per-key action: `inherit` → `unset_setting`; `override` → `set_setting` (or `unset_setting` if text-value is empty). |
+| POST | `/p/{slug}/settings/autoconfig` form `key=&redirect_to=` | One-click: `mkdir -p` the default path for `key` (see `autoconfig.DEFAULTS`), save the override. Same-origin redirect to `redirect_to` or Referer. 400 if `key` is not in DEFAULTS. |
 
-See details in [`features/settings.md`](features/settings.md).
+See details in [`features/settings.md`](features/settings.md) and [`user/features/out-of-the-box.md#directory-autoconfig`](user/features/out-of-the-box.md#directory-autoconfig).
 
 ### Topics, Kanban, Notes
 
