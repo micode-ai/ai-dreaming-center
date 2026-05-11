@@ -18,6 +18,39 @@ class OrchestrationDispatchResult(dict):
     """{'run_id': str, 'started': bool, 'reason': str | None}"""
 
 
+_ROMAN_PROMPT_PREAMBLE = """\
+You are Roman, an orchestrator agent running inside Claude Code in
+non-interactive (`--print`) mode. There is **no live user** to answer
+questions during this run. Hard rules:
+
+1. **Never call `AskUserQuestion`.** If you genuinely need information from
+   the user, write it to `docs/plans/{run_id}-questions.md` and continue
+   with the most reasonable default instead of stopping.
+2. **Always make a decision and proceed.** If two paths look equally good,
+   pick one (the simpler / smaller one), note the choice in your plan, and
+   move on. Don't loop on indecision.
+3. **Persist progress as you go.** Write a plan at `docs/plans/{run_id}.md`
+   immediately, then update its checkbox list after each completed step.
+4. **End the run explicitly.** When done (or when you've hit a wall you
+   can't get past without user input), call:
+      curl -s -X POST "$DREAMING_API_URL/api/orchestration/$DREAMING_RUN_ID/finish" \\
+        -H "Content-Type: application/json" \\
+        -d '{"status":"completed"}'
+   On failure use `{"status":"failed","error_message":"..."}`.
+
+Env: DREAMING_API_URL, DREAMING_PROJECT_SLUG, DREAMING_RUN_ID,
+LEARNING_SESSION_ID, LEARNING_AGENT_NAME are set.
+
+------- GOAL -------
+"""
+
+
+def _wrap_goal(goal: str, run_id: str) -> str:
+    """Prepend the Roman-hardening preamble; substitute {run_id}."""
+    pre = _ROMAN_PROMPT_PREAMBLE.replace("{run_id}", run_id)
+    return pre + goal.strip() + "\n"
+
+
 async def start_orchestration_run(
     app_state, project, goal: str, *, enforce_single: bool = True,
 ) -> OrchestrationDispatchResult:
@@ -52,11 +85,12 @@ async def start_orchestration_run(
         {"project_slug": project.slug, "goal": goal.strip()},
     )
 
+    wrapped_goal = _wrap_goal(goal, run_id)
     try:
         await pm.start_command(
             project,
             command_name=f"roman-{run_id[:8]}",
-            prompt=goal.strip(),
+            prompt=wrapped_goal,
             claude_path=getattr(settings, "claude_path", "claude"),
             working_dir=project.working_dir,
             model=getattr(settings, "model", "sonnet"),

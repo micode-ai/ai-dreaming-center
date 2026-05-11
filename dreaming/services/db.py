@@ -602,6 +602,75 @@ class SqliteDB:
         await self._conn.commit()
         return closed
 
+    async def cancel_stale_orchestration_runs(
+        self,
+        active_session_ids: set[str] | list[str],
+        *,
+        grace_minutes: int = 5,
+    ) -> int:
+        """Close orphan orchestrator_runs whose claude process is gone.
+
+        `active_session_ids` — claude session-ids currently alive in PM (we
+        take them from `cmd:*` keys of pm.list_running — those whose
+        agent_name starts with `cmd:{slug}:roman-`). Any run with
+        status='running' and `external_id` NOT in that set, started more
+        than `grace_minutes` ago, is marked status='failed' with a synthetic
+        error_message so the user sees what happened on the list page.
+
+        Returns the count of runs closed.
+        """
+        now_dt = datetime.now(timezone.utc)
+        cutoff = (now_dt - timedelta(minutes=grace_minutes)).isoformat()
+        rows = await self.fetch_all(
+            "SELECT id, external_id, project_id FROM orchestrator_runs "
+            "WHERE status='running' AND started_at < ?",
+            (cutoff,),
+        )
+        active = set(active_session_ids)
+        now_iso = now_dt.isoformat()
+        closed = 0
+        for row in rows:
+            ext = row["external_id"]
+            if ext and ext in active:
+                continue
+            async with self._conn.execute(
+                "UPDATE orchestrator_runs "
+                "SET status='failed', finished_at=?, "
+                "    error_message='Claude process exited without calling /api/orchestration/{id}/finish — likely hit non-interactive AskUserQuestion limit. See logs for details.' "
+                "WHERE id=? AND status='running'",
+                (now_iso, row["id"]),
+            ) as cur:
+                if cur.rowcount > 0:
+                    closed += 1
+                    # Best effort: also close any still-running nodes for the run
+                    await self._conn.execute(
+                        "UPDATE orchestrator_nodes SET status='failed', finished_at=? "
+                        "WHERE run_id=? AND status='running'",
+                        (now_iso, row["id"]),
+                    )
+        await self._conn.commit()
+        return closed
+
+    async def cancel_stale_orchestration_runs_for_project(self, project_id: int) -> int:
+        """User-triggered: close every running run for this project, regardless of age."""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        async with self._conn.execute(
+            "UPDATE orchestrator_runs "
+            "SET status='cancelled', finished_at=?, "
+            "    error_message='Force-closed by user from the orchestration list page' "
+            "WHERE project_id=? AND status='running'",
+            (now_iso, project_id),
+        ) as cur:
+            n = cur.rowcount
+        if n > 0:
+            await self._conn.execute(
+                "UPDATE orchestrator_nodes SET status='cancelled', finished_at=? "
+                "WHERE project_id=? AND status='running'",
+                (now_iso, project_id),
+            )
+        await self._conn.commit()
+        return n
+
     async def list_sessions(self, project_id: int, limit: int = 50) -> list:
         return await self.fetch_all(
             "SELECT * FROM agent_learning_sessions "
