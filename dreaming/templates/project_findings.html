@@ -1,13 +1,11 @@
 {% extends "_project_layout.html" %}
+{% from "_autoconfig_banner.html" import autoconfig_banner %}
 {% set active='findings' %}
 {% block project_content %}
 {% if not td_dir_set %}
-<div class="bg-amber-50 border border-amber-200 rounded p-4 mb-4">
-  <p class="text-sm">Каталог tech-debt не настроен.</p>
-  <p class="text-xs muted mt-2">Зайди в <a class="text-blue-600 underline" href="/p/{{ project.slug }}/settings">Settings</a> и пропиши <code>tech_debt_dir</code>, например: <code>D:\Work\micode\{{ project.slug }}\docs\tech-debt</code>.</p>
-</div>
+{{ autoconfig_banner(project, "tech_debt_dir", autoconfig_default, "Tech-debt") }}
 {% elif not td_dir_exists %}
-<p class="muted">Каталог <code>{{ td_dir }}</code> не существует.</p>
+{{ autoconfig_banner(project, "tech_debt_dir", td_dir, "Tech-debt") }}
 {% elif error %}
 <div class="bg-red-50 border border-red-200 rounded p-4 mb-4">
   <p class="text-sm text-red-700">Ошибка парсинга: <code>{{ error }}</code></p>
@@ -47,6 +45,16 @@
   </tbody>
 </table>
 {% else %}
-<p class="muted">В <code>{{ td_dir }}</code> нет markdown файлов.</p>
+<div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
+  <p class="font-semibold text-sky-900 mb-1">В <code>{{ td_dir }}</code> нет markdown файлов</p>
+  <p class="text-sm text-sky-900 mb-2">
+    Findings (они же tech-debt items) пишутся slash-командой <code>/tech-debt-scan</code> —
+    claude сканит репо на TODO/FIXME/legacy/смелли и кладёт каждую находку
+    отдельным markdown'ом сюда. Запустить можно прямо сейчас:
+  </p>
+  <form method="post" action="/p/{{ project.slug }}/tech-debt/scan">
+    <button class="text-sm bg-blue-600 text-white rounded px-3 py-1">Run /tech-debt-scan</button>
+  </form>
+</div>
 {% endif %}
 {% endblock %}

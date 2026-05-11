@@ -25,10 +25,17 @@ def _job_id(kind: str, slug: str) -> str:
 
 
 async def _ai_usage_ingest_job(app_state):
-    """Ingest Claude Code session JSONLs into ai_usage_events."""
+    """Ingest Claude Code session JSONLs into ai_usage_events.
+
+    `max_files` is raised well above the default (1000) — with a few thousand
+    JSONLs accumulated over months, the alphabetically-first 1000 tend to be
+    user-terminal sessions (`C:\\Users\\<name>` cwd) that don't match any
+    project, so the parser hits the cap before reaching DC-spawned files."""
     from dreaming.services.ai_usage_parser import ingest_ai_usage
     try:
-        result = await ingest_ai_usage(app_state.db, app_state.projects)
+        result = await ingest_ai_usage(
+            app_state.db, app_state.projects, max_files=20000,
+        )
         log.info("ai_usage_ingest: %s", result)
     except Exception as e:
         log.warning("ai_usage_ingest failed: %s", e)
