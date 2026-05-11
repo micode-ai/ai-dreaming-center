@@ -54,6 +54,31 @@ async def ideas_page(request: Request, slug: str, status: str | None = None):
     )
 
 
+@router.post("/p/{slug}/ideas/scan")
+async def ideas_scan(request: Request, slug: str):
+    project = request.state.project
+    pm = request.app.state.process_manager
+    settings = request.app.state.settings
+    try:
+        await pm.start_command(
+            project,
+            command_name="product-idea-scan",
+            prompt="/product-idea-scan",
+            claude_path=getattr(settings, "claude_path", "claude"),
+            working_dir=project.working_dir,
+            model=getattr(settings, "model", "sonnet"),
+            max_turns=getattr(settings, "max_turns", 50),
+            timeout_minutes=getattr(settings, "timeout_minutes", 60),
+            env_overrides={
+                "DREAMING_PROJECT_SLUG": project.slug,
+                "DREAMING_API_URL": f"http://localhost:{settings.port}",
+            },
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return RedirectResponse(f"/p/{project.slug}/live", status_code=303)
+
+
 @router.post("/p/{slug}/ideas/{item_id}/jira")
 async def ideas_create_jira(request: Request, slug: str, item_id: str):
     project = request.state.project

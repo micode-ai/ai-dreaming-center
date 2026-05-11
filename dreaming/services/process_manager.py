@@ -285,6 +285,16 @@ class ProcessManager:
 
         log.info("Starting command %s: %s", command_name, " ".join(cmd[:6]))
 
+        # Build env including the LEARNING_* hooks so slash-commands spawned
+        # via start_command can report back to /api/session/finish exactly like
+        # /self-study does.
+        env = self._build_env(env_overrides)
+        if db_session_id:
+            env["LEARNING_SESSION_ID"] = db_session_id
+        env["LEARNING_AGENT_NAME"] = key
+        env["LEARNING_PROJECT_SLUG"] = project.slug
+        env["LEARNING_PROJECT_ID"] = str(project.id)
+
         try:
             process = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -292,7 +302,7 @@ class ProcessManager:
                 stderr=asyncio.subprocess.STDOUT,
                 cwd=working_dir,
                 stdin=(asyncio.subprocess.PIPE if interactive_stdin else asyncio.subprocess.DEVNULL),
-                env=self._build_env(env_overrides),
+                env=env,
                 limit=STDOUT_BUFFER_LIMIT,
             )
         except FileNotFoundError:

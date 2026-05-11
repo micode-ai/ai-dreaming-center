@@ -4,6 +4,8 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
+from dreaming.services import autoconfig
+
 
 router = APIRouter()
 
@@ -41,6 +43,7 @@ async def findings_page(request: Request, slug: str):
         request, "project_findings.html",
         {"project": project, "items": items, "td_dir": td_dir,
          "td_dir_set": bool(td_dir), "td_dir_exists": bool(td_dir) and Path(td_dir).exists(),
+         "autoconfig_default": autoconfig.default_abs(project, "tech_debt_dir"),
          "error": error,
          "projects": projects, "locale": locale},
     )
