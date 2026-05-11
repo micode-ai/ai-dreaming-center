@@ -42,22 +42,35 @@ async def _ai_usage_ingest_job(app_state):
 
 
 async def _reconcile_job(app_state):
-    """Build (project_id, agent_name) pairs from currently-running keys, then
-    ask ProcessManager to close orphans."""
+    """Close orphans across all process-backed tables:
+      - agent_learning_sessions (self-study + cmd:* sessions)
+      - orchestrator_runs (Roman runs whose claude process is gone)
+    """
     pm = app_state.process_manager
     pairs: list[tuple[int, str]] = []
+    cmd_session_ids: set[str] = set()
     for key, sess in pm.list_running().items():
         if key.startswith("cmd:"):
+            # `cmd:{slug}:{cmd_name}` — RunningSession.session_id holds the
+            # claude `--session-id` (= orchestrator_runs.external_id for Roman).
+            cmd_session_ids.add(getattr(sess, "session_id", "") or "")
             continue
         slug, _, agent = key.partition(":")
         proj = await app_state.projects.get_by_slug(slug)
         if proj:
             pairs.append((proj.id, agent))
+    closed = 0
     try:
-        return await pm.reconcile_stale_sessions(pairs)
+        closed += await pm.reconcile_stale_sessions(pairs) or 0
     except Exception as e:
-        log.warning("reconcile_job error: %s", e)
-        return 0
+        log.warning("reconcile_job session error: %s", e)
+    try:
+        closed += await app_state.db.cancel_stale_orchestration_runs(
+            cmd_session_ids, grace_minutes=5,
+        ) or 0
+    except Exception as e:
+        log.warning("reconcile_job orchestration error: %s", e)
+    return closed
 
 
 async def _nightly_learning(app_state, project_id: int):
