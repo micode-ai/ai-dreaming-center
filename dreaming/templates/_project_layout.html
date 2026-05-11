@@ -9,6 +9,8 @@
      href="/p/{{ project.slug }}/">{{ "p.dashboard" | t(locale=locale) }}</a>
   <a class="py-2 {% if active=='orchestration' %}border-b-2 border-blue-600 text-blue-700 font-semibold{% else %}text-slate-600 hover:text-slate-900{% endif %}"
      href="/p/{{ project.slug }}/orchestration">{{ "p.orchestration" | t(locale=locale) }}</a>
+  <a class="py-2 {% if active=='questions' %}border-b-2 border-blue-600 text-blue-700 font-semibold{% else %}text-slate-600 hover:text-slate-900{% endif %}"
+     href="/p/{{ project.slug }}/questions">{{ "p.questions" | t(locale=locale) }}</a>
   <a class="py-2 {% if active=='live' %}border-b-2 border-blue-600 text-blue-700 font-semibold{% else %}text-slate-600 hover:text-slate-900{% endif %}"
      href="/p/{{ project.slug }}/live">{{ "p.live" | t(locale=locale) }}</a>
   <a class="py-2 {% if active=='rotation' %}border-b-2 border-blue-600 text-blue-700 font-semibold{% else %}text-slate-600 hover:text-slate-900{% endif %}"
