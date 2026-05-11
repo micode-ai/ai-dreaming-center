@@ -19,25 +19,45 @@
     <th class="p-2">status</th>
     <th class="p-2">priority</th>
     <th class="p-2">module</th>
+    <th class="p-2">refs</th>
     <th class="p-2"></th>
   </tr></thead>
   <tbody>
   {% for it in items %}
-  <tr class="border-b">
+  <tr class="border-b align-top">
     <td class="p-2 font-mono text-xs"><a class="text-blue-600 underline" href="/p/{{ project.slug }}/findings/{{ it.id }}">{{ it.id or it.slug or '—' }}</a></td>
     <td class="p-2">{{ it.title or '—' }}</td>
-    <td class="p-2 text-xs"><span class="font-mono">{{ it.status or '—' }}</span></td>
+    <td class="p-2 text-xs">
+      <form method="post" action="/p/{{ project.slug }}/findings/{{ it.id }}/status" class="inline">
+        <select name="status" onchange="this.form.submit()" class="border rounded p-1 text-xs font-mono">
+          {% set cur = it.status or 'open' %}
+          {% for opt in ['open', 'in-progress', 'blocked', 'closed', 'dropped'] %}
+          <option value="{{ opt }}" {% if cur==opt %}selected{% endif %}>{{ opt }}</option>
+          {% endfor %}
+        </select>
+      </form>
+    </td>
     <td class="p-2 text-xs">{{ it.priority or '—' }}</td>
     <td class="p-2 text-xs muted">{{ it.module or '' }}</td>
+    <td class="p-2 text-xs font-mono">
+      {% if it.github_issue %}<a class="text-blue-600 underline" target="_blank" href="{{ it.github_issue }}">GH</a>{% endif %}
+      {% if it.orchestration_run %}<a class="text-purple-600 underline ml-1" href="/p/{{ project.slug }}/orchestration/{{ it.orchestration_run }}">run</a>{% endif %}
+      {% if it.jira %}<span class="ml-1 muted">{{ it.jira }}</span>{% endif %}
+    </td>
     <td class="p-2 text-xs whitespace-nowrap">
-      {% if it.status != 'closed' %}
-      <form method="post" action="/p/{{ project.slug }}/findings/{{ it.id }}/close" class="inline">
-        <button class="text-xs px-2 py-1 border rounded">close</button>
+      <form method="post" action="/p/{{ project.slug }}/findings/{{ it.id }}/orchestrate" class="inline"
+            onsubmit="return confirm('Запустить Roman с этим finding как целью?');">
+        <button class="text-xs px-2 py-1 border border-purple-500 text-purple-700 rounded">Roman</button>
+      </form>
+      {% if not it.github_issue %}
+      <form method="post" action="/p/{{ project.slug }}/findings/{{ it.id }}/github" class="inline ml-1"
+            onsubmit="return confirm('Создать GitHub issue?');">
+        <button class="text-xs px-2 py-1 border border-slate-500 text-slate-700 rounded">→ GH</button>
       </form>
       {% endif %}
-      <form method="post" action="/p/{{ project.slug }}/findings/{{ it.id }}/delete" class="inline"
+      <form method="post" action="/p/{{ project.slug }}/findings/{{ it.id }}/delete" class="inline ml-1"
             onsubmit="return confirm('Удалить {{ it.id }}?')">
-        <button class="text-xs px-2 py-1 border rounded text-red-600">delete</button>
+        <button class="text-xs px-2 py-1 border rounded text-red-600">del</button>
       </form>
     </td>
   </tr>

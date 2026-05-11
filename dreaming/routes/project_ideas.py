@@ -6,13 +6,18 @@ and persist the resulting key back to the markdown file's frontmatter.
 from __future__ import annotations
 import re
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from dreaming.services import autoconfig
+from dreaming.services.frontmatter_io import set_frontmatter_field, find_md_file
 
 
 router = APIRouter()
+
+
+def _find_idea_file(ideas_dir: str, item_id: str) -> Path | None:
+    return find_md_file(ideas_dir, item_id)
 
 
 @router.get("/p/{slug}/ideas")
@@ -135,3 +140,109 @@ async def ideas_create_jira(request: Request, slug: str, item_id: str):
         raise HTTPException(status_code=400, detail=str(e))
 
     return RedirectResponse(f"/p/{project.slug}/ideas", status_code=303)
+
+
+@router.post("/p/{slug}/ideas/{item_id}/status")
+async def ideas_set_status(
+    request: Request, slug: str, item_id: str, status: str = Form(...),
+):
+    project = request.state.project
+    resolver = request.app.state.resolver_factory(request)
+    ideas_dir = await resolver.get(project, "product_ideas_dir", "")
+    value = status.strip()
+    if ideas_dir and value:
+        path = _find_idea_file(ideas_dir, item_id)
+        if path is not None:
+            set_frontmatter_field(path, "status", value)
+    return RedirectResponse(f"/p/{project.slug}/ideas", status_code=303)
+
+
+@router.post("/p/{slug}/ideas/{item_id}/github")
+async def ideas_create_github(request: Request, slug: str, item_id: str):
+    """Create a GitHub issue from this idea + persist URL into frontmatter."""
+    project = request.state.project
+    resolver = request.app.state.resolver_factory(request)
+    ideas_dir = await resolver.get(project, "product_ideas_dir", "")
+    if not ideas_dir:
+        raise HTTPException(status_code=400, detail="product_ideas_dir not set")
+    from dreaming.services.product_ideas import list_product_ideas, read_product_idea
+    target = None
+    for it in list_product_ideas(ideas_dir):
+        obj = it.__dict__ if hasattr(it, "__dict__") else (it if isinstance(it, dict) else {})
+        if obj.get("id") == item_id or obj.get("slug") == item_id:
+            target = obj
+            break
+    if target is None:
+        raise HTTPException(status_code=404, detail=f"idea {item_id} not found")
+    path = _find_idea_file(ideas_dir, item_id)
+    body_md = ""
+    if path is not None:
+        try:
+            _, body_md = read_product_idea(str(path))
+        except Exception:
+            body_md = ""
+    title = target.get("title") or item_id
+    dc_url = f"http://localhost:{request.app.state.settings.port}/p/{project.slug}/ideas"
+    issue_body = (
+        f"From AI Dreaming Center product idea `{item_id}` — {dc_url}\n\n"
+        f"{body_md[:5000]}"
+    )
+    labels = ["product-idea"]
+    if target.get("priority"):
+        labels.append(f"priority:{target['priority']}".lower())
+    repo_override = await resolver.get(project, "github_repo", None) or None
+    from dreaming.services.github_issues import create_issue, GitHubIssueError
+    try:
+        result = await create_issue(
+            working_dir=project.working_dir,
+            repo_override=repo_override,
+            title=f"[{project.slug}] {title}",
+            body=issue_body,
+            labels=labels,
+        )
+    except GitHubIssueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if path is not None:
+        set_frontmatter_field(path, "github_issue", result["url"])
+    return RedirectResponse(f"/p/{project.slug}/ideas", status_code=303)
+
+
+@router.post("/p/{slug}/ideas/{item_id}/orchestrate")
+async def ideas_send_to_orchestration(request: Request, slug: str, item_id: str):
+    project = request.state.project
+    resolver = request.app.state.resolver_factory(request)
+    ideas_dir = await resolver.get(project, "product_ideas_dir", "")
+    if not ideas_dir:
+        raise HTTPException(status_code=400, detail="product_ideas_dir not set")
+    from dreaming.services.product_ideas import list_product_ideas, read_product_idea
+    target = None
+    for it in list_product_ideas(ideas_dir):
+        obj = it.__dict__ if hasattr(it, "__dict__") else (it if isinstance(it, dict) else {})
+        if obj.get("id") == item_id or obj.get("slug") == item_id:
+            target = obj
+            break
+    if target is None:
+        raise HTTPException(status_code=404, detail=f"idea {item_id} not found")
+    path = _find_idea_file(ideas_dir, item_id)
+    body_md = ""
+    if path is not None:
+        try:
+            _, body_md = read_product_idea(str(path))
+        except Exception:
+            body_md = ""
+    title = target.get("title") or item_id
+    goal = (
+        f"Спроектируй и реализуй продуктовую идею: «{title}» (id `{item_id}`).\n\n"
+        f"{body_md[:4000]}\n\n"
+        f"Шаги: (1) разнеси задачи в `docs/plans/{item_id}-plan.md` с "
+        f"чек-листом, (2) сформулируй контракты модулей в `docs/contracts/`, "
+        f"(3) реализуй основной путь, (4) обнови frontmatter `status:` "
+        f"в `{path}` на `building` (или `dropped`, если решил, что идея не годится)."
+    )
+    from dreaming.services.orchestration_dispatch import start_orchestration_run
+    result = await start_orchestration_run(request.app.state, project, goal)
+    if path is not None:
+        set_frontmatter_field(path, "orchestration_run", result["run_id"])
+    return RedirectResponse(
+        f"/p/{project.slug}/orchestration/{result['run_id']}", status_code=303,
+    )
