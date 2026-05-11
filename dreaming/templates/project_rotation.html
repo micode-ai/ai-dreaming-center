@@ -2,6 +2,40 @@
 {% set active='rotation' %}
 {% block project_content %}
 <p class="muted mb-3">{{ rotation|length }} agents in DB; {{ fs_count }} on disk in {{ project.working_dir }}/.claude/agents/</p>
+
+{% if kit_status.template_files %}
+  {% if not kit_status.all_present %}
+    <div class="mb-4 p-3 border border-amber-400 bg-amber-50 rounded text-sm">
+      <p class="font-semibold text-amber-800 mb-1">Starter-kit slash-commands are missing</p>
+      <p class="text-amber-900 mb-2">
+        Sessions need <code>/self-study</code> (and any other commands in the kit)
+        to be present at <code>{{ project.working_dir }}/.claude/commands/</code>.
+        Without them claude CLI exits in milliseconds with $0 cost (no actual work runs).
+      </p>
+      <p class="text-xs text-amber-900 mb-2">
+        Missing: {% for f in kit_status.missing %}<code class="mr-1">{{ f }}</code>{% endfor %}
+      </p>
+      <form method="post" action="/p/{{ project.slug }}/starter-kit/install" class="inline">
+        <button class="text-xs bg-amber-600 text-white rounded px-3 py-1">Install starter kit</button>
+      </form>
+    </div>
+  {% else %}
+    <details class="mb-4 text-xs muted">
+      <summary class="cursor-pointer">✓ starter kit installed ({{ kit_status.installed|length }} file{{ "s" if kit_status.installed|length != 1 else "" }})</summary>
+      <ul class="mt-1 ml-4 list-disc">
+        {% for f in kit_status.installed %}<li><code>{{ f }}</code></li>{% endfor %}
+      </ul>
+      <form method="post" action="/p/{{ project.slug }}/starter-kit/install" class="mt-2">
+        <input type="hidden" name="force" value="1">
+        <button class="text-xs border rounded px-2 py-1"
+                onclick="return confirm('Overwrite existing starter-kit files with the latest template?');">
+          Reinstall (overwrite)
+        </button>
+      </form>
+    </details>
+  {% endif %}
+{% endif %}
+
 <table class="w-full bg-white rounded shadow text-sm">
   <thead class="text-left border-b"><tr>
     <th class="p-2">agent</th>

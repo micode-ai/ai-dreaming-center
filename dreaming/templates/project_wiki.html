@@ -1,17 +1,25 @@
 {% extends "_project_layout.html" %}
+{% from "_autoconfig_banner.html" import autoconfig_banner %}
 {% set active='wiki' %}
 {% block project_content %}
 {% if not wiki_dir_set %}
-<div class="bg-amber-50 border border-amber-200 rounded p-4 mb-4">
-  <p class="text-sm">Каталог wiki не настроен.</p>
-  <p class="text-xs muted mt-2">Пропиши <code>wiki_dir</code> в Settings или через CLI: <code>set_setting('wiki_dir', '...')</code>.</p>
+{{ autoconfig_banner(project, "wiki_dir", autoconfig_default, "Wiki") }}
+{% elif not status.exists or status.domains_count == 0 %}
+<div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
+  <p class="font-semibold text-sky-900 mb-1">
+    {% if not status.exists %}Каталог wiki не существует{% else %}Wiki ещё пустая{% endif %}
+  </p>
+  <p class="text-sm text-sky-900 mb-2">
+    Путь: <code class="text-xs">{{ status.wiki_dir }}</code>
+  </p>
+  <p class="text-sm text-sky-900 mb-3">
+    Запусти <code>/wiki-bootstrap</code> — Claude CLI пройдёт по репо и сложит сюда
+    domain-страницы.
+  </p>
+  <form method="post" action="/p/{{ project.slug }}/wiki/bootstrap">
+    <button class="text-sm bg-blue-600 text-white rounded px-3 py-1">Run /wiki-bootstrap</button>
+  </form>
 </div>
-{% elif not status.exists %}
-<p class="muted">Wiki не найдена. Каталог <code>{{ status.wiki_dir }}</code> не существует.</p>
-<p class="text-xs muted mt-2">Можно запустить bootstrap прямо из UI — Claude CLI выполнит <code>/wiki-bootstrap</code> в рабочем каталоге проекта.</p>
-<form method="post" action="/p/{{ project.slug }}/wiki/bootstrap" class="mt-4">
-  <button class="bg-blue-600 text-white text-sm rounded px-3 py-1">Run /wiki-bootstrap (запустит claude)</button>
-</form>
 {% else %}
 <div class="bg-white p-4 rounded shadow">
   <p class="text-sm muted">Источник: <code>{{ status.wiki_dir }}</code></p>

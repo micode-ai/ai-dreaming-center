@@ -1,0 +1,31 @@
+{# Reusable banner for "directory not configured" / "directory missing" cases.
+
+Usage in a template:
+    {% from "_autoconfig_banner.html" import autoconfig_banner %}
+    {{ autoconfig_banner(project, "tech_debt_dir", autoconfig_default, "Tech-debt") }}
+
+Arguments:
+  project        — Project object (need .slug)
+  key            — setting key (must be in autoconfig.DEFAULTS)
+  default_path   — pre-computed default absolute path (string)
+  what           — human label for the page ("Tech-debt", "Wiki", ...)
+#}
+{% macro autoconfig_banner(project, key, default_path, what) %}
+<div class="mb-4 p-4 border border-amber-400 bg-amber-50 rounded">
+  <p class="font-semibold text-amber-900 mb-1">{{ what }} ещё не настроен</p>
+  <p class="text-sm text-amber-900 mb-2">
+    Создам каталог и пропишу настройку <code>{{ key }}</code>:
+  </p>
+  <p class="text-xs font-mono bg-white border rounded px-2 py-1 mb-3 break-all">{{ default_path }}</p>
+  <p class="text-xs text-amber-900 mb-3">
+    Если нужен другой путь — поменяй после установки в
+    <a class="text-blue-600 underline" href="/p/{{ project.slug }}/settings">Settings</a>.
+  </p>
+  <form method="post" action="/p/{{ project.slug }}/settings/autoconfig">
+    <input type="hidden" name="key" value="{{ key }}">
+    <button class="text-sm bg-amber-600 text-white rounded px-3 py-1">
+      Создать каталог и сохранить настройку
+    </button>
+  </form>
+</div>
+{% endmacro %}

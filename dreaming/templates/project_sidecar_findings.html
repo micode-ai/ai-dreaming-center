@@ -1,10 +1,11 @@
 {% extends "_project_layout.html" %}
+{% from "_autoconfig_banner.html" import autoconfig_banner %}
 {% set active='sidecar_findings' %}
 {% block project_content %}
 {% if not sidecar_dir_set %}
-<p class="muted">sidecar_findings_dir не настроен. См. Settings.</p>
+{{ autoconfig_banner(project, "sidecar_findings_dir", autoconfig_default, "Sidecar findings") }}
 {% elif not exists %}
-<p class="muted">Каталог <code>{{ sidecar_dir }}</code> не существует.</p>
+{{ autoconfig_banner(project, "sidecar_findings_dir", sidecar_dir, "Sidecar findings") }}
 {% elif error %}
 <p class="text-sm text-red-700">Ошибка: <code>{{ error }}</code></p>
 {% elif items %}

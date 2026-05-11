@@ -1,9 +1,9 @@
 {% extends "_project_layout.html" %}
+{% from "_autoconfig_banner.html" import autoconfig_banner %}
 {% set active='evolutions' %}
 {% block project_content %}
 {% if not exists %}
-<p class="muted">Каталог <code>{{ evolutions_dir }}</code> не существует.</p>
-<p class="text-xs muted">Переопредели <code>evolutions_dir</code> или <code>context_overrides_dir</code> в Settings, или создай папку.</p>
+{{ autoconfig_banner(project, "evolutions_dir", evolutions_dir, "Evolutions (_context)") }}
 {% elif error %}
 <p class="text-sm text-red-700">Ошибка: <code>{{ error }}</code></p>
 {% elif items %}

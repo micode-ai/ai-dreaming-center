@@ -72,6 +72,10 @@
 
 **Scheduler** — компонент DC с APScheduler внутри. Регистрирует cron-jobs для каждого включённого проекта.
 
+**Autoconfig (каталоги)** — one-click механизм на 8 dashboard-страницах: создаёт дефолтный каталог (`docs/<feature>/` или `.claude/agents/<feature>/`) и сохраняет per-project setting. Дефолты в `dreaming/services/autoconfig.py:DEFAULTS`. См. [`features/out-of-the-box.md`](features/out-of-the-box.md#autoconfig-каталогов).
+
+**Orphan (session)** — row в `agent_learning_sessions` со `status='running'`, у которого процесс умер, но запись не закрылась. Возникает из-за Wave-0 reconcile-бага. Лечится кнопкой Force-close на dashboard'е.
+
 **Self-study** — slash-команда `/self-study {agent}`, заставляющая Claude перечитать свой агент-файл и написать конспект.
 
 **Session (agent learning)** — одна попытка self-study. Запись в `agent_learning_sessions` (id, project_id, agent_name, status, started_at, finished_at, note_path, error_message).
@@ -79,6 +83,8 @@
 **Sidecar (reviewer)** — отдельный агент-ревьюер (vera, svetlana, silent-failure-hunter) который пишет JSON-отчёты в `sidecar_findings_dir`. Запускается через слэш-команды или Roman'ом.
 
 **Slash-command** — команда вида `/{name}` которую Claude понимает. DC спавнит claude с одним из таких prompts (`/self-study agent`, `/wiki-bootstrap`, etc.).
+
+**Starter-kit** — набор файлов под `templates/starter-kit/` в репо DC, которые мирорятся в `{working_dir}/.claude/` проекта (slash-команды + skeleton'ы типа weekly checklist). Установка через UI-кнопку на Ротации/Темах или через `scripts/install_starter_kit.py`. См. [`features/out-of-the-box.md`](features/out-of-the-box.md#starter-kit).
 
 **Slug** — короткий машинный идентификатор проекта (`my-app`, `wishlist`, `mi-code-ai`). Уникален. Не меняется через UI (только через DB).
 
