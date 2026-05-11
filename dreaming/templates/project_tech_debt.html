@@ -8,6 +8,19 @@
 {{ autoconfig_banner(project, "tech_debt_dir", td_dir, "Tech-debt") }}
 {% elif error %}
 <p class="text-sm text-red-700">Ошибка парсинга: <code>{{ error }}</code></p>
+{% elif total == 0 %}
+<div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
+  <p class="font-semibold text-sky-900 mb-1">В <code>{{ td_dir }}</code> нет markdown файлов</p>
+  <p class="text-sm text-sky-900 mb-2">
+    Tech-debt items пишет slash-команда <code>/tech-debt-scan</code> — спавнит claude,
+    который сканит репо на TODO/FIXME/legacy/смелли и пишет каждую находку
+    отдельным markdown'ом сюда. По расписанию запускается weekly (если включён cron),
+    или можно дёрнуть прямо сейчас.
+  </p>
+  <form method="post" action="/p/{{ project.slug }}/tech-debt/scan">
+    <button class="text-sm bg-blue-600 text-white rounded px-3 py-1">Run /tech-debt-scan</button>
+  </form>
+</div>
 {% else %}
 <div class="grid grid-cols-2 gap-6">
   <div class="bg-white p-4 rounded shadow">
