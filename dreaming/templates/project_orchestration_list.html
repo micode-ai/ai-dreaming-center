@@ -1,6 +1,21 @@
 {% extends "_project_layout.html" %}
 {% set active='orchestration' %}
 {% block project_content %}
+{% if stale_running %}
+<div class="mb-3 p-2 border border-amber-400 bg-amber-50 rounded text-sm flex items-center justify-between">
+  <span class="text-amber-900">
+    {{ stale_running }} stale <code>running</code> run{{ "s" if stale_running != 1 else "" }} (process gone, run never finished).
+    Auto-reconcile тикает каждые 5 мин — или закрой принудительно сейчас.
+  </span>
+  <form method="post" action="/p/{{ project.slug }}/orchestration/force-close-stale">
+    <button class="text-xs bg-amber-600 text-white rounded px-3 py-1"
+            onclick="return confirm('Mark all running orchestration runs for this project as cancelled?');">
+      Force-close all stale
+    </button>
+  </form>
+</div>
+{% endif %}
+
 <form method="post" action="/p/{{ project.slug }}/orchestration/start" class="bg-white p-4 rounded shadow mb-6 flex gap-3">
   <input name="goal" placeholder="Цель Roman-сессии (например: «декомпозируй фичу X»)" required class="flex-1 border rounded p-2">
   <button class="bg-blue-600 text-white rounded px-4 py-2">Start Roman</button>

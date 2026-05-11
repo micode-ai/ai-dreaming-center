@@ -14,14 +14,36 @@ log = logging.getLogger(__name__)
 async def orchestration_list(request: Request, slug: str):
     project = request.state.project
     hub = request.app.state.orchestration_hub
+    pm = request.app.state.process_manager
     runs = await hub.list_runs(project.id, limit=50)
+    # Mark each running row "stale" if no live claude process matches its
+    # external_id — this is what the auto-reconcile checks too.
+    live_session_ids = {
+        getattr(sess, "session_id", "") or ""
+        for key, sess in pm.list_running().items()
+        if key.startswith(f"cmd:{slug}:roman-")
+    }
+    stale_running = sum(
+        1 for r in runs
+        if r["status"] == "running" and (r.get("external_id") or "") not in live_session_ids
+    )
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
     projects = await request.app.state.projects.list_all(only_enabled=True)
     return request.app.state.templates.TemplateResponse(
         request, "project_orchestration_list.html",
         {"project": project, "runs": [dict(r) for r in runs],
+         "stale_running": stale_running,
          "projects": projects, "locale": locale},
     )
+
+
+@router.post("/p/{slug}/orchestration/force-close-stale")
+async def orchestration_force_close_stale(request: Request, slug: str):
+    """Force-close every running orchestration run for this project — used to
+    clear orphans that the auto-reconcile hasn't gotten to yet."""
+    project = request.state.project
+    await request.app.state.db.cancel_stale_orchestration_runs_for_project(project.id)
+    return RedirectResponse(f"/p/{project.slug}/orchestration", status_code=303)
 
 
 @router.get("/p/{slug}/orchestration/{run_id}")
