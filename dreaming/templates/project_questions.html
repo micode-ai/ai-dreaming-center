@@ -1,0 +1,68 @@
+{% extends "_project_layout.html" %}
+{% set active='questions' %}
+{% block project_content %}
+
+{% if not pending and not answered %}
+<div class="bg-white p-4 rounded shadow text-sm">
+  <p class="muted mb-2">Пока вопросов нет.</p>
+  <p class="text-xs muted">
+    Когда агент в running-сессии вызывает <code>AskUserQuestion</code> или
+    делает <code>POST /api/questions/create</code> через Bash — вопрос
+    появляется здесь, watchdog приостанавливает таймер бездействия, ты
+    отвечаешь, агент дочитывает ответ через
+    <code>GET /api/questions/{id}/poll</code> и продолжает работу.
+  </p>
+</div>
+{% endif %}
+
+{% if pending %}
+<h2 class="font-semibold mb-2 mt-2">Pending — ждут твоего ответа ({{ pending|length }})</h2>
+<div class="space-y-3">
+{% for q in pending %}
+  <div class="bg-amber-50 border border-amber-300 rounded p-3">
+    <div class="flex items-baseline gap-2 mb-2">
+      <span class="font-mono text-xs muted">{{ q.id[:8] }}…</span>
+      <span class="text-xs muted">{{ q.asked_at }}</span>
+      {% if q.run_id %}<span class="text-xs muted">run <code>{{ q.run_id[:8] }}…</code></span>{% endif %}
+    </div>
+    <p class="text-sm font-semibold mb-2">{{ q.parsed.question or "(no question text)" }}</p>
+    {% if q.parsed.options %}
+    <p class="text-xs muted mb-2">Предложенные варианты:</p>
+    <ul class="text-xs mb-2 ml-4 list-disc">
+      {% for opt in q.parsed.options %}<li><code>{{ opt }}</code></li>{% endfor %}
+    </ul>
+    {% endif %}
+    <form method="post" action="/p/{{ project.slug }}/questions/{{ q.id }}/answer" class="flex gap-2 mt-2">
+      <input name="answer" required class="flex-1 border rounded p-1 text-sm" placeholder="Твой ответ агенту…">
+      <button class="bg-amber-600 text-white rounded px-3 py-1 text-sm">Ответить</button>
+    </form>
+    <form method="post" action="/p/{{ project.slug }}/questions/{{ q.id }}/dismiss" class="mt-2"
+          onsubmit="return confirm('Закрыть вопрос без ответа? Агент получит пустую строку.');">
+      <button class="text-xs text-slate-600 underline">пропустить (dismiss)</button>
+    </form>
+  </div>
+{% endfor %}
+</div>
+{% endif %}
+
+{% if answered %}
+<h2 class="font-semibold mb-2 mt-6">Recently answered ({{ answered|length }})</h2>
+<div class="space-y-2">
+{% for q in answered %}
+  <details class="bg-white border rounded p-2 text-sm">
+    <summary class="cursor-pointer">
+      <span class="font-mono text-xs muted">{{ q.id[:8] }}…</span>
+      <span class="ml-2">{{ q.parsed.question[:80] }}{% if q.parsed.question|length > 80 %}…{% endif %}</span>
+      <span class="ml-2 text-xs muted">→ {{ q.answer_text[:60] or "(empty)" }}</span>
+    </summary>
+    <div class="mt-2 text-xs">
+      <p class="muted">asked: {{ q.asked_at }} · answered: {{ q.answered_at }}</p>
+      <p class="mt-1"><strong>Q:</strong> {{ q.parsed.question }}</p>
+      <p class="mt-1"><strong>A:</strong> <code>{{ q.answer_text }}</code></p>
+    </div>
+  </details>
+{% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}

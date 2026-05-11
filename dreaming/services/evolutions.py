@@ -58,4 +58,24 @@ def list_evolutions(evolutions_dir: str) -> list[EvolutionItem]:
             has_conflict=bool(fm.get("conflict")),
             raw_frontmatter=fm,
         ))
+
+    # Auto-detect implicit conflicts: when ≥2 non-archived evolutions target
+    # the same agent, they probably need human review. Mark each as
+    # conflict=true unless the file's own frontmatter explicitly says
+    # `conflict: false` (which would be a deliberate "I checked, no conflict"
+    # signal from the author). Frontmatter-true is always kept as-is.
+    from collections import Counter
+    open_statuses = {"active", "proposed", "open", ""}
+    agent_counts = Counter(
+        it.agent_name for it in items
+        if it.status.lower() in open_statuses
+    )
+    for it in items:
+        if (
+            it.agent_name
+            and it.status.lower() in open_statuses
+            and agent_counts[it.agent_name] > 1
+            and it.raw_frontmatter.get("conflict", "").lower() != "false"
+        ):
+            it.has_conflict = True
     return items

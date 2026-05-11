@@ -82,8 +82,13 @@
   {% set key = s.agent_name if s.agent_name.startswith("cmd:") else (project.slug ~ ":" ~ s.agent_name) %}
   {% set is_live = key in active_key_set %}
   {% set is_running_row = s.status == 'running' %}
+  {% set is_cmd_row = s.agent_name.startswith("cmd:") %}
+  {% set display_name = s.agent_name.split(":", 2)[2] if is_cmd_row else s.agent_name %}
   <tr class="border-b">
-    <td class="p-2 font-mono">{{ s.agent_name }}</td>
+    <td class="p-2 font-mono">
+      {{ display_name }}
+      {% if is_cmd_row %}<span class="ml-1 text-xs bg-slate-200 text-slate-700 rounded px-1 font-mono">cmd</span>{% endif %}
+    </td>
     <td class="p-2">
       {% if is_running_row and not is_live %}
         <span class="text-amber-700">running <span class="text-xs">(orphan)</span></span>
