@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from fastapi import APIRouter, Request
 
+from dreaming.services import autoconfig
+
 
 router = APIRouter()
 
@@ -37,6 +39,7 @@ async def sidecar_findings_page(request: Request, slug: str):
         {"project": project, "items": items, "sidecar_dir": sidecar_dir,
          "sidecar_dir_set": bool(sidecar_dir),
          "exists": bool(sidecar_dir) and Path(sidecar_dir).exists(),
+         "autoconfig_default": autoconfig.default_abs(project, "sidecar_findings_dir"),
          "error": error, "severities": severities, "selected_severity": severity,
          "projects": projects, "locale": locale},
     )

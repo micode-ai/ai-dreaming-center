@@ -7,6 +7,8 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
+from dreaming.services import autoconfig
+
 
 router = APIRouter()
 
@@ -26,6 +28,7 @@ async def wiki_page(request: Request, slug: str):
         request, "project_wiki.html",
         {"project": project, "wiki_dir": wiki_dir, "wiki_dir_set": bool(wiki_dir),
          "status": status_info,
+         "autoconfig_default": autoconfig.default_abs(project, "wiki_dir"),
          "projects": projects, "locale": locale},
     )
 

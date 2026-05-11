@@ -441,6 +441,27 @@ class SqliteDB:
         await self._conn.commit()
         return n > 0
 
+    async def delete_session(self, session_id: str) -> bool:
+        """Remove a session row entirely. Returns True if a row was deleted."""
+        async with self._conn.execute(
+            "DELETE FROM agent_learning_sessions WHERE id=?", (session_id,),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
+    async def cancel_stale_running(self, project_id: int) -> int:
+        """Close every 'running' row for a project as cancelled. Returns rowcount."""
+        now = datetime.now(timezone.utc).isoformat()
+        async with self._conn.execute(
+            "UPDATE agent_learning_sessions SET finished_at=?, status='cancelled' "
+            "WHERE project_id=? AND (status='running' OR (status IS NULL AND finished_at IS NULL))",
+            (now, project_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n
+
     async def list_sessions(self, project_id: int, limit: int = 50) -> list:
         return await self.fetch_all(
             "SELECT * FROM agent_learning_sessions "

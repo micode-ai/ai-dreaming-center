@@ -4,6 +4,8 @@ from collections import Counter
 from pathlib import Path
 from fastapi import APIRouter, Request
 
+from dreaming.services import autoconfig
+
 
 router = APIRouter()
 
@@ -37,6 +39,7 @@ async def tech_debt_page(request: Request, slug: str):
          "by_module": sorted(by_module.items(), key=lambda kv: -kv[1])[:10],
          "td_dir": td_dir, "td_dir_set": bool(td_dir),
          "td_dir_exists": bool(td_dir) and Path(td_dir).exists(),
+         "autoconfig_default": autoconfig.default_abs(project, "tech_debt_dir"),
          "error": error,
          "projects": projects, "locale": locale},
     )
