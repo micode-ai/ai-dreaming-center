@@ -29,6 +29,18 @@
   </tbody>
 </table>
 {% else %}
-<p class="muted">Нет loop-файлов.</p>
+<div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
+  <p class="font-semibold text-sky-900 mb-1">В <code>{{ loops_dir }}</code> нет loop-файлов</p>
+  <p class="text-sm text-sky-900 mb-2">
+    Циклы — это документация повторяющихся процессов (CI/CD, релиз, deploy,
+    weekly review и т.п.). Пишутся либо агентами в orchestration, либо
+    slash-командой <code>/loops-bootstrap</code> — она сканит
+    <code>.github/workflows/</code>, <code>scripts/</code>,
+    <code>package.json</code>, и фиксирует найденные циклы в markdown'ах.
+  </p>
+  <form method="post" action="/p/{{ project.slug }}/loops/bootstrap">
+    <button class="text-sm bg-blue-600 text-white rounded px-3 py-1">Run /loops-bootstrap</button>
+  </form>
+</div>
 {% endif %}
 {% endblock %}
