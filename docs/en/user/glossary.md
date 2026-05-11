@@ -72,6 +72,10 @@ Terms that show up across DC and its documentation. Sorted alphabetically; in pa
 
 **Scheduler** — DC's component wrapping APScheduler. Registers cron jobs for every enabled project.
 
+**Autoconfig (directories)** — one-click mechanism on 8 dashboard pages: creates a sensible default directory (`docs/<feature>/` or `.claude/agents/<feature>/`) and saves the per-project setting. Defaults live in `dreaming/services/autoconfig.py:DEFAULTS`. See [`features/out-of-the-box.md`](features/out-of-the-box.md#directory-autoconfig).
+
+**Orphan (session)** — a row in `agent_learning_sessions` with `status='running'` whose process died without the row being closed. Caused by the Wave-0 reconcile bug. Fixed by the Force-close button on the dashboard.
+
 **Self-study** — the slash command `/self-study {agent}` that makes Claude re-read its agent file and write a note.
 
 **Session (agent learning)** — one self-study attempt. A row in `agent_learning_sessions` (id, project_id, agent_name, status, started_at, finished_at, note_path, error_message).
@@ -79,6 +83,8 @@ Terms that show up across DC and its documentation. Sorted alphabetically; in pa
 **Sidecar (reviewer)** — a separate reviewer agent (vera, svetlana, silent-failure-hunter) that writes JSON reports into `sidecar_findings_dir`. Started by slash commands or by Roman.
 
 **Slash-command** — a command of the form `/{name}` that Claude understands. DC spawns claude with one of these prompts (`/self-study agent`, `/wiki-bootstrap`, etc.).
+
+**Starter-kit** — a set of files under `templates/starter-kit/` in the DC repo that get mirrored into a project's `{working_dir}/.claude/` (slash commands plus skeletons like the weekly checklist). Installed via a UI button on the Rotation/Topics pages or via `scripts/install_starter_kit.py`. See [`features/out-of-the-box.md`](features/out-of-the-box.md#starter-kit).
 
 **Slug** — short machine identifier of a project (`my-app`, `wishlist`, `mi-code-ai`). Unique. Not editable via UI (only via DB).
 

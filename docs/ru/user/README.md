@@ -6,6 +6,7 @@
 
 - [`getting-started.md`](getting-started.md) — установка и первая сессия за 15–20 минут.
 - [`overview.md`](overview.md) — что такое AI Dreaming Center, кому и зачем нужен.
+- [`features/out-of-the-box.md`](features/out-of-the-box.md) — установка «из коробки»: starter-kit, autoconfig каталогов, управление сессиями.
 - [`workflows/onboarding.md`](workflows/onboarding.md) — расширенный «первый день» от нуля до настроенного nightly cron.
 
 ## Гайды по фичам

@@ -142,12 +142,38 @@ Source: [`project_rotation.py`](../dreaming/routes/project_rotation.py).
 
 | Method | Path | Описание |
 |---|---|---|
-| GET | `/p/{slug}/rotation` | Roster. На входе авто-добавляет агентов из `list_agent_names(working_dir)` если нет в DB. |
+| GET | `/p/{slug}/rotation` | Roster. На входе авто-добавляет агентов из `list_agent_names(working_dir)` если нет в DB. В контексте отдаёт `kit_status` (см. ниже). |
 | POST | `/p/{slug}/rotation/tier` form `agent_name=&tier=` | Tier ∈ {1, 2, 3}. |
 | POST | `/p/{slug}/rotation/toggle` form `agent_name=` | Toggle enabled. |
 | POST | `/p/{slug}/rotation/start/{agent}` | Start self-study session, redirect на `/p/{slug}/live`. 409 если уже running. |
 
 `/rotation/start/{agent}` всегда передаёт env `DREAMING_PROJECT_SLUG` и `DREAMING_API_URL=http://localhost:{port}`.
+
+### Starter-kit
+
+Source: [`project_rotation.py`](../dreaming/routes/project_rotation.py) (эндпоинт инсталлера живёт там по историческим причинам — путь нейтральный).
+
+| Method | Path | Описание |
+|---|---|---|
+| POST | `/p/{slug}/starter-kit/install` form `force=&redirect_to=` | Копирует `templates/starter-kit/**` в `{working_dir}/.claude/`. `force=1` перезаписывает, иначе skip-if-exists. Редирект на `redirect_to` или Referer (same-origin: только `/p/{slug}*`). |
+
+Используется и страницей Ротации, и страницей Темы — каждая шлёт собственный `redirect_to`, чтобы юзер вернулся туда, откуда стартовал.
+
+См. [`services.md#starter_kit-py—установка-slash-команд`](services.md#starter_kitpy--установка-slash-команд) и [`user/features/out-of-the-box.md#starter-kit`](user/features/out-of-the-box.md#starter-kit).
+
+### Dashboard actions
+
+Source: [`project_dashboard.py`](../dreaming/routes/project_dashboard.py).
+
+| Method | Path | Описание |
+|---|---|---|
+| GET | `/p/{slug}/` | Dashboard. Передаёт `sessions`, `active_keys`, `active_key_set`, `kit_status`, `missing_dirs`, `bootstrap_needed` в шаблон. |
+| POST | `/p/{slug}/bootstrap-all` | Master-кнопка «из коробки»: `starter_kit.install(force=False)` + `autoconfig.apply_all_defaults(skip_existing=True)`. Идемпотентно. Same-origin редирект на Referer. |
+| POST | `/p/{slug}/sessions/{session_id}/stop` | Stop: если процесс жив — `pm.kill(key)`, иначе `db.cancel_session(session_id)` (orphan). Редирект на `/p/{slug}/`. |
+| POST | `/p/{slug}/sessions/{session_id}/delete` | Delete: kill процесс если жив, затем `db.delete_session(session_id)`. 404 если row не из этого проекта. |
+| POST | `/p/{slug}/sessions/force-close-stale` | Массово ставит `status='cancelled'` всем running-row'ам проекта через `db.cancel_stale_running(project_id)`. Живые процессы не трогает. |
+
+См. [`user/features/out-of-the-box.md#управление-сессиями`](user/features/out-of-the-box.md#управление-сессиями).
 
 ### Settings (per-project)
 
@@ -157,8 +183,9 @@ Source: [`project_settings.py`](../dreaming/routes/project_settings.py).
 |---|---|---|
 | GET | `/p/{slug}/settings` | Форма, рендерит `is_overridden` + global value + override value для каждого ключа в SETTINGS_GROUPS. |
 | POST | `/p/{slug}/settings` | Per-key action: `inherit` → `unset_setting`; `override` → `set_setting` (или `unset_setting` если text-value пустой). |
+| POST | `/p/{slug}/settings/autoconfig` form `key=&redirect_to=` | One-click: `mkdir -p` дефолтный путь для `key` (см. `autoconfig.DEFAULTS`), сохранить override. Same-origin редирект на `redirect_to` или Referer. 400 если `key` не из DEFAULTS. |
 
-См. подробности в [`features/settings.md`](features/settings.md).
+См. подробности в [`features/settings.md`](features/settings.md) и [`user/features/out-of-the-box.md#autoconfig-каталогов`](user/features/out-of-the-box.md#autoconfig-каталогов).
 
 ### Topics, Kanban, Notes
 
