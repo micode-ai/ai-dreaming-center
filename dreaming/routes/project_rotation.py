@@ -1,9 +1,11 @@
 """GET /p/{slug}/rotation — agent roster + tier/enabled inline edit + Start button."""
 from __future__ import annotations
+from urllib.parse import urlparse
 from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.responses import RedirectResponse
 
 from dreaming.services.agents import list_agent_names
+from dreaming.services import starter_kit
 
 
 router = APIRouter()
@@ -25,12 +27,34 @@ async def rotation_page(request: Request, slug: str):
     running_keys = {k for k in pm.list_running() if k.startswith(pfx)}
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
     projects = await request.app.state.projects.list_all(only_enabled=True)
+    kit_status = starter_kit.status(project.working_dir)
     return request.app.state.templates.TemplateResponse(
         request, "project_rotation.html",
         {"project": project, "rotation": [dict(r) for r in rotation],
          "running_keys": running_keys, "fs_count": len(fs_agents),
-         "projects": projects, "locale": locale},
+         "projects": projects, "locale": locale,
+         "kit_status": kit_status},
     )
+
+
+@router.post("/p/{slug}/starter-kit/install")
+async def starter_kit_install(
+    request: Request, slug: str,
+    force: str | None = Form(default=None),
+    redirect_to: str | None = Form(default=None),
+):
+    """Install starter-kit files. `redirect_to` (form) or Referer header decides
+    where to bounce the user back; falls back to project dashboard."""
+    project = request.state.project
+    try:
+        starter_kit.install(project.working_dir, force=bool(force))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    raw = redirect_to or request.headers.get("referer") or ""
+    path = urlparse(raw).path if raw else ""
+    if not path.startswith(f"/p/{project.slug}"):
+        path = f"/p/{project.slug}/"
+    return RedirectResponse(path, status_code=303)
 
 
 @router.post("/p/{slug}/rotation/tier")

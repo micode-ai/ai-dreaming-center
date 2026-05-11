@@ -30,6 +30,8 @@ class SqliteDB:
     async def get_or_create_session(project_id, agent_name, model, reuse_window_sec=120) -> str
     async def finish_session(session_id, status, **kwargs) -> bool
     async def cancel_session(session_id) -> bool
+    async def cancel_stale_running(project_id) -> int        # mass-cancel all running rows
+    async def delete_session(session_id) -> bool             # hard-delete row
     async def list_sessions(project_id, limit=50) -> list
     async def list_running_sessions(project_id) -> list
     async def week_stats(project_id) -> dict
@@ -607,6 +609,75 @@ async def global_summary(db) -> {last_7d, last_30d, by_project, events_total}
 ```
 
 Внутри: `_totals` / `_by_model` / `_by_project` (private). Все запросы по `ts_date BETWEEN ? AND ?`.
+
+### `starter_kit.py` — установка slash-команд
+
+Bootstrap «из коробки»: `templates/starter-kit/` в репо DC зеркалится в `{working_dir}/.claude/` целевого проекта.
+
+```python
+@dataclass
+class StarterKitStatus:
+    template_files: list[str]      # relative paths from templates/starter-kit/
+    installed: list[str]
+    missing: list[str]
+    all_present: bool
+    template_root: str
+
+@dataclass
+class InstallResult:
+    copied: list[str]
+    overwritten: list[str]
+    skipped: list[str]
+    dry_run: bool
+
+def status(working_dir) -> StarterKitStatus
+def install(working_dir, *, force=False, dry_run=False) -> InstallResult
+```
+
+Реализация (`dreaming/services/starter_kit.py`):
+- `TEMPLATE_DIR = <repo>/templates/starter-kit`.
+- `_template_files()` рекурсивно `rglob('*')` под `TEMPLATE_DIR`.
+- `install()` обходит каждый файл, считает rel-path, проверяет existence в target, копирует через `shutil.copy2`. По умолчанию **skip if exists** — overwrite только с `force=True`.
+
+Используется:
+- Routes: `dreaming/routes/project_rotation.py` (POST `/p/{slug}/starter-kit/install`), `dreaming/routes/project_rotation.py:rotation_page` (status в context), `dreaming/routes/project_topics.py:topics_page` (status для inline-кнопки).
+- CLI: `scripts/install_starter_kit.py`.
+
+См. [`features/out-of-the-box.md`](user/features/out-of-the-box.md#starter-kit).
+
+### `autoconfig.py` — one-click per-project directories
+
+Дефолтные пути для всех `*_dir` настроек + создание каталога + сохранение override'а.
+
+```python
+DEFAULTS: dict[str, str] = {
+    "tech_debt_dir":         "docs/tech-debt",
+    "product_ideas_dir":     "docs/product-ideas",
+    "wiki_dir":              "docs/wiki",
+    "evolutions_dir":        ".claude/agents/_context",
+    "loops_dir":             "docs/loops",
+    "plans_dir":             "docs/plans",
+    "contracts_dir":         "docs/contracts",
+    "sidecar_findings_dir":  ".claude/agents/sidecar-findings",
+    "learning_notes_dir":    ".claude/agents/learning-notes",
+    "findings_dir":          "docs/findings",
+}
+
+def default_abs(project, key: str) -> str | None
+async def apply(projects_svc, project, key: str) -> str
+```
+
+`apply()` (`autoconfig.py:35`):
+1. `Path(abs_path).mkdir(parents=True, exist_ok=True)`.
+2. `projects_svc.set_setting(project.id, key, abs_path)` — JSON-encoded в `project_settings`.
+3. Возвращает абсолютный путь (полезно для логов).
+
+Используется:
+- Route: `dreaming/routes/project_settings.py` (POST `/p/{slug}/settings/autoconfig`).
+- Per-page routes: каждый из 8 dashboard-routes (`project_tech_debt.py`, `project_ideas.py`, `project_wiki.py`, `project_evolutions.py`, `project_loops.py`, `project_plans.py`, `project_contracts.py`, `project_sidecar_findings.py`) импортит `autoconfig` и передаёт `default_abs(project, key)` в шаблон как `autoconfig_default`.
+- Jinja: `dreaming/templates/_autoconfig_banner.html` (макрос `autoconfig_banner(project, key, default_path, what)`).
+
+См. [`features/out-of-the-box.md`](user/features/out-of-the-box.md#autoconfig-каталогов).
 
 ## Cross-references
 

@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from fastapi import APIRouter, Request
 
+from dreaming.services import autoconfig
+
 
 router = APIRouter()
 
@@ -30,5 +32,6 @@ async def evolutions_page(request: Request, slug: str):
         request, "project_evolutions.html",
         {"project": project, "items": items, "evolutions_dir": evolutions_dir,
          "exists": Path(evolutions_dir).exists(), "error": error,
+         "autoconfig_default": autoconfig.default_abs(project, "evolutions_dir"),
          "projects": projects, "locale": locale},
     )

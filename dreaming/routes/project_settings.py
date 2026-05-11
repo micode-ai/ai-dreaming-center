@@ -1,12 +1,34 @@
 """GET/POST /p/{slug}/settings — full per-project overrides for ~80 keys."""
 from __future__ import annotations
-from fastapi import APIRouter, Request
+from urllib.parse import urlparse
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from dreaming.config import SETTINGS_GROUPS
+from dreaming.services import autoconfig
 
 
 router = APIRouter()
+
+
+@router.post("/p/{slug}/settings/autoconfig")
+async def project_settings_autoconfig(
+    request: Request, slug: str,
+    key: str = Form(...),
+    redirect_to: str | None = Form(default=None),
+):
+    """Create the default directory for `key` and save the setting. Returns to
+    referer (or the explicit redirect_to) so the user lands back on the page
+    that triggered the action."""
+    project = request.state.project
+    if key not in autoconfig.DEFAULTS:
+        raise HTTPException(status_code=400, detail=f"unknown autoconfig key '{key}'")
+    await autoconfig.apply(request.app.state.projects, project, key)
+    raw = redirect_to or request.headers.get("referer") or ""
+    path = urlparse(raw).path if raw else ""
+    if not path.startswith(f"/p/{project.slug}"):
+        path = f"/p/{project.slug}/"
+    return RedirectResponse(path, status_code=303)
 
 
 def _coerce(raw: str, default_value):

@@ -3,8 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 from fastapi import APIRouter, Request
 
+from dreaming.services import starter_kit
+
 
 router = APIRouter()
+
+
+CHECKLIST_REL = "agents/lessons/_weekly-learning-checklist.md"
 
 
 @router.get("/p/{slug}/topics")
@@ -25,6 +30,8 @@ async def topics_page(request: Request, slug: str):
             items = [{"raw": ln.strip()} for ln in text.splitlines() if ln.strip().startswith("- [")]
         except Exception:
             items = []
+    kit_status = starter_kit.status(project.working_dir)
+    can_install = CHECKLIST_REL in kit_status.template_files
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
     projects = await request.app.state.projects.list_all(only_enabled=True)
     return request.app.state.templates.TemplateResponse(
@@ -32,5 +39,6 @@ async def topics_page(request: Request, slug: str):
         {"project": project, "items": items,
          "checklist_path": str(found_path) if found_path else "",
          "found": found_path is not None,
+         "can_install_checklist": can_install,
          "projects": projects, "locale": locale},
     )

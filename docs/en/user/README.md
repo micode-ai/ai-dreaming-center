@@ -6,6 +6,7 @@ This is the collection of end-user-oriented guides — "how to use" the tool. If
 
 - [`getting-started.md`](getting-started.md) — install and first session in 15–20 minutes.
 - [`overview.md`](overview.md) — what AI Dreaming Center is, who it's for and why.
+- [`features/out-of-the-box.md`](features/out-of-the-box.md) — out-of-the-box setup: starter-kit, directory autoconfig, session controls.
 - [`workflows/onboarding.md`](workflows/onboarding.md) — extended "first day" from scratch to a configured nightly cron.
 
 ## Feature guides

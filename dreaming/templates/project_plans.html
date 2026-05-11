@@ -1,10 +1,11 @@
 {% extends "_project_layout.html" %}
+{% from "_autoconfig_banner.html" import autoconfig_banner %}
 {% set active='plans' %}
 {% block project_content %}
 {% if not plans_dir_set %}
-<p class="muted">plans_dir не настроен. См. Settings.</p>
+{{ autoconfig_banner(project, "plans_dir", autoconfig_default, "Plans") }}
 {% elif not exists %}
-<p class="muted">Каталог <code>{{ plans_dir }}</code> не существует.</p>
+{{ autoconfig_banner(project, "plans_dir", plans_dir, "Plans") }}
 {% elif error %}
 <p class="text-sm text-red-700">Ошибка: <code>{{ error }}</code></p>
 {% elif items %}

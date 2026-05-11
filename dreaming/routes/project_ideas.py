@@ -9,6 +9,8 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
+from dreaming.services import autoconfig
+
 
 router = APIRouter()
 
@@ -46,6 +48,7 @@ async def ideas_page(request: Request, slug: str, status: str | None = None):
         {"project": project, "items": items, "ideas_dir": ideas_dir,
          "ideas_dir_set": bool(ideas_dir),
          "ideas_dir_exists": bool(ideas_dir) and Path(ideas_dir).exists(),
+         "autoconfig_default": autoconfig.default_abs(project, "product_ideas_dir"),
          "error": error, "statuses": statuses, "selected_status": status or "",
          "projects": projects, "locale": locale},
     )

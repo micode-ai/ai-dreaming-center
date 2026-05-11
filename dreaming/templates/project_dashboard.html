@@ -1,6 +1,37 @@
 {% extends "_project_layout.html" %}
 {% set active='dashboard' %}
 {% block project_content %}
+
+{% if bootstrap_needed %}
+<div class="mb-4 p-4 border border-amber-400 bg-amber-50 rounded">
+  <p class="font-semibold text-amber-900 mb-1">Проект ещё не настроен «из коробки»</p>
+  <p class="text-sm text-amber-900 mb-2">
+    Одна кнопка ниже сделает всё разом:
+  </p>
+  <ul class="text-xs text-amber-900 list-disc ml-5 mb-3 space-y-1">
+    {% if kit_status and not kit_status.all_present %}
+    <li>скопирует {{ kit_status.missing|length }} файл(а) starter-kit
+      ({% for f in kit_status.missing %}<code>{{ f }}</code>{{ ", " if not loop.last }}{% endfor %})
+      в <code>.claude/</code></li>
+    {% endif %}
+    {% if missing_dirs %}
+    <li>создаст {{ missing_dirs|length }} каталог(а) и пропишет в Settings:
+      {% for k in missing_dirs %}<code>{{ k }}</code>{{ ", " if not loop.last }}{% endfor %}</li>
+    {% endif %}
+  </ul>
+  <p class="text-xs text-amber-900 mb-3">
+    Существующие файлы и уже выставленные настройки не трогаются. Если хочешь
+    другие пути — поменяй потом в
+    <a class="text-blue-600 underline" href="/p/{{ project.slug }}/settings">Settings</a>.
+  </p>
+  <form method="post" action="/p/{{ project.slug }}/bootstrap-all">
+    <button class="text-sm bg-amber-600 text-white rounded px-4 py-2 font-semibold">
+      Bootstrap everything
+    </button>
+  </form>
+</div>
+{% endif %}
+
 <div class="grid grid-cols-3 gap-4 mb-6">
   <div class="bg-white p-4 rounded shadow">
     <div class="text-xs muted">{{ "p.metrics.success" | t(locale=locale) }}</div>
@@ -16,6 +47,27 @@
   </div>
 </div>
 
+{% set ns = namespace(stale_orphans=0) %}
+{% for s in sessions %}
+  {% set key = project.slug ~ ":" ~ s.agent_name %}
+  {% if s.status == 'running' and key not in active_key_set %}
+    {% set ns.stale_orphans = ns.stale_orphans + 1 %}
+  {% endif %}
+{% endfor %}
+{% if ns.stale_orphans %}
+<div class="mb-3 p-2 border border-amber-400 bg-amber-50 rounded text-sm flex items-center justify-between">
+  <span class="text-amber-900">
+    {{ ns.stale_orphans }} stuck <code>running</code> row{{ "s" if ns.stale_orphans != 1 else "" }} (process gone, DB never closed).
+  </span>
+  <form method="post" action="/p/{{ project.slug }}/sessions/force-close-stale">
+    <button class="text-xs bg-amber-600 text-white rounded px-3 py-1"
+            onclick="return confirm('Mark all running rows for this project as cancelled?');">
+      Force-close all stale
+    </button>
+  </form>
+</div>
+{% endif %}
+
 <h2 class="font-semibold mb-2">{{ "p.recent_sessions" | t(locale=locale) }}</h2>
 <table class="w-full bg-white rounded shadow text-sm">
   <thead class="text-left border-b"><tr>
@@ -23,17 +75,43 @@
     <th class="p-2">{{ "p.col.status" | t(locale=locale) }}</th>
     <th class="p-2">{{ "p.col.topic" | t(locale=locale) }}</th>
     <th class="p-2">{{ "p.col.started" | t(locale=locale) }}</th>
+    <th class="p-2"></th>
   </tr></thead>
   <tbody>
   {% for s in sessions %}
+  {% set key = project.slug ~ ":" ~ s.agent_name %}
+  {% set is_live = key in active_key_set %}
+  {% set is_running_row = s.status == 'running' %}
   <tr class="border-b">
     <td class="p-2 font-mono">{{ s.agent_name }}</td>
-    <td class="p-2">{{ s.status or '—' }}</td>
+    <td class="p-2">
+      {% if is_running_row and not is_live %}
+        <span class="text-amber-700">running <span class="text-xs">(orphan)</span></span>
+      {% else %}
+        {{ s.status or '—' }}
+      {% endif %}
+    </td>
     <td class="p-2 text-xs">{{ s.topic or '' }}</td>
     <td class="p-2 text-xs muted">{{ s.started_at }}</td>
+    <td class="p-2 text-right whitespace-nowrap">
+      {% if is_running_row %}
+        <form method="post" action="/p/{{ project.slug }}/sessions/{{ s.id }}/stop" class="inline">
+          <button class="text-xs border border-amber-500 text-amber-700 rounded px-2 py-1 mr-1"
+                  onclick="return confirm('{{ "Stop running process for " if is_live else "Force-close orphan row for " }}{{ s.agent_name }}?');">
+            {{ "Stop" if is_live else "Force-close" }}
+          </button>
+        </form>
+      {% endif %}
+      <form method="post" action="/p/{{ project.slug }}/sessions/{{ s.id }}/delete" class="inline">
+        <button class="text-xs border border-red-400 text-red-700 rounded px-2 py-1"
+                onclick="return confirm('Permanently delete this session row?{{ "  (process is still running — it will be killed first)" if is_live else "" }}');">
+          Delete
+        </button>
+      </form>
+    </td>
   </tr>
   {% else %}
-  <tr><td class="p-3 muted" colspan="4">{{ "p.no_sessions_yet" | t(locale=locale) }}</td></tr>
+  <tr><td class="p-3 muted" colspan="5">{{ "p.no_sessions_yet" | t(locale=locale) }}</td></tr>
   {% endfor %}
   </tbody>
 </table>
@@ -41,7 +119,18 @@
 <h2 class="font-semibold mt-6 mb-2">{{ "p.active_runs" | t(locale=locale) }}</h2>
 {% if active_keys %}
 <ul class="bg-white rounded shadow p-2">
-  {% for key in active_keys %}<li class="font-mono text-sm">{{ key }}</li>{% endfor %}
+  {% for key in active_keys %}
+    {% set agent = key.split(':', 1)[1] %}
+    <li class="font-mono text-sm flex items-center justify-between py-1">
+      <span>{{ key }}</span>
+      <form method="post" action="/p/{{ project.slug }}/live/kill/{{ agent }}" class="inline">
+        <button class="text-xs border border-amber-500 text-amber-700 rounded px-2 py-1"
+                onclick="return confirm('Kill running process for {{ agent }}?');">
+          Stop
+        </button>
+      </form>
+    </li>
+  {% endfor %}
 </ul>
 {% else %}
 <p class="muted">{{ "p.no_active_runs" | t(locale=locale) }}</p>
