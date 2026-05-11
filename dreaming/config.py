@@ -52,6 +52,11 @@ class AppSettings(BaseSettings):
     question_reminder_minutes: int = 15
     question_expire_minutes: int = 60
 
+    # === Orchestration (Roman) — separate limits because Roman + subagents
+    # take many more turns than a single self-study session.
+    orchestration_max_turns: int = 150
+    orchestration_timeout_minutes: int = 120
+
     # === Scheduling — nightly ===
     cron_expression: str = "0 2 * * *"
     cron_enabled: bool = True
@@ -151,6 +156,9 @@ SETTINGS_GROUPS: list[tuple[str, list[str]]] = [
     ("Self-study", [
         "model", "max_turns", "timeout_minutes", "self_study_command",
         "question_reminder_minutes", "question_expire_minutes",
+    ]),
+    ("Orchestration (Roman)", [
+        "orchestration_max_turns", "orchestration_timeout_minutes",
     ]),
     ("Scheduling — nightly", [
         "cron_expression", "cron_enabled", "agents_per_night",
