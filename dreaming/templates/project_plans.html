@@ -36,6 +36,17 @@
   </tbody>
 </table>
 {% else %}
-<p class="muted">Нет plan-файлов.</p>
+<div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
+  <p class="font-semibold text-sky-900 mb-1">В <code>{{ plans_dir }}</code> нет plan-файлов</p>
+  <p class="text-sm text-sky-900 mb-2">
+    Планы пишет либо Roman из <a class="text-blue-600 underline" href="/p/{{ project.slug }}/orchestration">orchestration</a>
+    при декомпозиции фичи, либо slash-команда <code>/plans-extract</code> —
+    она проходит по recent commits / TODO-комментариям / spec-файлам и
+    surfaces активные in-flight плана с чек-листом tasks.
+  </p>
+  <form method="post" action="/p/{{ project.slug }}/plans/extract">
+    <button class="text-sm bg-blue-600 text-white rounded px-3 py-1">Run /plans-extract</button>
+  </form>
+</div>
 {% endif %}
 {% endblock %}

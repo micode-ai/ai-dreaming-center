@@ -33,6 +33,17 @@
   </tbody>
 </table>
 {% else %}
-<p class="muted">Нет contract-файлов.</p>
+<div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
+  <p class="font-semibold text-sky-900 mb-1">В <code>{{ contracts_dir }}</code> нет contract-файлов</p>
+  <p class="text-sm text-sky-900 mb-2">
+    Контракты пишутся slash-командой <code>/contracts-scan</code> — claude
+    проходится по коду, выделяет модули и страницы, описывает их public API,
+    зависимости, инварианты в виде markdown'ов с frontmatter. Также пишутся
+    Roman'ом во время orchestration при декомпозиции фичи.
+  </p>
+  <form method="post" action="/p/{{ project.slug }}/contracts/scan">
+    <button class="text-sm bg-blue-600 text-white rounded px-3 py-1">Run /contracts-scan</button>
+  </form>
+</div>
 {% endif %}
 {% endblock %}
