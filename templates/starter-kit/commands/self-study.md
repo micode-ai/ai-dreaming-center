@@ -42,6 +42,43 @@ Your `cwd` is the project repo root. The following env vars are set:
    - **Agent file issues** — bullets: anything in the agent file that looks
      out-of-date, contradictory, or missing a guard-rail. Or "none".
 
+3b. **For each Agent file issue, write an Evolution proposal** to
+    `.claude/agents/_context/$ARGUMENTS/{today}-{topic-slug}.md`. Create the
+    `_context/$ARGUMENTS/` directory if missing. Use kebab-case for the topic
+    slug (e.g. `module-count-stale`, `paywall-guard-missing`).
+
+    Format (YAML frontmatter — always single-quote `title`, see the
+    YAML escaping note in `/product-idea-scan` if it bites you):
+
+    ```markdown
+    ---
+    agent: $ARGUMENTS
+    title: 'short imperative one-line description of the change'
+    status: proposed
+    conflict: false
+    created_at: {today}
+    ---
+
+    ## What's wrong
+    One paragraph describing the discrepancy. Be concrete — quote file
+    paths and identifiers.
+
+    ## Proposed change
+    3–5 bullets describing what to add/remove/change in
+    `.claude/agents/$ARGUMENTS.md`. Be specific enough that a human can
+    apply this in <5 minutes.
+
+    ## Rationale
+    One paragraph: what breaks today, what gets better after the change.
+    ```
+
+    Skip evolution proposals when the issue is trivially small (a typo,
+    a one-word change) — those belong in the note's "Agent file issues"
+    section as a bullet, not as their own file. Evolutions are for
+    *structural* misalignments worth reviewing separately.
+
+    If no issues were found in step 3 ("none"), skip this step entirely.
+
 4. **Report back to the Dreaming Center.** Use the Bash tool:
 
    ```bash
