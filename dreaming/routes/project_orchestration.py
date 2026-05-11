@@ -157,8 +157,8 @@ async def orchestration_resume(
             claude_path=getattr(settings, "claude_path", "claude"),
             working_dir=project.working_dir,
             model=getattr(settings, "model", "sonnet"),
-            max_turns=getattr(settings, "max_turns", 50),
-            timeout_minutes=getattr(settings, "timeout_minutes", 60),
+            max_turns=getattr(settings, "orchestration_max_turns", 150),
+            timeout_minutes=getattr(settings, "orchestration_timeout_minutes", 120),
             resume_session_id=run["external_id"],
             interactive_stdin=True,
             env_overrides={
