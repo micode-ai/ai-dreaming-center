@@ -21,6 +21,8 @@ class EvolutionItem:
     status: str
     has_conflict: bool
     relative_path: str = ""  # relative to evolutions_dir, for safe browser linking
+    github_issue: str | None = None
+    orchestration_run: str | None = None
     raw_frontmatter: dict[str, str] = field(default_factory=dict)
 
 
@@ -62,6 +64,8 @@ def list_evolutions(evolutions_dir: str) -> list[EvolutionItem]:
             status=fm.get("status") or "active",
             has_conflict=bool(fm.get("conflict")),
             relative_path=rel,
+            github_issue=(str(fm.get("github_issue") or "") or None),
+            orchestration_run=(str(fm.get("orchestration_run") or "") or None),
             raw_frontmatter=fm,
         ))
 
