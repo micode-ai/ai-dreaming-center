@@ -7,12 +7,23 @@
   <thead class="text-left border-b"><tr>
     <th class="p-2">путь</th>
     <th class="p-2 text-right">размер</th>
+    <th class="p-2"></th>
   </tr></thead>
   <tbody>
   {% for f in files %}
   <tr class="border-b">
-    <td class="p-2"><a class="text-blue-600 underline font-mono text-xs" href="/p/{{ project.slug }}/notes/raw?path={{ f.relative_path }}">{{ f.relative_path }}</a></td>
+    <td class="p-2">
+      <a class="text-blue-600 underline font-mono text-xs cursor-pointer"
+         href="#"
+         data-note-path="{{ f.relative_path }}"
+         onclick="openNote(this); return false;">{{ f.relative_path }}</a>
+    </td>
     <td class="p-2 text-right text-xs muted">{{ f.size }}</td>
+    <td class="p-2 text-right">
+      <a class="text-xs muted underline"
+         href="/p/{{ project.slug }}/notes/raw?path={{ f.relative_path }}"
+         target="_blank" rel="noopener">raw</a>
+    </td>
   </tr>
   {% endfor %}
   </tbody>
@@ -20,4 +31,51 @@
 {% else %}
 <p class="muted">Конспектов нет. Они появляются после успешных self-study сессий (записываются в этот каталог).</p>
 {% endif %}
+
+<dialog id="note-modal" class="note-modal">
+  <header class="flex items-baseline justify-between p-3 border-b bg-slate-50">
+    <h2 id="note-modal-title" class="text-sm font-mono text-slate-700"></h2>
+    <div class="flex gap-2">
+      <a id="note-modal-raw" class="text-xs text-blue-600 underline" target="_blank" rel="noopener">raw</a>
+      <button onclick="closeNote()" class="text-slate-500 hover:text-slate-900 text-xl leading-none">×</button>
+    </div>
+  </header>
+  <div id="note-modal-body" class="markdown-body p-6 overflow-auto" style="max-height: 80vh; min-height: 200px;"></div>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<script>
+(() => {
+  const slug = "{{ project.slug }}";
+  const modal = document.getElementById('note-modal');
+  const title = document.getElementById('note-modal-title');
+  const body = document.getElementById('note-modal-body');
+  const rawLink = document.getElementById('note-modal-raw');
+
+  window.openNote = async function(el) {
+    const path = el.dataset.notePath;
+    const rawUrl = `/p/${slug}/notes/raw?path=${encodeURIComponent(path)}`;
+    title.textContent = path;
+    rawLink.href = rawUrl;
+    body.innerHTML = '<p class="muted">Загрузка…</p>';
+    modal.showModal();
+    try {
+      const r = await fetch(rawUrl);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const text = await r.text();
+      body.innerHTML = marked.parse(text, { gfm: true, breaks: false });
+    } catch (e) {
+      body.innerHTML = '<p class="text-red-700 font-mono text-xs">Ошибка: ' + (e.message || e) + '</p>';
+    }
+  };
+
+  window.closeNote = function() { modal.close(); };
+
+  // Click on backdrop closes; click inside content does not.
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.close();
+  });
+  // Esc to close (built-in for <dialog>, but make sure focus is correct)
+})();
+</script>
 {% endblock %}
