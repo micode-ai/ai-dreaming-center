@@ -52,6 +52,7 @@ class RunningSession:
     _reader_task: asyncio.Task | None = None
     _watchdog_task: asyncio.Task | None = None
     key: str = ""  # composite key in pm.running dict
+    log_path: str | None = None  # absolute path to per-session stdout log file
 
     async def send_user_message(self, text: str) -> bool:
         """Записать stream-json user-message в stdin живого процесса.
@@ -91,11 +92,26 @@ class ProcessManager:
         self.running: dict[str, RunningSession] = {}  # composite key: '{slug}:{agent}' or 'cmd:{name}'
         self.max_concurrent = getattr(settings, "max_concurrent", 2)
         self.learning_notes_dir = getattr(settings, "learning_notes_dir", None)
+        self.session_logs_dir = getattr(settings, "session_logs_dir", "data/session_logs")
         self.env_resolver = env_resolver
         # Pока есть хотя бы одна running-сессия — Windows не даёт системе уйти
         # в Modern Standby (иначе дочерние Claude-процессы умирают, см. инцидент
         # 05.05 — машина уснула в 06:53, каскад умер в 07:03).
         self.keep_awake = KeepAwake()
+
+    def _allocate_log_path(self, session_id: str) -> str | None:
+        """Compute a fresh log file path for a session, creating the date dir.
+        Returns the absolute path or None if the directory can't be created."""
+        if not session_id:
+            return None
+        try:
+            base = Path(self.session_logs_dir)
+            date_dir = base / time.strftime("%Y-%m-%d")
+            date_dir.mkdir(parents=True, exist_ok=True)
+            return str((date_dir / f"{session_id}.log").resolve())
+        except OSError as e:
+            log.warning("session_log dir create failed: %s", e)
+            return None
 
     def _build_env(
         self,
@@ -199,6 +215,7 @@ class ProcessManager:
             process=process,
         )
         session.key = key
+        session.log_path = self._allocate_log_path(session_id)
 
         self.running[key] = session
         self.keep_awake.acquire()
@@ -321,6 +338,7 @@ class ProcessManager:
             process=process,
         )
         session.key = key
+        session.log_path = self._allocate_log_path(session_id)
 
         self.running[key] = session
         self.keep_awake.acquire()
@@ -496,6 +514,16 @@ class ProcessManager:
             session.output_lines.append(line)
             if len(session.output_lines) > RING_BUFFER_SIZE:
                 session.output_lines.pop(0)
+            if session.log_path:
+                try:
+                    with open(session.log_path, "a", encoding="utf-8") as lf:
+                        lf.write(line + "\n")
+                except OSError as e:
+                    log.warning(
+                        "session log write failed for %s: %s",
+                        session.key or session.session_id, e,
+                    )
+                    session.log_path = None  # stop retrying for this session
             dead_queues = []
             for q in session.subscribers:
                 try:

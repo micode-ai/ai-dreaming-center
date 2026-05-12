@@ -99,6 +99,7 @@
     <td class="p-2 text-xs">{{ s.topic or '' }}</td>
     <td class="p-2 text-xs muted">{{ s.started_at }}</td>
     <td class="p-2 text-right whitespace-nowrap">
+      <a class="text-xs border rounded px-2 py-1 mr-1 text-slate-700" href="/p/{{ project.slug }}/sessions/{{ s.id }}/log">log</a>
       {% if is_running_row %}
         <form method="post" action="/p/{{ project.slug }}/sessions/{{ s.id }}/stop" class="inline">
           <button class="text-xs border border-amber-500 text-amber-700 rounded px-2 py-1 mr-1"

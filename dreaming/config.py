@@ -52,6 +52,10 @@ class AppSettings(BaseSettings):
     question_reminder_minutes: int = 15
     question_expire_minutes: int = 60
 
+    # Per-session stdout log files (raw human-readable lines). Used to browse
+    # what a session printed after it finishes — /live only shows live streams.
+    session_logs_dir: str = "data/session_logs"
+
     # === Orchestration (Roman) — separate limits because Roman + subagents
     # take many more turns than a single self-study session.
     orchestration_max_turns: int = 150

@@ -51,6 +51,29 @@ async def orchestration_force_close_stale(request: Request, slug: str):
     return RedirectResponse(f"/p/{project.slug}/orchestration", status_code=303)
 
 
+@router.post("/p/{slug}/orchestration/{run_id}/delete")
+async def orchestration_delete(request: Request, slug: str, run_id: str):
+    """Hard-delete a run plus its child rows (messages, nodes, events,
+    questions). If the run is still in `pm.running`, kill the claude process
+    first so we don't leave a runaway."""
+    project = request.state.project
+    db = request.app.state.db
+    pm = request.app.state.process_manager
+    # If the spawn-side cmd key is still alive, kill its process first so we
+    # don't leave a runaway. Both initial run and resume use stable key names.
+    for cmd_key in (
+        f"cmd:{project.slug}:roman-{run_id[:8]}",
+        f"cmd:{project.slug}:resume-{run_id[:8]}",
+    ):
+        if cmd_key in pm.list_running():
+            try:
+                await pm.kill(cmd_key)
+            except Exception:
+                pass
+    await db.delete_orchestration_run(run_id, project.id)
+    return RedirectResponse(f"/p/{project.slug}/orchestration", status_code=303)
+
+
 @router.get("/p/{slug}/orchestration/{run_id}")
 async def orchestration_detail(request: Request, slug: str, run_id: str):
     project = request.state.project
