@@ -24,6 +24,8 @@ class PlanItem:
     done: int
     todo: int
     progress_pct: int
+    github_issue: str | None = None
+    orchestration_run: str | None = None
     raw_frontmatter: dict = field(default_factory=dict)
 
 
@@ -37,6 +39,26 @@ def _parse_frontmatter(text: str) -> dict[str, str]:
             k, _, v = line.partition(":")
             out[k.strip()] = v.strip().strip('"\'')
     return out
+
+
+def read_plan(plans_dir: str, name: str) -> tuple[dict, str] | None:
+    """Read a single plan file by stem. Returns (frontmatter, body) or None."""
+    p = Path(plans_dir)
+    if not p.exists():
+        return None
+    if name.endswith(".md"):
+        name = name[:-3]
+    target = (p / f"{name}.md").resolve()
+    try:
+        target.relative_to(p.resolve())
+    except ValueError:
+        return None
+    if not target.exists() or not target.is_file():
+        return None
+    text = target.read_text(encoding="utf-8")
+    fm = _parse_frontmatter(text)
+    body = _FRONTMATTER_RE.sub("", text, count=1)
+    return fm, body
 
 
 def list_plans(plans_dir: str) -> list[PlanItem]:
@@ -63,6 +85,8 @@ def list_plans(plans_dir: str) -> list[PlanItem]:
             title=fm.get("title") or f.stem,
             status=fm.get("status") or ("done" if (total and todo == 0) else "active"),
             done=done, todo=todo, progress_pct=progress_pct,
+            github_issue=(str(fm.get("github_issue") or "") or None),
+            orchestration_run=(str(fm.get("orchestration_run") or "") or None),
             raw_frontmatter=fm,
         ))
     return items
