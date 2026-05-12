@@ -59,6 +59,39 @@ async def ideas_page(request: Request, slug: str, status: str | None = None):
     )
 
 
+@router.get("/p/{slug}/ideas/{item_id}")
+async def ideas_detail(request: Request, slug: str, item_id: str):
+    """Detail page for a single product idea: frontmatter meta + rendered markdown."""
+    project = request.state.project
+    resolver = request.app.state.resolver_factory(request)
+    ideas_dir = await resolver.get(project, "product_ideas_dir", "")
+    item_dict: dict | None = None
+    body_md = ""
+    if ideas_dir and Path(ideas_dir).exists():
+        from dreaming.services.product_ideas import list_product_ideas, read_product_idea
+        try:
+            for it in list_product_ideas(ideas_dir):
+                obj = it.__dict__ if hasattr(it, "__dict__") else (it if isinstance(it, dict) else {})
+                if obj.get("id") == item_id or obj.get("slug") == item_id:
+                    item_dict = dict(obj)
+                    break
+        except Exception:
+            item_dict = None
+        if item_dict and item_dict.get("file_path"):
+            try:
+                _, body_md = read_product_idea(item_dict["file_path"])
+            except Exception:
+                body_md = ""
+    locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
+    projects = await request.app.state.projects.list_all(only_enabled=True)
+    return request.app.state.templates.TemplateResponse(
+        request, "project_ideas_detail.html",
+        {"project": project, "item_id": item_id, "item": item_dict,
+         "body_md": body_md, "ideas_dir": ideas_dir,
+         "projects": projects, "locale": locale},
+    )
+
+
 @router.post("/p/{slug}/ideas/scan")
 async def ideas_scan(request: Request, slug: str):
     project = request.state.project

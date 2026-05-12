@@ -35,7 +35,11 @@
   {% for it in items %}
   {% set iid = it.id or it.slug %}
   <tr class="border-b align-top">
-    <td class="p-2 font-mono text-xs">{{ iid or '—' }}</td>
+    <td class="p-2 font-mono text-xs">
+      {% if iid %}
+      <a class="text-blue-600 underline" href="/p/{{ project.slug }}/ideas/{{ iid }}">{{ iid }}</a>
+      {% else %}—{% endif %}
+    </td>
     <td class="p-2">{{ it.title or '—' }}</td>
     <td class="p-2 text-xs">
       <form method="post" action="/p/{{ project.slug }}/ideas/{{ iid }}/status" class="inline">
