@@ -20,6 +20,7 @@ class EvolutionItem:
     title: str
     status: str
     has_conflict: bool
+    relative_path: str = ""  # relative to evolutions_dir, for safe browser linking
     raw_frontmatter: dict[str, str] = field(default_factory=dict)
 
 
@@ -49,6 +50,10 @@ def list_evolutions(evolutions_dir: str) -> list[EvolutionItem]:
             continue
         fm = _parse_frontmatter(text)
         agent_name = fm.get("agent") or fm.get("agent_name") or f.parent.name or ""
+        try:
+            rel = str(f.relative_to(p)).replace("\\", "/")
+        except ValueError:
+            rel = f.name
         items.append(EvolutionItem(
             path=str(f),
             name=f.stem,
@@ -56,6 +61,7 @@ def list_evolutions(evolutions_dir: str) -> list[EvolutionItem]:
             title=fm.get("title") or f.stem,
             status=fm.get("status") or "active",
             has_conflict=bool(fm.get("conflict")),
+            relative_path=rel,
             raw_frontmatter=fm,
         ))
 
