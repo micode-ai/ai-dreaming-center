@@ -154,13 +154,18 @@
     const form = e.target;
     if (!(form instanceof HTMLFormElement)) return;
     if (!form.hasAttribute('data-confirm')) return;
+    const d = dataOf(form);
+    if (!d.message) {
+      console.warn('[app-modal] empty data-confirm; submitting without modal', form);
+      form.removeAttribute('data-confirm');
+      return;  // let default submit proceed on the same event tick
+    }
     e.preventDefault();
     e.stopPropagation();
-    const d = dataOf(form);
     showConfirm(d.message, { variant: d.variant, input: d.input }).then((ok) => {
       if (!ok) return;
       form.removeAttribute('data-confirm');
-      form.requestSubmit();
+      (typeof form.requestSubmit === 'function' ? form.requestSubmit() : form.submit());
     });
   }, true);
 
@@ -172,9 +177,13 @@
     // Skip if button lives inside a form that already has data-confirm — that form's submit listener owns it.
     const ownerForm = btn.closest('form[data-confirm]');
     if (ownerForm) return;
+    const d = dataOf(btn);
+    if (!d.message) {
+      console.warn('[app-modal] empty data-confirm; ignoring', btn);
+      return;  // do nothing — leave default click behavior (no action) intact
+    }
     e.preventDefault();
     e.stopPropagation();
-    const d = dataOf(btn);
     showConfirm(d.message, { variant: d.variant, input: d.input }).then((ok) => {
       if (!ok) return;
       if (d.action) {
@@ -184,6 +193,7 @@
         tmp.style.display = 'none';
         document.body.appendChild(tmp);
         tmp.submit();
+        tmp.remove();
       } else if (btn instanceof HTMLAnchorElement && btn.href) {
         window.location.href = btn.href;
       }
