@@ -10,7 +10,20 @@
 <div class="bg-red-50 border border-red-200 rounded p-4 mb-4">
   <p class="text-sm text-red-700">Ошибка парсинга: <code>{{ error }}</code></p>
 </div>
-{% elif items %}
+{% else %}
+{% if selected_status or selected_module %}
+<div class="mb-3 flex items-center gap-2 text-sm">
+  <span class="muted">Фильтр:</span>
+  {% if selected_status %}
+  <span class="bg-slate-200 rounded px-2 py-1 font-mono text-xs">status: {{ selected_status }}</span>
+  {% endif %}
+  {% if selected_module %}
+  <span class="bg-slate-200 rounded px-2 py-1 font-mono text-xs">module: {{ selected_module }}</span>
+  {% endif %}
+  <a class="text-xs text-blue-600 underline ml-1" href="/p/{{ project.slug }}/findings">очистить</a>
+</div>
+{% endif %}
+{% if items %}
 <p class="text-xs muted mb-3">{{ items|length }} items in <code>{{ td_dir }}</code></p>
 <table class="w-full bg-white rounded shadow text-sm">
   <thead class="text-left border-b"><tr>
@@ -65,6 +78,9 @@
   </tbody>
 </table>
 {% else %}
+{% if selected_status or selected_module %}
+<p class="muted">По текущему фильтру ничего не нашлось.</p>
+{% else %}
 <div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
   <p class="font-semibold text-sky-900 mb-1">В <code>{{ td_dir }}</code> нет markdown файлов</p>
   <p class="text-sm text-sky-900 mb-2">
@@ -76,5 +92,7 @@
     <button class="text-sm bg-blue-600 text-white rounded px-3 py-1">Run /tech-debt-scan</button>
   </form>
 </div>
+{% endif %}
+{% endif %}
 {% endif %}
 {% endblock %}
