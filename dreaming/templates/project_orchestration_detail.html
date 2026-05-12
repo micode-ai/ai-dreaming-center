@@ -12,7 +12,7 @@
     {% if run.finished_at %} · finished {{ run.finished_at }}{% endif %}
     {% if run.external_id %} · session <span class="font-mono">{{ run.external_id[:8] }}…</span>{% endif %}
   </div>
-  <div class="mt-2 flex gap-2">
+  <div class="mt-2 flex gap-2 flex-wrap">
     {% if run.status == 'running' %}
     <form method="post" action="/p/{{ project.slug }}/orchestration/{{ run.id }}/finish" class="inline">
       <button class="text-xs px-3 py-1 border rounded">Mark completed</button>
@@ -25,6 +25,11 @@
       </form>
       {% endif %}
     {% endif %}
+    <a class="text-xs px-3 py-1 border rounded text-slate-700" href="/p/{{ project.slug }}/orchestration/{{ run.id }}/log">View log</a>
+    <form method="post" action="/p/{{ project.slug }}/orchestration/{{ run.id }}/delete" class="inline"
+          onsubmit="return confirm('Удалить run полностью (вместе с messages/nodes/events)?\nФайлы которые Roman написал на диск НЕ удаляются.');">
+      <button class="text-xs px-3 py-1 border rounded text-red-600">Delete run</button>
+    </form>
   </div>
 </header>
 

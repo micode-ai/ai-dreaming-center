@@ -1,0 +1,28 @@
+{% extends "_project_layout.html" %}
+{% set active='dashboard' %}
+{% block project_content %}
+{% if run_id %}
+<a href="/p/{{ project.slug }}/orchestration/{{ run_id }}" class="text-sm text-blue-600 underline">← к run</a>
+{% else %}
+<a href="/p/{{ project.slug }}/" class="text-sm text-blue-600 underline">← к dashboard</a>
+{% endif %}
+
+<h1 class="text-xl font-bold mt-3">Log — {{ label }}</h1>
+<p class="text-xs muted mt-1">
+  session_id: <code>{{ session_id }}</code>
+  {% if log_path %} · file: <code>{{ log_path }}</code>{% endif %}
+</p>
+
+{% if not log_path %}
+<div class="mt-4 bg-amber-50 border border-amber-300 rounded p-3 text-sm">
+  Лог-файл не найден. Возможные причины:
+  <ul class="list-disc ml-5 mt-2 text-xs">
+    <li>Сессия запускалась до того, как DC начал писать stdout-логи (PR с этой фичей).</li>
+    <li>Лог-каталог <code>{{ session_id }}</code> был удалён вручную или ротирован.</li>
+    <li>Setting <code>session_logs_dir</code> поменялся.</li>
+  </ul>
+</div>
+{% else %}
+<pre class="mt-4 bg-slate-900 text-slate-100 rounded p-3 overflow-auto text-xs whitespace-pre-wrap" style="max-height: 80vh;">{{ body or "(empty)" }}</pre>
+{% endif %}
+{% endblock %}
