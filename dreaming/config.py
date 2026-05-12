@@ -46,7 +46,11 @@ class AppSettings(BaseSettings):
 
     # === Self-study core ===
     model: str = "sonnet"
-    max_turns: int = 25
+    # Default budget for self-study + scanner sessions. 25 was too low when
+    # the agent file references stale paths and claude burns turns chasing
+    # them — bumped to 50 so a slow but recoverable session can still
+    # finish a note instead of hitting error_max_turns at $0.50.
+    max_turns: int = 50
     timeout_minutes: int = 20
     self_study_command: str = "/self-study"
     question_reminder_minutes: int = 15
