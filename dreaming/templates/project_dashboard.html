@@ -59,9 +59,9 @@
   <span class="text-amber-900">
     {{ ns.stale_orphans }} stuck <code>running</code> row{{ "s" if ns.stale_orphans != 1 else "" }} (process gone, DB never closed).
   </span>
-  <form method="post" action="/p/{{ project.slug }}/sessions/force-close-stale">
-    <button class="text-xs bg-amber-600 text-white rounded px-3 py-1"
-            onclick="return confirm('Mark all running rows for this project as cancelled?');">
+  <form method="post" action="/p/{{ project.slug }}/sessions/force-close-stale"
+        data-confirm="Mark all running rows for this project as cancelled?" data-confirm-variant="danger">
+    <button class="text-xs bg-amber-600 text-white rounded px-3 py-1">
       Force-close all stale
     </button>
   </form>
@@ -101,16 +101,16 @@
     <td class="p-2 text-right whitespace-nowrap">
       <a class="text-xs border rounded px-2 py-1 mr-1 text-slate-700" href="/p/{{ project.slug }}/sessions/{{ s.id }}/log">log</a>
       {% if is_running_row %}
-        <form method="post" action="/p/{{ project.slug }}/sessions/{{ s.id }}/stop" class="inline">
-          <button class="text-xs border border-amber-500 text-amber-700 rounded px-2 py-1 mr-1"
-                  onclick="return confirm('{{ "Stop running process for " if is_live else "Force-close orphan row for " }}{{ s.agent_name }}?');">
+        <form method="post" action="/p/{{ project.slug }}/sessions/{{ s.id }}/stop" class="inline"
+            data-confirm="{{ "Stop running process for " if is_live else "Force-close orphan row for " }}{{ s.agent_name }}?" data-confirm-variant="danger">
+          <button class="text-xs border border-amber-500 text-amber-700 rounded px-2 py-1 mr-1">
             {{ "Stop" if is_live else "Force-close" }}
           </button>
         </form>
       {% endif %}
-      <form method="post" action="/p/{{ project.slug }}/sessions/{{ s.id }}/delete" class="inline">
-        <button class="text-xs border border-red-400 text-red-700 rounded px-2 py-1"
-                onclick="return confirm('Permanently delete this session row?{{ "  (process is still running — it will be killed first)" if is_live else "" }}');">
+      <form method="post" action="/p/{{ project.slug }}/sessions/{{ s.id }}/delete" class="inline"
+            data-confirm="Permanently delete this session row?{{ "  (process is still running — it will be killed first)" if is_live else "" }}" data-confirm-variant="danger">
+        <button class="text-xs border border-red-400 text-red-700 rounded px-2 py-1">
           Delete
         </button>
       </form>
@@ -129,9 +129,9 @@
     {% set agent = key.split(':', 1)[1] %}
     <li class="font-mono text-sm flex items-center justify-between py-1">
       <span>{{ key }}</span>
-      <form method="post" action="/p/{{ project.slug }}/live/kill/{{ agent }}" class="inline">
-        <button class="text-xs border border-amber-500 text-amber-700 rounded px-2 py-1"
-                onclick="return confirm('Kill running process for {{ agent }}?');">
+      <form method="post" action="/p/{{ project.slug }}/live/kill/{{ agent }}" class="inline"
+            data-confirm="Kill running process for {{ agent }}?" data-confirm-variant="danger">
+        <button class="text-xs border border-amber-500 text-amber-700 rounded px-2 py-1">
           Stop
         </button>
       </form>
