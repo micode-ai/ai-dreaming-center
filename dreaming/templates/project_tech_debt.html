@@ -25,12 +25,16 @@
 <div class="grid grid-cols-2 gap-6">
   <div class="bg-white p-4 rounded shadow">
     <div class="text-xs muted mb-1">Всего</div>
-    <div class="text-3xl font-bold">{{ total }}</div>
+    <a class="text-3xl font-bold text-blue-700 hover:underline" href="/p/{{ project.slug }}/findings">{{ total }}</a>
+    <div class="text-xs muted mt-1">→ открыть полный список</div>
   </div>
   <div class="bg-white p-4 rounded shadow">
     <div class="text-xs muted mb-2">По статусу</div>
     {% for status, n in by_status %}
-      <div class="text-sm flex justify-between"><span class="font-mono text-xs">{{ status }}</span><span class="font-bold">{{ n }}</span></div>
+      <div class="text-sm flex justify-between">
+        <a class="font-mono text-xs text-blue-600 hover:underline" href="/p/{{ project.slug }}/findings?status={{ status }}">{{ status }}</a>
+        <span class="font-bold">{{ n }}</span>
+      </div>
     {% endfor %}
   </div>
 </div>
@@ -40,11 +44,18 @@
   <thead class="text-left border-b"><tr><th class="p-2">module</th><th class="p-2 text-right">count</th></tr></thead>
   <tbody>
   {% for mod, n in by_module %}
-  <tr class="border-b"><td class="p-2 font-mono text-xs">{{ mod }}</td><td class="p-2 text-right">{{ n }}</td></tr>
+  <tr class="border-b">
+    <td class="p-2 font-mono text-xs">
+      {% if mod and mod != '—' %}
+      <a class="text-blue-600 hover:underline" href="/p/{{ project.slug }}/findings?module={{ mod | urlencode }}">{{ mod }}</a>
+      {% else %}{{ mod }}{% endif %}
+    </td>
+    <td class="p-2 text-right">{{ n }}</td>
+  </tr>
   {% endfor %}
   </tbody>
 </table>
 
-<p class="text-xs muted mt-4">Источник: <code>{{ td_dir }}</code> · полный список: <a class="text-blue-600 underline" href="/p/{{ project.slug }}/findings">findings</a></p>
+<p class="text-xs muted mt-4">Источник: <code>{{ td_dir }}</code> · клик по статусу или модулю → отфильтрованный <a class="text-blue-600 underline" href="/p/{{ project.slug }}/findings">findings</a> с конкретными items.</p>
 {% endif %}
 {% endblock %}

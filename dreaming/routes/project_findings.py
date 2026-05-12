@@ -22,18 +22,21 @@ def _default_td_dir(project) -> str:
 
 
 @router.get("/p/{slug}/findings")
-async def findings_page(request: Request, slug: str):
+async def findings_page(
+    request: Request, slug: str,
+    status: str | None = None, module: str | None = None,
+):
     project = request.state.project
     resolver = request.app.state.resolver_factory(request)
     td_dir = await resolver.get(project, "tech_debt_dir", _default_td_dir(project))
     items = []
     error = None
+    statuses: list[str] = []
+    modules: list[str] = []
     if td_dir and Path(td_dir).exists():
         try:
             from dreaming.services.tech_debt import list_tech_debt
             raw = list_tech_debt(td_dir)
-            # Normalize to list of dicts so template doesn't depend on dataclass
-            items = []
             for it in raw:
                 if hasattr(it, "__dict__"):
                     items.append(dict(it.__dict__))
@@ -43,6 +46,12 @@ async def findings_page(request: Request, slug: str):
                     items.append({"raw": str(it)})
         except Exception as e:
             error = f"{type(e).__name__}: {e}"
+        statuses = sorted({(it.get("status") or "open") for it in items if isinstance(it, dict)})
+        modules = sorted({(it.get("module") or "") for it in items if isinstance(it, dict) and it.get("module")})
+    if status:
+        items = [it for it in items if (it.get("status") or "open") == status]
+    if module:
+        items = [it for it in items if (it.get("module") or "") == module]
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
     projects = await request.app.state.projects.list_all(only_enabled=True)
     return request.app.state.templates.TemplateResponse(
@@ -50,6 +59,8 @@ async def findings_page(request: Request, slug: str):
         {"project": project, "items": items, "td_dir": td_dir,
          "td_dir_set": bool(td_dir), "td_dir_exists": bool(td_dir) and Path(td_dir).exists(),
          "autoconfig_default": autoconfig.default_abs(project, "tech_debt_dir"),
+         "statuses": statuses, "modules": modules,
+         "selected_status": status or "", "selected_module": module or "",
          "error": error,
          "projects": projects, "locale": locale},
     )
