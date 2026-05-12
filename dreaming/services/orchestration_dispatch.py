@@ -1,9 +1,15 @@
 """Shared launcher for an orchestration run.
 
-The Roman-spawning logic was originally inlined in
+The Orchestrator-spawning logic was originally inlined in
 `POST /p/{slug}/orchestration/start` (orchestration_start_form). It's now
 shared with the "Send to orchestration" buttons on Findings / Ideas pages,
 so the spawn / watcher / tail bookkeeping lives here.
+
+Historical note: the orchestrator role was originally called "Roman" in
+the ALC fork; existing DB rows from before 2026-05-12 carry
+`agent_name="roman"`, and the cmd-key lookup in callers recognises both
+`cmd:{slug}:roman-*` and `cmd:{slug}:orchestrator-*` for backwards
+compatibility.
 """
 from __future__ import annotations
 import asyncio
@@ -18,8 +24,8 @@ class OrchestrationDispatchResult(dict):
     """{'run_id': str, 'started': bool, 'reason': str | None}"""
 
 
-_ROMAN_PROMPT_PREAMBLE = """\
-You are Roman, an orchestrator agent running inside Claude Code in
+_ORCHESTRATOR_PROMPT_PREAMBLE = """\
+You are the Orchestrator agent running inside Claude Code in
 non-interactive (`--print`) mode. There is **no live user** to answer
 questions during this run. Hard rules:
 
@@ -46,15 +52,15 @@ LEARNING_SESSION_ID, LEARNING_AGENT_NAME are set.
 
 
 def _wrap_goal(goal: str, run_id: str) -> str:
-    """Prepend the Roman-hardening preamble; substitute {run_id}."""
-    pre = _ROMAN_PROMPT_PREAMBLE.replace("{run_id}", run_id)
+    """Prepend the Orchestrator-hardening preamble; substitute {run_id}."""
+    pre = _ORCHESTRATOR_PROMPT_PREAMBLE.replace("{run_id}", run_id)
     return pre + goal.strip() + "\n"
 
 
 async def start_orchestration_run(
     app_state, project, goal: str, *, enforce_single: bool = True,
 ) -> OrchestrationDispatchResult:
-    """Create a new orchestrator run + spawn Roman via PM. Best-effort: any
+    """Create a new orchestrator run + spawn the Orchestrator via PM. Best-effort: any
     optional pieces (ClaudeSessionTail, SubagentWatcher) that fail to spawn
     are logged and skipped — the run still proceeds.
 
@@ -77,7 +83,7 @@ async def start_orchestration_run(
     claude_session_id = str(uuid.uuid4())
     run_id = await hub.create_run(project.id, goal.strip(), external_id=claude_session_id)
     root_node = await hub.create_node(
-        run_id, project.id, agent_name="roman", role="orchestrator",
+        run_id, project.id, agent_name="orchestrator", role="orchestrator",
         external_id=claude_session_id,
     )
     await hub.append_event(
@@ -89,7 +95,7 @@ async def start_orchestration_run(
     try:
         await pm.start_command(
             project,
-            command_name=f"roman-{run_id[:8]}",
+            command_name=f"orchestrator-{run_id[:8]}",
             prompt=wrapped_goal,
             claude_path=getattr(settings, "claude_path", "claude"),
             working_dir=project.working_dir,

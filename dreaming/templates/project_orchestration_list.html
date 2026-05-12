@@ -17,8 +17,8 @@
 {% endif %}
 
 <form method="post" action="/p/{{ project.slug }}/orchestration/start" class="bg-white p-4 rounded shadow mb-6 flex gap-3">
-  <input name="goal" placeholder="Цель Roman-сессии (например: «декомпозируй фичу X»)" required class="flex-1 border rounded p-2">
-  <button class="bg-blue-600 text-white rounded px-4 py-2">Start Roman</button>
+  <input name="goal" placeholder="Цель orchestration-сессии (например: «декомпозируй фичу X»)" required class="flex-1 border rounded p-2">
+  <button class="bg-blue-600 text-white rounded px-4 py-2">Start Orchestrator</button>
 </form>
 
 {% if runs %}
@@ -42,7 +42,7 @@
     <td class="p-2 text-xs whitespace-nowrap">
       <a class="text-xs px-2 py-1 border rounded text-slate-700" href="/p/{{ project.slug }}/orchestration/{{ r.id }}/log">log</a>
       <form method="post" action="/p/{{ project.slug }}/orchestration/{{ r.id }}/delete" class="inline ml-1"
-            onsubmit="return confirm('Удалить run {{ r.id[:8] }}…?\nЭто удалит и все его messages/nodes/events. Файлы которые Roman написал на диск — НЕ удаляются.');">
+            onsubmit="return confirm('Удалить run {{ r.id[:8] }}…?\nЭто удалит и все его messages/nodes/events. Файлы которые Orchestrator написал на диск — НЕ удаляются.');">
         <button class="text-xs px-2 py-1 border rounded text-red-600">delete</button>
       </form>
     </td>
@@ -51,6 +51,6 @@
   </tbody>
 </table>
 {% else %}
-<p class="muted">Нет orchestration runs пока. Запусти Roman через форму выше.</p>
+<p class="muted">Нет orchestration runs пока. Запусти Orchestrator через форму выше.</p>
 {% endif %}
 {% endblock %}
