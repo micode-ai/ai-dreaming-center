@@ -651,6 +651,38 @@ class SqliteDB:
         await self._conn.commit()
         return closed
 
+    async def delete_orchestration_run(self, run_id: str, project_id: int) -> bool:
+        """Hard-delete an orchestration run plus all its child rows.
+        run_id ⇄ project_id pair must match for the delete to apply (defence in depth).
+        Returns True if a row was deleted."""
+        # Defensive: only act if the run actually belongs to this project.
+        row = await self.fetch_one(
+            "SELECT id FROM orchestrator_runs WHERE id=? AND project_id=?",
+            (run_id, project_id),
+        )
+        if row is None:
+            return False
+        # Cascade — child tables don't have FK CASCADE on run_id (only on project_id),
+        # so we delete each child set manually.
+        await self._conn.execute(
+            "DELETE FROM orchestrator_messages WHERE run_id=?", (run_id,),
+        )
+        await self._conn.execute(
+            "DELETE FROM orchestrator_nodes WHERE run_id=?", (run_id,),
+        )
+        await self._conn.execute(
+            "DELETE FROM orchestrator_events WHERE run_id=?", (run_id,),
+        )
+        await self._conn.execute(
+            "DELETE FROM orchestrator_questions WHERE run_id=?", (run_id,),
+        )
+        await self._conn.execute(
+            "DELETE FROM orchestrator_runs WHERE id=? AND project_id=?",
+            (run_id, project_id),
+        )
+        await self._conn.commit()
+        return True
+
     async def cancel_stale_orchestration_runs_for_project(self, project_id: int) -> int:
         """User-triggered: close every running run for this project, regardless of age."""
         now_iso = datetime.now(timezone.utc).isoformat()
