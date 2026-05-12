@@ -15,11 +15,12 @@
     <th class="p-2">status</th>
     <th class="p-2">conflict</th>
     <th class="p-2">title</th>
+    <th class="p-2">refs</th>
     <th class="p-2"></th>
   </tr></thead>
   <tbody>
   {% for it in items %}
-  <tr class="border-b">
+  <tr class="border-b align-top">
     <td class="p-2 font-mono text-xs">{{ it.agent_name }}</td>
     <td class="p-2 font-mono text-xs">
       <a class="text-blue-600 underline cursor-pointer"
@@ -28,11 +29,42 @@
          data-evo-name="{{ it.name }}"
          onclick="openEvolution(this); return false;">{{ it.name }}</a>
     </td>
-    <td class="p-2"><span class="font-mono text-xs">{{ it.status }}</span></td>
+    <td class="p-2 text-xs">
+      <form method="post" action="/p/{{ project.slug }}/evolutions/status" class="inline">
+        <input type="hidden" name="path" value="{{ it.relative_path }}">
+        <select name="status" onchange="this.form.submit()" class="border rounded p-1 text-xs font-mono">
+          {% set cur = it.status or 'proposed' %}
+          {% for opt in ['proposed', 'active', 'applied', 'archived', 'rejected'] %}
+          <option value="{{ opt }}" {% if cur==opt %}selected{% endif %}>{{ opt }}</option>
+          {% endfor %}
+        </select>
+      </form>
+    </td>
     <td class="p-2">{{ "⚠" if it.has_conflict else "" }}</td>
     <td class="p-2 text-xs">{{ it.title or '' }}</td>
-    <td class="p-2 text-right">
-      <a class="text-xs muted underline"
+    <td class="p-2 text-xs font-mono">
+      {% if it.github_issue %}<a class="text-blue-600 underline" target="_blank" href="{{ it.github_issue }}">GH</a>{% endif %}
+      {% if it.orchestration_run %}<a class="text-purple-600 underline ml-1" href="/p/{{ project.slug }}/orchestration/{{ it.orchestration_run }}">run</a>{% endif %}
+    </td>
+    <td class="p-2 text-xs whitespace-nowrap">
+      <form method="post" action="/p/{{ project.slug }}/evolutions/apply" class="inline"
+            onsubmit="return confirm('Запустить Orchestrator: применить эту правку к `.claude/agents/{{ it.agent_name }}.md`?');">
+        <input type="hidden" name="path" value="{{ it.relative_path }}">
+        <button class="text-xs px-2 py-1 border border-purple-500 text-purple-700 rounded">Apply</button>
+      </form>
+      {% if not it.github_issue %}
+      <form method="post" action="/p/{{ project.slug }}/evolutions/github" class="inline ml-1"
+            onsubmit="return confirm('Создать GitHub issue из этого evolution?');">
+        <input type="hidden" name="path" value="{{ it.relative_path }}">
+        <button class="text-xs px-2 py-1 border border-slate-500 text-slate-700 rounded">→ GH</button>
+      </form>
+      {% endif %}
+      <form method="post" action="/p/{{ project.slug }}/evolutions/delete" class="inline ml-1"
+            onsubmit="return confirm('Удалить файл {{ it.relative_path }}?')">
+        <input type="hidden" name="path" value="{{ it.relative_path }}">
+        <button class="text-xs px-2 py-1 border rounded text-red-600">del</button>
+      </form>
+      <a class="text-xs muted underline ml-1"
          href="/p/{{ project.slug }}/evolutions/raw?path={{ it.relative_path | urlencode }}"
          target="_blank" rel="noopener">raw</a>
     </td>
