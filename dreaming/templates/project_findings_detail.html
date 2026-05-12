@@ -15,8 +15,8 @@
 </div>
 <div class="mt-4 flex flex-wrap gap-2 items-center">
   <form method="post" action="/p/{{ project.slug }}/findings/{{ item_id }}/orchestrate" class="inline"
-        onsubmit="return confirm('Запустить Roman с этим finding как целью?');">
-    <button class="text-sm px-3 py-1 rounded bg-purple-600 text-white font-semibold">Дать Roman'у разобраться</button>
+        onsubmit="return confirm('Запустить Orchestrator с этим finding как целью?');">
+    <button class="text-sm px-3 py-1 rounded bg-purple-600 text-white font-semibold">Отправить в Orchestrator</button>
   </form>
   {% if not item.github_issue %}
   <form method="post" action="/p/{{ project.slug }}/findings/{{ item_id }}/github" class="inline"
@@ -39,7 +39,7 @@
 </div>
 {% if item.orchestration_run %}
 <p class="mt-2 text-xs muted">
-  Уже запускался Roman:
+  Уже запускался Orchestrator:
   <a class="text-blue-600 underline" href="/p/{{ project.slug }}/orchestration/{{ item.orchestration_run }}">run {{ item.orchestration_run[:8] }}…</a>
 </p>
 {% endif %}

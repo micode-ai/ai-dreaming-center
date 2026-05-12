@@ -2,7 +2,7 @@
 
 POST /p/{slug}/findings/{id}/status   — change status (open|in-progress|closed|...)
 POST /p/{slug}/findings/{id}/github   — create GitHub issue + persist URL
-POST /p/{slug}/findings/{id}/orchestrate — send to Roman as orchestration goal
+POST /p/{slug}/findings/{id}/orchestrate — send to Orchestrator as goal
 """
 from __future__ import annotations
 from pathlib import Path
@@ -181,7 +181,7 @@ async def findings_create_github(request: Request, slug: str, item_id: str):
 
 @router.post("/p/{slug}/findings/{item_id}/orchestrate")
 async def findings_send_to_orchestration(request: Request, slug: str, item_id: str):
-    """Spawn Roman with this finding as the orchestration goal."""
+    """Spawn the Orchestrator with this finding as the goal."""
     project = request.state.project
     resolver = request.app.state.resolver_factory(request)
     td_dir = await resolver.get(project, "tech_debt_dir", "")

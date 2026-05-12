@@ -48,11 +48,11 @@
 
 **Loop** — markdown-файл в `loops_dir`. Описывает «reflex-loop» агента (повторяющийся самокорректирующийся цикл). На `/p/{slug}/loops` — список с iterations counter.
 
-**Node (orchestrator)** — узел в орке́страции: один агент в run'е. Может быть root (Roman) или sub-agent. Видны на detail-странице run'а.
+**Node (orchestrator)** — узел в орке́страции: один агент в run'е. Может быть root (Orchestrator) или sub-agent. Видны на detail-странице run'а.
 
 **Note (конспект)** — markdown-файл, который агент пишет по итогам self-study. Лежит в `learning_notes_dir`. Путь записывается в `agent_learning_sessions.note_path`.
 
-**Plan** — markdown-файл с tasks-чек-листом, который Roman пишет в `plans_dir`. На странице — progress bar (`done/total`).
+**Plan** — markdown-файл с tasks-чек-листом, который Orchestrator пишет в `plans_dir`. На странице — progress bar (`done/total`).
 
 **Process Manager** — внутренний компонент DC, отвечающий за spawn/track/kill всех subprocess'ов claude. Невидим пользователю.
 
@@ -66,7 +66,7 @@
 
 **Resume** — продолжение оркестрации: спавн нового claude-subprocess'а с `--resume {session_id}`. Доступно для finished-runs.
 
-**Roman** — корневой агент-оркестратор. В коде `agent_name="roman"`, `role="orchestrator"`. Запускается через форму на `/p/{slug}/orchestration`.
+**Orchestrator** — корневой агент-оркестратор. В коде `agent_name="orchestrator"`, `role="orchestrator"`. Запускается через форму на `/p/{slug}/orchestration`. Раньше (до 2026-05-12) назывался **Roman** — старые run'ы в DB могут иметь `agent_name="roman"`, это backward-compat, нового кода это не касается.
 
 **Rotation** — список агентов проекта с tier и enabled-флагом. Используется ночным cron'ом для выбора top-N кандидатов на сегодня.
 
@@ -80,7 +80,7 @@
 
 **Session (agent learning)** — одна попытка self-study. Запись в `agent_learning_sessions` (id, project_id, agent_name, status, started_at, finished_at, note_path, error_message).
 
-**Sidecar (reviewer)** — отдельный агент-ревьюер (vera, svetlana, silent-failure-hunter) который пишет JSON-отчёты в `sidecar_findings_dir`. Запускается через слэш-команды или Roman'ом.
+**Sidecar (reviewer)** — отдельный агент-ревьюер (vera, svetlana, silent-failure-hunter) который пишет JSON-отчёты в `sidecar_findings_dir`. Запускается через слэш-команды или Orchestrator'ом.
 
 **Slash-command** — команда вида `/{name}` которую Claude понимает. DC спавнит claude с одним из таких prompts (`/self-study agent`, `/wiki-bootstrap`, etc.).
 
@@ -94,7 +94,7 @@
 
 **Status (session)** — `running` / `success` / `failed` / `timeout`. Тру-статусы terminal'ные кроме `running`.
 
-**Subagent** — child claude-process, спавненный через Task/Agent tool из Roman'а. Виден как отдельный node на orchestration detail.
+**Subagent** — child claude-process, спавненный через Task/Agent tool из Orchestrator'а. Виден как отдельный node на orchestration detail.
 
 **Tech debt (тех-долг)** — markdown-файл в `tech_debt_dir` с frontmatter (id/title/status/priority/module). Создаётся weekly_tech_debt_scan'ером.
 

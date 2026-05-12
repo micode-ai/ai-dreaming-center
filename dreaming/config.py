@@ -56,7 +56,7 @@ class AppSettings(BaseSettings):
     # what a session printed after it finishes — /live only shows live streams.
     session_logs_dir: str = "data/session_logs"
 
-    # === Orchestration (Roman) — separate limits because Roman + subagents
+    # === Orchestration — separate limits because the orchestrator + subagents
     # take many more turns than a single self-study session.
     orchestration_max_turns: int = 150
     orchestration_timeout_minutes: int = 120
@@ -161,7 +161,7 @@ SETTINGS_GROUPS: list[tuple[str, list[str]]] = [
         "model", "max_turns", "timeout_minutes", "self_study_command",
         "question_reminder_minutes", "question_expire_minutes",
     ]),
-    ("Orchestration (Roman)", [
+    ("Orchestration", [
         "orchestration_max_turns", "orchestration_timeout_minutes",
     ]),
     ("Scheduling — nightly", [

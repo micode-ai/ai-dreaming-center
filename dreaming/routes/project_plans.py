@@ -1,4 +1,4 @@
-"""GET /p/{slug}/plans — Roman's plan files dashboard.
+"""GET /p/{slug}/plans — Orchestrator's plan files dashboard.
 
 POST /p/{slug}/plans/extract — run /plans-extract slash-command via Claude CLI.
 """
