@@ -43,6 +43,18 @@
   <a class="text-blue-600 underline" href="/p/{{ project.slug }}/orchestration/{{ item.orchestration_run }}">run {{ item.orchestration_run[:8] }}…</a>
 </p>
 {% endif %}
-<pre class="mt-6 bg-white p-4 rounded shadow whitespace-pre-wrap text-sm font-mono">{{ body_md or '(пустое тело)' }}</pre>
+{% if body_md %}
+{% include "_markdown_partial.html" %}
+<script id="finding-md-src" type="text/markdown">{{ body_md }}</script>
+<div id="finding-md-body" class="markdown-body bg-white p-6 rounded shadow mt-6"></div>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const src = document.getElementById('finding-md-src').textContent;
+    window.dcRenderMarkdown(document.getElementById('finding-md-body'), src);
+  });
+</script>
+{% else %}
+<p class="mt-6 muted">(пустое тело)</p>
+{% endif %}
 {% endif %}
 {% endblock %}
