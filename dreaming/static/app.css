@@ -2,32 +2,9 @@
 body { font-family: system-ui, sans-serif; }
 .muted { color: #64748b; }
 
-/* Markdown rendering inside modals / notes views.
-   Tailwind's @typography plugin is not loaded (CDN), so this is a small
-   hand-rolled stylesheet that covers headers, code, lists, tables, links,
-   blockquotes — enough for agent-written learning notes. */
-.markdown-body { color: #0f172a; line-height: 1.55; }
-.markdown-body h1 { font-size: 1.5rem; font-weight: 700; margin: 1.2em 0 .6em; border-bottom: 1px solid #e2e8f0; padding-bottom: .25em; }
-.markdown-body h2 { font-size: 1.25rem; font-weight: 700; margin: 1em 0 .5em; border-bottom: 1px solid #e2e8f0; padding-bottom: .2em; }
-.markdown-body h3 { font-size: 1.1rem; font-weight: 600; margin: .9em 0 .4em; }
-.markdown-body h4 { font-size: 1rem; font-weight: 600; margin: .8em 0 .3em; }
-.markdown-body p  { margin: .6em 0; }
-.markdown-body ul, .markdown-body ol { margin: .6em 0; padding-left: 1.5em; }
-.markdown-body ul { list-style: disc; }
-.markdown-body ol { list-style: decimal; }
-.markdown-body li { margin: .2em 0; }
-.markdown-body a  { color: #2563eb; text-decoration: underline; }
-.markdown-body strong { font-weight: 700; }
-.markdown-body em { font-style: italic; }
-.markdown-body code { background: #f1f5f9; padding: .12em .35em; border-radius: 3px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9em; }
-.markdown-body pre { background: #0f172a; color: #e2e8f0; padding: .8em 1em; border-radius: 6px; overflow-x: auto; margin: .8em 0; font-size: .85em; line-height: 1.5; }
-.markdown-body pre code { background: transparent; color: inherit; padding: 0; }
-.markdown-body blockquote { border-left: 4px solid #94a3b8; padding: .2em .8em; color: #475569; margin: .8em 0; background: #f8fafc; }
-.markdown-body hr { border: none; border-top: 1px solid #e2e8f0; margin: 1.2em 0; }
-.markdown-body table { border-collapse: collapse; margin: .8em 0; }
-.markdown-body th, .markdown-body td { border: 1px solid #cbd5e1; padding: .35em .7em; }
-.markdown-body th { background: #f1f5f9; font-weight: 600; }
-.markdown-body img { max-width: 100%; }
+/* Markdown rendering is handled by github-markdown-css + highlight.js loaded
+   on-demand via _markdown_partial.html. No site-wide .markdown-body styles
+   here — the partial owns them. */
 
 /* Modal dialog — opened via <dialog>.showModal(). */
 dialog.note-modal { padding: 0; border: none; border-radius: .5rem; max-width: 56rem; width: calc(100% - 2rem); box-shadow: 0 25px 50px -12px rgba(0,0,0,.25); }

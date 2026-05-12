@@ -1,0 +1,55 @@
+{# Reusable markdown renderer.
+
+   Drops three CDN includes (github-markdown-css, marked.js, highlight.js) and
+   exposes a single global function `window.dcRenderMarkdown(el, text)`.
+
+   Usage in any template:
+       {% include "_markdown_partial.html" %}
+
+       <div id="my-target" class="markdown-body"></div>
+       <script>
+         dcRenderMarkdown(
+           document.getElementById('my-target'),
+           "your markdown text here"
+         );
+       </script>
+
+   For dynamic content (e.g. fetched after click), call the same function
+   with the freshly-loaded text. For inline server-rendered content, use a
+   `<script type="text/markdown">` wrapper to avoid escaping headaches:
+
+       <script id="src" type="text/markdown">{{ body_md }}</script>
+       <div id="out" class="markdown-body"></div>
+       <script>
+         dcRenderMarkdown(
+           document.getElementById('out'),
+           document.getElementById('src').textContent
+         );
+       </script>
+#}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown-light.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github.min.css">
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/highlight.min.js"></script>
+<style>
+  /* github-markdown-css ships with `max-width: 980px; padding: 45px` on
+     `.markdown-body`. We're rendering inside narrower containers (modal,
+     side panel), so override the box-sizing to play nice. */
+  .markdown-body { box-sizing: border-box; min-width: 200px; max-width: 100%; padding: 0; }
+  .markdown-body pre { background: #f6f8fa; }  /* hljs-github gives the code element its own bg */
+</style>
+<script>
+  (function() {
+    if (window.dcRenderMarkdown) return;  // idempotent if partial included twice
+    window.dcRenderMarkdown = function(el, text) {
+      if (!el) return;
+      const html = marked.parse(text || "", { gfm: true, breaks: false });
+      el.innerHTML = html;
+      // Post-process: syntax-highlight every fenced code block.
+      el.querySelectorAll('pre code').forEach(block => {
+        try { hljs.highlightElement(block); }
+        catch (e) { /* hljs may fail on unknown languages — markup stays as-is */ }
+      });
+    };
+  })();
+</script>
