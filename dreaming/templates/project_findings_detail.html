@@ -46,7 +46,7 @@
 {% if body_md %}
 {% include "_markdown_partial.html" %}
 <script id="finding-md-src" type="text/markdown">{{ body_md }}</script>
-<div id="finding-md-body" class="markdown-body bg-white p-6 rounded shadow mt-6"></div>
+<div id="finding-md-body" class="markdown-body bg-white rounded shadow mt-6"></div>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     const src = document.getElementById('finding-md-src').textContent;
