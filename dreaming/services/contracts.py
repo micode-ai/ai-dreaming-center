@@ -25,6 +25,9 @@ class ContractItem:
     page: str
     status: str
     last_review_at: str
+    relative_path: str = ""
+    github_issue: str | None = None
+    orchestration_run: str | None = None
     raw_frontmatter: dict = field(default_factory=dict)
 
 
@@ -53,6 +56,10 @@ def list_contracts(contracts_dir: str) -> list[ContractItem]:
         except OSError:
             continue
         fm = _parse_frontmatter(text)
+        try:
+            rel = str(f.relative_to(p)).replace("\\", "/")
+        except ValueError:
+            rel = f.name
         items.append(ContractItem(
             path=str(f),
             name=f.stem,
@@ -61,6 +68,27 @@ def list_contracts(contracts_dir: str) -> list[ContractItem]:
             page=fm.get("page") or "",
             status=fm.get("status") or "draft",
             last_review_at=fm.get("last_review_at") or "",
+            relative_path=rel,
+            github_issue=(str(fm.get("github_issue") or "") or None),
+            orchestration_run=(str(fm.get("orchestration_run") or "") or None),
             raw_frontmatter=fm,
         ))
     return items
+
+
+def read_contract(contracts_dir: str, relative_path: str) -> tuple[dict, str] | None:
+    """Read a single contract file by relative path. Returns (frontmatter, body)."""
+    base = Path(contracts_dir).resolve()
+    if not base.exists():
+        return None
+    target = (base / relative_path).resolve()
+    try:
+        target.relative_to(base)
+    except ValueError:
+        return None
+    if not target.exists() or not target.is_file():
+        return None
+    text = target.read_text(encoding="utf-8")
+    fm = _parse_frontmatter(text)
+    body = _FRONTMATTER_RE.sub("", text, count=1)
+    return fm, body
