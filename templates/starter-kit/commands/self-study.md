@@ -23,11 +23,25 @@ Your `cwd` is the project repo root. The following env vars are set:
    if it's a multi-file agent). If neither exists, jump to step 4 and report
    `status="failed"` with `error_message="agent file not found"`.
 
-2. **Study it carefully.** Spend most of your turns here. Read the agent file
-   end-to-end, then look at the repo to ground what the agent claims. Cheap
-   things to check: `package.json` / pyproject for the stack, the directory
-   structure, any files the agent mentions by name. Don't open every file —
-   sample.
+2. **Study it carefully — but stay within a tight investigation budget.**
+   Read the agent file end-to-end, then sample the repo. Hard limit:
+   **no more than 6–8 file/grep/glob operations total** before you start
+   writing the note. After that, switch to drafting.
+
+   What to look at: `package.json` / `pyproject.toml` / `tsconfig.json` for
+   the stack, a top-level directory listing, and 2–3 files the agent
+   mentions by name. That's enough.
+
+   **If a file the agent references is missing** (renamed, deleted, moved
+   to git history):
+   - Don't spend turns hunting it across the repo — single `glob` to confirm
+     absence, then **note it under "Agent file issues"** in step 3 below
+     and move on.
+   - Don't switch to git-history archaeology (`git log --all`, branches,
+     etc.). The agent file lying about current state IS the finding.
+
+   The goal is a finished note, not a perfect map of the repo. A short
+   accurate note beats a long-running investigation that never reports.
 
 3. **Write a Markdown note** to
    `.claude/agents/learning-notes/{today}-$ARGUMENTS.md`, where `{today}` is
