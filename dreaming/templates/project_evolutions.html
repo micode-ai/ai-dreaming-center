@@ -15,19 +15,76 @@
     <th class="p-2">status</th>
     <th class="p-2">conflict</th>
     <th class="p-2">title</th>
+    <th class="p-2"></th>
   </tr></thead>
   <tbody>
   {% for it in items %}
   <tr class="border-b">
     <td class="p-2 font-mono text-xs">{{ it.agent_name }}</td>
-    <td class="p-2 font-mono text-xs">{{ it.name }}</td>
+    <td class="p-2 font-mono text-xs">
+      <a class="text-blue-600 underline cursor-pointer"
+         href="#"
+         data-evo-path="{{ it.relative_path }}"
+         data-evo-name="{{ it.name }}"
+         onclick="openEvolution(this); return false;">{{ it.name }}</a>
+    </td>
     <td class="p-2"><span class="font-mono text-xs">{{ it.status }}</span></td>
     <td class="p-2">{{ "⚠" if it.has_conflict else "" }}</td>
     <td class="p-2 text-xs">{{ it.title or '' }}</td>
+    <td class="p-2 text-right">
+      <a class="text-xs muted underline"
+         href="/p/{{ project.slug }}/evolutions/raw?path={{ it.relative_path | urlencode }}"
+         target="_blank" rel="noopener">raw</a>
+    </td>
   </tr>
   {% endfor %}
   </tbody>
 </table>
+
+{% include "_markdown_partial.html" %}
+
+<dialog id="evo-modal" class="note-modal">
+  <header class="flex items-baseline justify-between p-3 border-b bg-slate-50">
+    <h2 id="evo-modal-title" class="text-sm font-mono text-slate-700"></h2>
+    <div class="flex gap-2">
+      <a id="evo-modal-raw" class="text-xs text-blue-600 underline" target="_blank" rel="noopener">raw</a>
+      <button onclick="closeEvolution()" class="text-slate-500 hover:text-slate-900 text-xl leading-none">×</button>
+    </div>
+  </header>
+  <div id="evo-modal-body" class="markdown-body overflow-auto" style="max-height: 80vh; min-height: 200px;"></div>
+</dialog>
+
+<script>
+(() => {
+  const slug = "{{ project.slug }}";
+  const modal = document.getElementById('evo-modal');
+  const title = document.getElementById('evo-modal-title');
+  const body = document.getElementById('evo-modal-body');
+  const rawLink = document.getElementById('evo-modal-raw');
+
+  window.openEvolution = async function(el) {
+    const path = el.dataset.evoPath;
+    const name = el.dataset.evoName;
+    const rawUrl = `/p/${slug}/evolutions/raw?path=${encodeURIComponent(path)}`;
+    title.textContent = name + " — " + path;
+    rawLink.href = rawUrl;
+    body.innerHTML = '<p class="muted" style="padding: 1.5rem;">Загрузка…</p>';
+    modal.showModal();
+    try {
+      const r = await fetch(rawUrl);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const text = await r.text();
+      window.dcRenderMarkdown(body, text);
+    } catch (e) {
+      body.innerHTML = '<p class="text-red-700 font-mono text-xs" style="padding: 1.5rem;">Ошибка: ' + (e.message || e) + '</p>';
+    }
+  };
+  window.closeEvolution = function() { modal.close(); };
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.close();
+  });
+})();
+</script>
 {% else %}
 <p class="muted">Нет evolution-файлов в <code>{{ evolutions_dir }}</code>.</p>
 {% endif %}
