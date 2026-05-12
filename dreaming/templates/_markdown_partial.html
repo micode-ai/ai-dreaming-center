@@ -32,10 +32,12 @@
 <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/highlight.js@11/highlight.min.js"></script>
 <style>
-  /* github-markdown-css ships with `max-width: 980px; padding: 45px` on
-     `.markdown-body`. We're rendering inside narrower containers (modal,
-     side panel), so override the box-sizing to play nice. */
-  .markdown-body { box-sizing: border-box; min-width: 200px; max-width: 100%; padding: 0; }
+  /* github-markdown-css ships `.markdown-body { max-width: 980px; padding: 45px }`
+     which is too generous for narrower containers (modal, in-page card).
+     Use 1.5rem padding (matching Tailwind's `p-6`) and let max-width be the
+     container's width. Outer template should NOT add another `p-*` on the
+     same element — `.markdown-body` owns its own padding. */
+  .markdown-body { box-sizing: border-box; min-width: 200px; max-width: 100%; padding: 1.5rem; }
   .markdown-body pre { background: #f6f8fa; }  /* hljs-github gives the code element its own bg */
 </style>
 <script>
