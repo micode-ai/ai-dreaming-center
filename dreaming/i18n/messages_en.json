@@ -38,5 +38,13 @@
   "p.col.started": "Started at",
   "p.no_sessions_yet": "No sessions yet",
   "p.active_runs": "Active runs",
-  "p.no_active_runs": "Nothing running"
+  "p.no_active_runs": "Nothing running",
+  "modal.title.confirm": "Confirm",
+  "modal.title.alert": "Notice",
+  "modal.btn.confirm": "Confirm",
+  "modal.btn.cancel": "Cancel",
+  "modal.btn.ok": "OK",
+  "modal.btn.delete": "Delete",
+  "modal.input.placeholder": "Enter value",
+  "modal.input.mismatch": "Value does not match"
 }
