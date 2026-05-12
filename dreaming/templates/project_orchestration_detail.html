@@ -27,7 +27,7 @@
     {% endif %}
     <a class="text-xs px-3 py-1 border rounded text-slate-700" href="/p/{{ project.slug }}/orchestration/{{ run.id }}/log">View log</a>
     <form method="post" action="/p/{{ project.slug }}/orchestration/{{ run.id }}/delete" class="inline"
-          onsubmit="return confirm('Удалить run полностью (вместе с messages/nodes/events)?\nФайлы которые Roman написал на диск НЕ удаляются.');">
+          onsubmit="return confirm('Удалить run полностью (вместе с messages/nodes/events)?\nФайлы которые Orchestrator написал на диск НЕ удаляются.');">
       <button class="text-xs px-3 py-1 border rounded text-red-600">Delete run</button>
     </form>
   </div>

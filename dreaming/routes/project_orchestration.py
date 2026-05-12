@@ -18,10 +18,13 @@ async def orchestration_list(request: Request, slug: str):
     runs = await hub.list_runs(project.id, limit=50)
     # Mark each running row "stale" if no live claude process matches its
     # external_id — this is what the auto-reconcile checks too.
+    # Both prefixes are recognised — `orchestrator-` for new runs,
+    # `roman-` for runs created before the 2026-05-12 rename.
     live_session_ids = {
         getattr(sess, "session_id", "") or ""
         for key, sess in pm.list_running().items()
-        if key.startswith(f"cmd:{slug}:roman-")
+        if key.startswith(f"cmd:{slug}:orchestrator-")
+        or key.startswith(f"cmd:{slug}:roman-")
     }
     def _ext(r):
         try:
@@ -61,7 +64,9 @@ async def orchestration_delete(request: Request, slug: str, run_id: str):
     pm = request.app.state.process_manager
     # If the spawn-side cmd key is still alive, kill its process first so we
     # don't leave a runaway. Both initial run and resume use stable key names.
+    # `roman-` is the pre-rename prefix, kept for backwards compatibility.
     for cmd_key in (
+        f"cmd:{project.slug}:orchestrator-{run_id[:8]}",
         f"cmd:{project.slug}:roman-{run_id[:8]}",
         f"cmd:{project.slug}:resume-{run_id[:8]}",
     ):

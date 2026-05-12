@@ -48,11 +48,11 @@ Terms that show up across DC and its documentation. Sorted alphabetically; in pa
 
 **Loop** — a markdown file in `loops_dir`. Describes an agent's "reflex-loop" (a repeating self-correcting cycle). On `/p/{slug}/loops` — list with iteration counter.
 
-**Node (orchestrator)** — a node in an orchestration: one agent in a run. Can be root (Roman) or sub-agent. Visible on the run's detail page.
+**Node (orchestrator)** — a node in an orchestration: one agent in a run. Can be root (Orchestrator) or sub-agent. Visible on the run's detail page.
 
 **Note** — a markdown file the agent writes as the result of self-study. Lives in `learning_notes_dir`. The path is recorded in `agent_learning_sessions.note_path`.
 
-**Plan** — a markdown file with a tasks checklist that Roman writes into `plans_dir`. On the page — a progress bar (`done/total`).
+**Plan** — a markdown file with a tasks checklist that the Orchestrator writes into `plans_dir`. On the page — a progress bar (`done/total`).
 
 **Process Manager** — internal DC component responsible for spawn/track/kill of all claude subprocesses. Invisible to the user.
 
@@ -66,7 +66,7 @@ Terms that show up across DC and its documentation. Sorted alphabetically; in pa
 
 **Resume** — orchestration continuation: spawning a new claude subprocess with `--resume {session_id}`. Available for finished runs.
 
-**Roman** — the root orchestrator agent. In code `agent_name="roman"`, `role="orchestrator"`. Started via the form on `/p/{slug}/orchestration`.
+**Orchestrator** — the root orchestrator agent. In code `agent_name="orchestrator"`, `role="orchestrator"`. Started via the form on `/p/{slug}/orchestration`. Previously (before 2026-05-12) called **Roman** — older runs in the DB may still carry `agent_name="roman"`; that's a backwards-compat detail, new code uses the new name everywhere.
 
 **Rotation** — the project's agent list with tier and enabled flag. Used by the nightly cron to pick today's top-N candidates.
 
@@ -80,7 +80,7 @@ Terms that show up across DC and its documentation. Sorted alphabetically; in pa
 
 **Session (agent learning)** — one self-study attempt. A row in `agent_learning_sessions` (id, project_id, agent_name, status, started_at, finished_at, note_path, error_message).
 
-**Sidecar (reviewer)** — a separate reviewer agent (vera, svetlana, silent-failure-hunter) that writes JSON reports into `sidecar_findings_dir`. Started by slash commands or by Roman.
+**Sidecar (reviewer)** — a separate reviewer agent (vera, svetlana, silent-failure-hunter) that writes JSON reports into `sidecar_findings_dir`. Started by slash commands or by the Orchestrator.
 
 **Slash-command** — a command of the form `/{name}` that Claude understands. DC spawns claude with one of these prompts (`/self-study agent`, `/wiki-bootstrap`, etc.).
 
@@ -94,7 +94,7 @@ Terms that show up across DC and its documentation. Sorted alphabetically; in pa
 
 **Status (session)** — `running` / `success` / `failed` / `timeout`. All are terminal except `running`.
 
-**Subagent** — child claude process, spawned via the Task/Agent tool from Roman. Visible as a separate node on the orchestration detail page.
+**Subagent** — child claude process, spawned via the Task/Agent tool from the Orchestrator. Visible as a separate node on the orchestration detail page.
 
 **Tech debt** — a markdown file in `tech_debt_dir` with frontmatter (id/title/status/priority/module). Created by the weekly_tech_debt_scan.
 
