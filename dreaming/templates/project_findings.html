@@ -46,8 +46,8 @@
     </td>
     <td class="p-2 text-xs whitespace-nowrap">
       <form method="post" action="/p/{{ project.slug }}/findings/{{ it.id }}/orchestrate" class="inline"
-            onsubmit="return confirm('Запустить Roman с этим finding как целью?');">
-        <button class="text-xs px-2 py-1 border border-purple-500 text-purple-700 rounded">Roman</button>
+            onsubmit="return confirm('Запустить Orchestrator с этим finding как целью?');">
+        <button class="text-xs px-2 py-1 border border-purple-500 text-purple-700 rounded">Orchestrate</button>
       </form>
       {% if not it.github_issue %}
       <form method="post" action="/p/{{ project.slug }}/findings/{{ it.id }}/github" class="inline ml-1"

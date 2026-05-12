@@ -152,9 +152,9 @@ async def orchestration_start(request: Request, payload: OrchStartIn):
     # external API callers too).
     external_id = payload.external_id or str(uuid.uuid4())
     run_id = await hub.create_run(project.id, payload.goal, external_id=external_id)
-    # Auto-create the Roman root node
+    # Auto-create the orchestrator root node
     node_id = await hub.create_node(
-        run_id, project.id, agent_name="roman", role="orchestrator",
+        run_id, project.id, agent_name="orchestrator", role="orchestrator",
         external_id=external_id,
     )
     await hub.append_event(run_id, "run_started",
@@ -258,7 +258,7 @@ async def cascade_init(request: Request, payload: CascadeStartIn):
         raise HTTPException(status_code=409, detail={"error": "another run already running",
                                                      "run_id": existing})
     run_id = await hub.create_run(project.id, payload.goal, external_id=payload.external_id)
-    root_node_id = await hub.create_node(run_id, project.id, agent_name="roman", role="orchestrator",
+    root_node_id = await hub.create_node(run_id, project.id, agent_name="orchestrator", role="orchestrator",
                                          external_id=payload.external_id)
     stages = payload.stages or [
         {"key": "contract", "label": "Contract"},
