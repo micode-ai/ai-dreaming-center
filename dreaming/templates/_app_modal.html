@@ -64,6 +64,7 @@
   // ---- core: showConfirm ---------------------------------------------------
   function showConfirm(message, opts) {
     opts = opts || {};
+    message = typeof message === 'string' ? message.replace(/\\n/g, '\n') : message;
     return new Promise((resolve) => {
       confirmBody.textContent = String(message || '');
       const variant = opts.variant === 'danger' ? 'danger' : 'default';
@@ -119,6 +120,7 @@
   // ---- core: showAlert -----------------------------------------------------
   function showAlert(message, opts) {
     opts = opts || {};
+    message = typeof message === 'string' ? message.replace(/\\n/g, '\n') : message;
     return new Promise((resolve) => {
       alertBody.textContent = String(message || '');
       const v = opts.variant;
