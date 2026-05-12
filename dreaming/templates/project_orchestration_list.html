@@ -7,9 +7,9 @@
     {{ stale_running }} stale <code>running</code> run{{ "s" if stale_running != 1 else "" }} (process gone, run never finished).
     Auto-reconcile тикает каждые 5 мин — или закрой принудительно сейчас.
   </span>
-  <form method="post" action="/p/{{ project.slug }}/orchestration/force-close-stale">
-    <button class="text-xs bg-amber-600 text-white rounded px-3 py-1"
-            onclick="return confirm('Mark all running orchestration runs for this project as cancelled?');">
+  <form method="post" action="/p/{{ project.slug }}/orchestration/force-close-stale"
+        data-confirm="Mark all running orchestration runs for this project as cancelled?" data-confirm-variant="danger">
+    <button class="text-xs bg-amber-600 text-white rounded px-3 py-1">
       Force-close all stale
     </button>
   </form>
