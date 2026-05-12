@@ -45,8 +45,8 @@
 <script>
 (function () {
   const I18N = {
-    confirm: "{{ 'modal.btn.confirm' | t(locale=locale) }}",
-    delete:  "{{ 'modal.btn.delete'  | t(locale=locale) }}",
+    confirm: {{ ("modal.btn.confirm" | t(locale=locale)) | tojson }},
+    delete:  {{ ("modal.btn.delete"  | t(locale=locale)) | tojson }},
   };
 
   const confirmDlg   = document.getElementById('app-confirm-modal');
