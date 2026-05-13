@@ -28,12 +28,31 @@ def _date_window(days: int) -> tuple[str, str]:
     return start, end
 
 
+def resolve_preset(preset: str | None) -> tuple[str, str, str]:
+    """Map a preset name to (start_date, end_date, normalized_preset).
+    Unknown presets fall back to '7d'. 'all' uses a very early start."""
+    p = (preset or "7d").lower()
+    if p == "today":
+        s, e = _date_window(1)
+    elif p == "7d":
+        s, e = _date_window(7)
+    elif p == "30d":
+        s, e = _date_window(30)
+    elif p == "all":
+        s, e = "1970-01-01", _today_utc().isoformat()
+    else:
+        p = "7d"
+        s, e = _date_window(7)
+    return s, e, p
+
+
 async def _totals(
     db: SqliteDB,
     *,
     start: str,
     end: str,
     project_id: int | None = None,
+    model: str | None = None,
 ) -> dict[str, int]:
     sql = (
         "SELECT "
@@ -51,6 +70,9 @@ async def _totals(
     if project_id is not None:
         sql += "AND project_id=? "
         params.append(project_id)
+    if model:
+        sql += "AND model=? "
+        params.append(model)
     row = await db.fetch_one(sql, tuple(params))
     return dict(row) if row else {
         "input_tokens": 0, "output_tokens": 0, "cache_read_tokens": 0,
@@ -64,6 +86,7 @@ async def _by_model(
     start: str,
     end: str,
     project_id: int | None = None,
+    model: str | None = None,
 ) -> list[dict[str, Any]]:
     sql = (
         "SELECT model, COUNT(*) AS events, "
@@ -80,6 +103,9 @@ async def _by_model(
     if project_id is not None:
         sql += "AND project_id=? "
         params.append(project_id)
+    if model:
+        sql += "AND model=? "
+        params.append(model)
     sql += "GROUP BY model ORDER BY total_tokens DESC"
     rows = await db.fetch_all(sql, tuple(params))
     return [dict(r) for r in rows]
@@ -118,6 +144,7 @@ async def _daily_series(
     start: str,
     end: str,
     project_id: int | None = None,
+    model: str | None = None,
 ) -> list[dict[str, Any]]:
     sql = (
         "SELECT ts_date, "
@@ -132,6 +159,9 @@ async def _daily_series(
     if project_id is not None:
         sql += "AND project_id=? "
         params.append(project_id)
+    if model:
+        sql += "AND model=? "
+        params.append(model)
     sql += "GROUP BY ts_date ORDER BY ts_date ASC"
     rows = await db.fetch_all(sql, tuple(params))
     return [dict(r) for r in rows]
@@ -143,6 +173,7 @@ async def _main_vs_sidechain(
     start: str,
     end: str,
     project_id: int | None = None,
+    model: str | None = None,
 ) -> dict[str, int]:
     sql = (
         "SELECT is_sidechain, "
@@ -155,6 +186,9 @@ async def _main_vs_sidechain(
     if project_id is not None:
         sql += "AND project_id=? "
         params.append(project_id)
+    if model:
+        sql += "AND model=? "
+        params.append(model)
     sql += "GROUP BY is_sidechain"
     rows = await db.fetch_all(sql, tuple(params))
     out = {"main": 0, "sub": 0}
@@ -164,24 +198,60 @@ async def _main_vs_sidechain(
     return out
 
 
+async def _models_catalog(
+    db: SqliteDB, *, project_id: int | None = None,
+) -> list[str]:
+    """All distinct models seen for this project, ordered by total usage desc."""
+    sql = (
+        "SELECT model, SUM(input_tokens+output_tokens+cache_read_tokens+cache_creation_tokens) AS t "
+        "FROM ai_usage_events WHERE model IS NOT NULL "
+    )
+    params: list[Any] = []
+    if project_id is not None:
+        sql += "AND project_id=? "
+        params.append(project_id)
+    sql += "GROUP BY model ORDER BY t DESC"
+    rows = await db.fetch_all(sql, tuple(params))
+    return [r["model"] for r in rows if r["model"]]
+
+
 # ── public API ────────────────────────────────────────────────────
 
-async def project_summary(db: SqliteDB, project_id: int) -> dict[str, Any]:
-    """Last-7d / last-30d totals + by_model breakdown for one project.
+async def project_summary(
+    db: SqliteDB,
+    project_id: int,
+    *,
+    preset: str | None = None,
+    model: str | None = None,
+) -> dict[str, Any]:
+    """Per-project AI usage summary.
 
-    Also returns daily series for the last 7 days and a main-vs-subagent
-    split for the last 30 days, both needed by the AI Usage charts."""
+    `preset` selects the date window (today / 7d / 30d / all). `model` narrows
+    every aggregate to a single model. The unfiltered "Last 7d" / "Last 30d"
+    KPI tiles are always returned alongside the filtered view so the page
+    keeps stable reference numbers when the user is exploring filters."""
+    fs, fe, preset = resolve_preset(preset)
     s7, e7 = _date_window(7)
     s30, e30 = _date_window(30)
 
+    filtered = await _totals(db, start=fs, end=fe, project_id=project_id, model=model)
     last_7d = await _totals(db, start=s7, end=e7, project_id=project_id)
     last_30d = await _totals(db, start=s30, end=e30, project_id=project_id)
-    by_model = await _by_model(db, start=s30, end=e30, project_id=project_id)
-    daily = await _daily_series(db, start=s7, end=e7, project_id=project_id)
-    main_sub = await _main_vs_sidechain(db, start=s30, end=e30, project_id=project_id)
+    by_model = await _by_model(db, start=fs, end=fe, project_id=project_id, model=model)
+    daily = await _daily_series(db, start=fs, end=fe, project_id=project_id, model=model)
+    main_sub = await _main_vs_sidechain(
+        db, start=fs, end=fe, project_id=project_id, model=model,
+    )
+    models = await _models_catalog(db, project_id=project_id)
 
     return {
         "project_id": project_id,
+        "filters": {
+            "preset": preset, "model": model or "",
+            "start": fs, "end": fe,
+        },
+        "models_catalog": models,
+        "filtered": filtered,
         "last_7d": last_7d,
         "last_30d": last_30d,
         "by_model": by_model,
