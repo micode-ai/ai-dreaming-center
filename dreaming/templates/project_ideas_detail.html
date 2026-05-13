@@ -17,12 +17,12 @@
 
 <div class="mt-4 flex flex-wrap gap-2 items-center">
   <form method="post" action="/p/{{ project.slug }}/ideas/{{ item_id }}/orchestrate" class="inline"
-        onsubmit="return confirm('Запустить Orchestrator с этой идеей как целью?');">
+        data-confirm="Запустить Orchestrator с этой идеей как целью?">
     <button class="text-sm px-3 py-1 rounded bg-purple-600 text-white font-semibold">Отправить в Orchestrator</button>
   </form>
   {% if not item.github_issue %}
   <form method="post" action="/p/{{ project.slug }}/ideas/{{ item_id }}/github" class="inline"
-        onsubmit="return confirm('Создать GitHub issue из этой идеи?');">
+        data-confirm="Создать GitHub issue из этой идеи?">
     <button class="text-sm px-3 py-1 border border-slate-500 text-slate-700 rounded">→ Создать GitHub issue</button>
   </form>
   {% else %}

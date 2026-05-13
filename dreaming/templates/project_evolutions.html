@@ -48,19 +48,19 @@
     </td>
     <td class="p-2 text-xs whitespace-nowrap">
       <form method="post" action="/p/{{ project.slug }}/evolutions/apply" class="inline"
-            onsubmit="return confirm('Запустить Orchestrator: применить эту правку к `.claude/agents/{{ it.agent_name }}.md`?');">
+            data-confirm="Запустить Orchestrator: применить эту правку к `.claude/agents/{{ it.agent_name }}.md`?">
         <input type="hidden" name="path" value="{{ it.relative_path }}">
         <button class="text-xs px-2 py-1 border border-purple-500 text-purple-700 rounded">Apply</button>
       </form>
       {% if not it.github_issue %}
       <form method="post" action="/p/{{ project.slug }}/evolutions/github" class="inline ml-1"
-            onsubmit="return confirm('Создать GitHub issue из этого evolution?');">
+            data-confirm="Создать GitHub issue из этого evolution?">
         <input type="hidden" name="path" value="{{ it.relative_path }}">
         <button class="text-xs px-2 py-1 border border-slate-500 text-slate-700 rounded">→ GH</button>
       </form>
       {% endif %}
       <form method="post" action="/p/{{ project.slug }}/evolutions/delete" class="inline ml-1"
-            onsubmit="return confirm('Удалить файл {{ it.relative_path }}?')">
+            data-confirm="Удалить файл {{ it.relative_path }}?" data-confirm-variant="danger">
         <input type="hidden" name="path" value="{{ it.relative_path }}">
         <button class="text-xs px-2 py-1 border rounded text-red-600">del</button>
       </form>

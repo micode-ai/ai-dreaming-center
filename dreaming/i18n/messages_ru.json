@@ -38,5 +38,19 @@
   "p.col.started": "Начало",
   "p.no_sessions_yet": "Сессий ещё нет",
   "p.active_runs": "Активные сессии",
-  "p.no_active_runs": "Ничего не запущено"
+  "p.no_active_runs": "Ничего не запущено",
+  "p.live.kill": "Остановить",
+  "p.live.waiting": "Ожидание вывода…",
+  "p.live.status.connecting": "Подключение…",
+  "p.live.status.live": "В эфире",
+  "p.live.status.error": "Ошибка соединения",
+  "p.live.status.ended": "Поток завершён",
+  "modal.title.confirm": "Подтверждение",
+  "modal.title.alert": "Сообщение",
+  "modal.btn.confirm": "Подтвердить",
+  "modal.btn.cancel": "Отмена",
+  "modal.btn.ok": "ОК",
+  "modal.btn.delete": "Удалить",
+  "modal.input.placeholder": "Введите значение",
+  "modal.input.mismatch": "Значение не совпадает"
 }

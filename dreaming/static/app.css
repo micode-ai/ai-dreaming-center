@@ -1,11 +1,209 @@
-/* Placeholder; full styling in Wave 5. Tailwind via CDN handles most cases. */
-body { font-family: system-ui, sans-serif; }
-.muted { color: #64748b; }
+/* ============================================================
+   AI Dreaming Center — global design tokens & base styles
+   Reference: Real-Time Monitoring + Dev Dashboard guidelines
+   ============================================================ */
 
-/* Markdown rendering is handled by github-markdown-css + highlight.js loaded
+:root {
+  --bg-app: #f6f8fb;
+  --bg-card: #ffffff;
+  --border-subtle: #e2e8f0;
+  --border-muted: #cbd5e1;
+
+  --text-strong: #0f172a;
+  --text-body: #1e293b;
+  --text-muted: #64748b;
+  --text-faint: #94a3b8;
+
+  --brand: #2563eb;
+  --brand-hover: #1d4ed8;
+  --brand-soft: #eff6ff;
+
+  --status-success: #16a34a;
+  --status-success-soft: #dcfce7;
+  --status-failed: #dc2626;
+  --status-failed-soft: #fee2e2;
+  --status-timeout: #d97706;
+  --status-timeout-soft: #fef3c7;
+  --status-running: #2563eb;
+  --status-running-soft: #dbeafe;
+  --status-live: #10b981;
+  --status-live-soft: #d1fae5;
+
+  --shadow-card: 0 1px 2px 0 rgba(15, 23, 42, 0.04), 0 1px 3px 0 rgba(15, 23, 42, 0.06);
+  --shadow-card-hover: 0 4px 6px -1px rgba(15, 23, 42, 0.07), 0 2px 4px -2px rgba(15, 23, 42, 0.06);
+
+  --ring: 0 0 0 2px var(--brand-soft), 0 0 0 4px var(--brand);
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  -webkit-font-smoothing: antialiased;
+  color: var(--text-body);
+  background: linear-gradient(180deg, #f8fafc 0%, var(--bg-app) 100%);
+  background-attachment: fixed;
+}
+
+code, pre, .font-mono, kbd, samp {
+  font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-feature-settings: 'liga' 0;
+}
+
+.muted { color: var(--text-muted); }
+
+/* ---------- Keyboard focus ring (a11y) ---------- */
+*:focus { outline: none; }
+*:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ---------- Card hover lift ---------- */
+.card-link {
+  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+  border: 1px solid var(--border-subtle);
+}
+.card-link:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--border-muted);
+}
+
+/* ---------- Buttons ---------- */
+button, [role="button"] { cursor: pointer; }
+button:disabled, [aria-disabled="true"] { cursor: not-allowed; opacity: 0.55; }
+
+/* ---------- Pill nav (project tabs) ---------- */
+.pill-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  padding: 0.375rem;
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+  box-shadow: var(--shadow-card);
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: background-color 150ms ease, color 150ms ease;
+  white-space: nowrap;
+}
+.pill:hover { background: #f1f5f9; color: var(--text-strong); }
+.pill.is-active {
+  background: var(--brand);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.25);
+}
+.pill.is-active:hover { background: var(--brand-hover); color: #ffffff; }
+
+/* ---------- Status badges ---------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.badge-success { background: var(--status-success-soft); color: var(--status-success); }
+.badge-failed  { background: var(--status-failed-soft);  color: var(--status-failed); }
+.badge-timeout { background: var(--status-timeout-soft); color: var(--status-timeout); }
+.badge-running { background: var(--status-running-soft); color: var(--status-running); }
+.badge-live    { background: var(--status-live-soft);    color: var(--status-live); }
+.badge-neutral { background: #f1f5f9; color: var(--text-muted); }
+
+/* Live dot */
+.dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: currentColor;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dot-pulse {
+    animation: dot-pulse 1.6s ease-in-out infinite;
+  }
+}
+@keyframes dot-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+  50% { box-shadow: 0 0 0 4px transparent; opacity: 0.6; }
+}
+
+/* ---------- Metric tile (accent stripe on the left) ---------- */
+.metric {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.625rem;
+  padding: 0.875rem 1rem 0.875rem 1.125rem;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.metric::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--text-faint);
+}
+.metric.metric-success::before { background: var(--status-success); }
+.metric.metric-failed::before  { background: var(--status-failed); }
+.metric.metric-timeout::before { background: var(--status-timeout); }
+.metric.metric-running::before { background: var(--status-running); }
+.metric.metric-info::before    { background: var(--brand); }
+
+/* ---------- Table polish ---------- */
+.data-table {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.625rem;
+  overflow: hidden;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.875rem;
+}
+.data-table thead th {
+  text-align: left;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 0.625rem 0.75rem;
+  background: #fafbfc;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.data-table tbody td { padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--border-subtle); vertical-align: middle; }
+.data-table tbody tr:last-child td { border-bottom: 0; }
+.data-table tbody tr:hover { background: #fafbfc; }
+
+/* ---------- Markdown rendering is handled by github-markdown-css + highlight.js loaded
    on-demand via _markdown_partial.html. No site-wide .markdown-body styles
    here — the partial owns them. */
 
 /* Modal dialog — opened via <dialog>.showModal(). */
-dialog.note-modal { padding: 0; border: none; border-radius: .5rem; max-width: 56rem; width: calc(100% - 2rem); box-shadow: 0 25px 50px -12px rgba(0,0,0,.25); }
-dialog.note-modal::backdrop { background: rgba(15,23,42,.5); }
+dialog.note-modal {
+  padding: 0;
+  border: none;
+  border-radius: 0.625rem;
+  max-width: 56rem;
+  width: calc(100% - 2rem);
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.35);
+}
+dialog.note-modal::backdrop { background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(2px); }

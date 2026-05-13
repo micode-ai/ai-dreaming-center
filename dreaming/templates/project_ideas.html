@@ -59,12 +59,12 @@
     </td>
     <td class="p-2 text-xs whitespace-nowrap">
       <form method="post" action="/p/{{ project.slug }}/ideas/{{ iid }}/orchestrate" class="inline"
-            onsubmit="return confirm('Запустить Orchestrator с этой идеей как целью?');">
+            data-confirm="Запустить Orchestrator с этой идеей как целью?">
         <button class="text-xs px-2 py-1 border border-purple-500 text-purple-700 rounded">Orchestrate</button>
       </form>
       {% if not it.github_issue %}
       <form method="post" action="/p/{{ project.slug }}/ideas/{{ iid }}/github" class="inline ml-1"
-            onsubmit="return confirm('Создать GitHub issue?');">
+            data-confirm="Создать GitHub issue?">
         <button class="text-xs px-2 py-1 border border-slate-500 text-slate-700 rounded">→ GH</button>
       </form>
       {% endif %}

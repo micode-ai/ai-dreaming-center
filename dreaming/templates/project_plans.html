@@ -50,17 +50,17 @@
     </td>
     <td class="p-2 text-xs whitespace-nowrap">
       <form method="post" action="/p/{{ project.slug }}/plans/{{ it.name }}/orchestrate" class="inline"
-            onsubmit="return confirm('Запустить Orchestrator продолжать выполнение «{{ it.title or it.name }}»?');">
+            data-confirm="Запустить Orchestrator продолжать выполнение «{{ it.title or it.name }}»?">
         <button class="text-xs px-2 py-1 border border-purple-500 text-purple-700 rounded">Run</button>
       </form>
       {% if not it.github_issue %}
       <form method="post" action="/p/{{ project.slug }}/plans/{{ it.name }}/github" class="inline ml-1"
-            onsubmit="return confirm('Создать GitHub issue из этого плана?');">
+            data-confirm="Создать GitHub issue из этого плана?">
         <button class="text-xs px-2 py-1 border border-slate-500 text-slate-700 rounded">→ GH</button>
       </form>
       {% endif %}
       <form method="post" action="/p/{{ project.slug }}/plans/{{ it.name }}/delete" class="inline ml-1"
-            onsubmit="return confirm('Удалить файл плана {{ it.name }}.md?')">
+            data-confirm="Удалить файл плана {{ it.name }}.md?" data-confirm-variant="danger">
         <button class="text-xs px-2 py-1 border rounded text-red-600">del</button>
       </form>
     </td>
