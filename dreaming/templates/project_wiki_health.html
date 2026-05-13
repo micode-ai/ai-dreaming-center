@@ -1,0 +1,105 @@
+{% extends "_project_layout.html" %}
+{% set active='wiki_health' %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+{% block project_content %}
+
+{% if error %}
+<div class="rounded-lg p-4 mb-4 text-sm" style="background: rgba(245, 158, 11, 0.10); border:1px solid rgba(245, 158, 11, 0.35); color: var(--status-timeout);">
+  ⚠ {{ error }}
+</div>
+{% endif %}
+
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+  <div class="metric metric-success">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">Модули покрыты</div>
+    <div class="text-2xl font-semibold mt-1" style="color: var(--status-success);">{{ snapshot.covered or 0 }}</div>
+  </div>
+  <div class="metric metric-info">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">Learning-notes</div>
+    <div class="text-2xl font-semibold mt-1" style="color: var(--text-strong);">{{ snapshot.learning_notes or 0 }}</div>
+  </div>
+  <div class="metric metric-running">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">Точек в trends</div>
+    <div class="text-2xl font-semibold mt-1" style="color: var(--text-strong);">{{ series|length }}</div>
+  </div>
+  <div class="metric metric-timeout">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">Последний срез</div>
+    <div class="text-sm font-mono mt-2" style="color: var(--text-body);">{{ latest.date if latest else '—' }}</div>
+  </div>
+</div>
+
+{% if series %}
+<div class="rounded-lg p-4 mb-4" style="background: var(--bg-card); border:1px solid var(--border-subtle); box-shadow: var(--shadow-card);">
+  <div class="text-sm font-semibold mb-2" style="color: var(--text-strong);">Тренды</div>
+  <div style="height: 320px;"><canvas id="wh-chart"></canvas></div>
+</div>
+
+<h2 class="text-sm font-semibold mb-2" style="color: var(--text-strong);">Срезы</h2>
+<table class="data-table">
+  <thead><tr>
+    <th>дата</th>
+    <th>метка</th>
+    <th class="text-right">covered_pct</th>
+    <th class="text-right">covered</th>
+    <th class="text-right">learning_notes</th>
+    <th class="text-right">uncovered_p1p2</th>
+  </tr></thead>
+  <tbody>
+  {% for s in series|reverse %}
+  <tr>
+    <td class="font-mono text-xs">{{ s.date }}</td>
+    <td class="text-xs">{{ s.label }}</td>
+    <td class="text-right">{{ s.metrics.covered_pct if s.metrics.covered_pct is not none else '—' }}</td>
+    <td class="text-right">{{ s.metrics.covered if s.metrics.covered is not none else '—' }}</td>
+    <td class="text-right">{{ s.metrics.learning_notes if s.metrics.learning_notes is not none else '—' }}</td>
+    <td class="text-right">{{ s.metrics.uncovered_p1p2 if s.metrics.uncovered_p1p2 is not none else '—' }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<script>
+(() => {
+  const series = {{ series | tojson }};
+  if (!window.Chart || !series.length) return;
+  Chart.defaults.color = '#94a3b8';
+  Chart.defaults.borderColor = '#1e293b';
+  Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+
+  const labels = series.map(s => s.date);
+  const mk = (label, color, key) => ({
+    label, data: series.map(s => s.metrics[key] ?? null),
+    borderColor: color, backgroundColor: color + '33',
+    tension: 0.25, borderWidth: 2, pointRadius: 3,
+    spanGaps: true,
+  });
+  new Chart(document.getElementById('wh-chart'), {
+    type: 'line',
+    data: { labels, datasets: [
+      mk('covered',         '#4ade80', 'covered'),
+      mk('learning_notes',  '#60a5fa', 'learning_notes'),
+      mk('uncovered_p1p2',  '#f87171', 'uncovered_p1p2'),
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 } } },
+        tooltip: { backgroundColor: '#111827', borderColor: '#1e293b', borderWidth: 1, padding: 8 },
+      },
+      scales: {
+        x: { grid: { color: 'rgba(30,41,59,0.5)' }, ticks: { font: { size: 11 } } },
+        y: { grid: { color: 'rgba(30,41,59,0.5)' }, ticks: { font: { size: 11 } } },
+      },
+    },
+  });
+})();
+</script>
+{% endif %}
+
+<div class="text-xs muted mt-4">
+  Источник трендов: <code class="font-mono">{{ trends_path }}</code> (формат — секции <code>## label (YYYY-MM-DD)</code> с метриками <code>- `key`: value</code>).
+</div>
+{% endblock %}

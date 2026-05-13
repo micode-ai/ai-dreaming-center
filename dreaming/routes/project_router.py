@@ -23,6 +23,9 @@ from dreaming.routes.project_questions import router as questions_router
 from dreaming.routes.project_session_log import router as session_log_router
 from dreaming.routes.project_contracts import router as contracts_router
 from dreaming.routes.project_sidecar_findings import router as sidecar_router
+from dreaming.routes.project_wiki_health import router as wiki_health_router
+from dreaming.routes.project_loops_templates import router as loops_templates_router
+from dreaming.routes.project_help import router as help_router
 
 
 router = APIRouter()
@@ -46,4 +49,7 @@ router.include_router(questions_router)
 router.include_router(session_log_router)
 router.include_router(contracts_router)
 router.include_router(sidecar_router)
+router.include_router(wiki_health_router)
+router.include_router(loops_templates_router)
+router.include_router(help_router)
 router.include_router(project_settings_router)

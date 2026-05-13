@@ -1,34 +1,101 @@
 {% extends "_project_layout.html" %}
 {% set active='kanban' %}
 {% block project_content %}
-<form method="post" action="/p/{{ project.slug }}/kanban/add" class="bg-white p-4 rounded shadow mb-6 grid grid-cols-2 gap-3">
-  <input name="title" placeholder="Заголовок темы" required class="border rounded p-2 col-span-2">
-  <input name="module" placeholder="модуль (опц.)" class="border rounded p-2">
-  <input name="target_agents" placeholder="агенты, через запятую (или пусто=всем)" class="border rounded p-2">
-  <textarea name="question" placeholder="Что именно изучить" class="border rounded p-2 col-span-2"></textarea>
-  <textarea name="why_important" placeholder="Почему важно" class="border rounded p-2 col-span-2"></textarea>
+
+<div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+  <div>
+    <h2 class="text-lg font-semibold" style="color: var(--text-strong);">План обучения</h2>
+    <p class="text-xs mt-0.5" style="color: var(--text-faint);">Расписание на 5 дней вперёд — {{ per_night }} агентов за ночь</p>
+  </div>
+  <div class="flex items-center gap-3">
+    <span class="text-sm" style="color: var(--text-muted);">{{ total_enabled }} активных</span>
+    {% if remaining > 0 %}
+    <span class="badge badge-timeout">+{{ remaining }} не вместились</span>
+    {% endif %}
+  </div>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+  {% for col in columns %}
+  <div class="flex flex-col">
+    <div class="mb-3 text-center">
+      <div class="text-xs font-medium uppercase tracking-wider" style="color: {{ 'var(--brand-hover)' if col.is_today else 'var(--text-faint)' }};">{{ col.weekday }}</div>
+      <div class="text-sm font-semibold" style="color: {{ 'var(--text-strong)' if col.is_today else 'var(--text-muted)' }};">{{ col.date_str }}</div>
+      {% if col.is_today %}
+      <div class="mt-1 mx-auto rounded-full" style="width: 2rem; height: 2px; background: var(--brand);"></div>
+      {% endif %}
+    </div>
+
+    <div class="flex-1 rounded-xl p-2.5 space-y-2" style="background: rgba(21, 28, 44, 0.5); border:1px solid var(--border-subtle); min-height: 200px;">
+      {% for a in col.agents %}
+      <div class="rounded-lg p-3" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+        <div class="flex items-center justify-between mb-2 gap-2">
+          <span class="text-sm font-medium truncate" style="color: var(--text-strong);">{{ a.name }}</span>
+          <span class="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium"
+                style="background: {% if a.tier == 1 %}rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.30){% elif a.tier == 2 %}rgba(167,139,250,0.15);color:#c4b5fd;border:1px solid rgba(167,139,250,0.30){% else %}var(--bg-hover);color:var(--text-faint);border:1px solid var(--border-subtle){% endif %};">T{{ a.tier }}</span>
+        </div>
+        <div class="flex items-center justify-between text-[11px]" style="color: var(--text-faint);">
+          <span>{{ a.total_sessions }} сессий</span>
+          {% if a.last_studied_at %}
+          <span class="font-mono">{{ a.last_studied_at[:10] }}</span>
+          {% else %}
+          <span style="color: var(--status-timeout);">новый</span>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+      {% if not col.agents %}
+      <div class="flex items-center justify-center h-full">
+        <span class="text-xs" style="color: var(--text-faint);">Нет агентов</span>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="mt-2 text-center text-xs" style="color: var(--text-faint);">{{ col.agents|length }} из {{ per_night }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="flex items-center gap-5 text-xs mb-8 flex-wrap" style="color: var(--text-faint);">
+  <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background: var(--brand);"></span> T1 — ежедневно</div>
+  <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background: #a78bfa;"></span> T2 — еженедельно</div>
+  <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background: var(--text-faint);"></span> T3 — ежемесячно</div>
+  <div class="ml-auto">Порядок: сначала давно не обучавшиеся, затем по уровню</div>
+</div>
+
+<hr style="border-color: var(--border-subtle); margin: 1.5rem 0;">
+
+<h2 class="text-sm font-semibold mb-3" style="color: var(--text-strong);">Custom topics</h2>
+<form method="post" action="/p/{{ project.slug }}/kanban/add" class="rounded-lg p-4 mb-4 grid grid-cols-2 gap-3"
+      style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+  <input name="title" placeholder="Заголовок темы" required class="rounded p-2 col-span-2">
+  <input name="module" placeholder="модуль (опц.)" class="rounded p-2">
+  <input name="target_agents" placeholder="агенты, через запятую (или пусто=всем)" class="rounded p-2">
+  <textarea name="question" placeholder="Что именно изучить" class="rounded p-2 col-span-2"></textarea>
+  <textarea name="why_important" placeholder="Почему важно" class="rounded p-2 col-span-2"></textarea>
   <button class="bg-blue-600 text-white rounded p-2 col-span-2">Добавить</button>
 </form>
 
 {% if topics %}
-<table class="w-full bg-white rounded shadow text-sm">
-  <thead class="text-left border-b"><tr>
-    <th class="p-2">Заголовок</th>
-    <th class="p-2">Модуль</th>
-    <th class="p-2">Агенты</th>
-    <th class="p-2">active</th>
-    <th class="p-2"></th>
+<table class="data-table">
+  <thead><tr>
+    <th>Заголовок</th>
+    <th>Модуль</th>
+    <th>Агенты</th>
+    <th>active</th>
+    <th></th>
   </tr></thead>
   <tbody>
   {% for t in topics %}
-  <tr class="border-b">
-    <td class="p-2">{{ t.title }}</td>
-    <td class="p-2 font-mono text-xs">{{ t.module or '' }}</td>
-    <td class="p-2 font-mono text-xs">{{ t.target_agents or '*' }}</td>
-    <td class="p-2">{{ "✓" if t.active else "—" }}</td>
-    <td class="p-2">
-      <form method="post" action="/p/{{ project.slug }}/kanban/{{ t.id }}/delete" class="inline">
-        <button class="text-xs text-red-600 underline">delete</button>
+  <tr>
+    <td>{{ t.title }}</td>
+    <td class="font-mono text-xs">{{ t.module or '' }}</td>
+    <td class="font-mono text-xs">{{ t.target_agents or '*' }}</td>
+    <td>{{ "✓" if t.active else "—" }}</td>
+    <td>
+      <form method="post" action="/p/{{ project.slug }}/kanban/{{ t.id }}/delete" class="inline"
+            data-confirm="Удалить custom topic «{{ t.title }}»?" data-confirm-variant="danger">
+        <button class="text-xs underline" style="color: var(--status-failed);">delete</button>
       </form>
     </td>
   </tr>
