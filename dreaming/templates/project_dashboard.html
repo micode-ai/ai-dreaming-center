@@ -32,18 +32,18 @@
 </div>
 {% endif %}
 
-<div class="grid grid-cols-3 gap-4 mb-6">
-  <div class="bg-white p-4 rounded shadow">
-    <div class="text-xs muted">{{ "p.metrics.success" | t(locale=locale) }}</div>
-    <div class="text-3xl font-bold text-green-700">{{ stats.success or 0 }}</div>
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+  <div class="metric metric-success">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "p.metrics.success" | t(locale=locale) }}</div>
+    <div class="text-3xl font-semibold text-slate-900 mt-1">{{ stats.success or 0 }}</div>
   </div>
-  <div class="bg-white p-4 rounded shadow">
-    <div class="text-xs muted">{{ "p.metrics.failed" | t(locale=locale) }}</div>
-    <div class="text-3xl font-bold text-red-700">{{ stats.failed or 0 }}</div>
+  <div class="metric metric-failed">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "p.metrics.failed" | t(locale=locale) }}</div>
+    <div class="text-3xl font-semibold text-slate-900 mt-1">{{ stats.failed or 0 }}</div>
   </div>
-  <div class="bg-white p-4 rounded shadow">
-    <div class="text-xs muted">{{ "p.metrics.timeout" | t(locale=locale) }}</div>
-    <div class="text-3xl font-bold text-amber-700">{{ stats.timeout or 0 }}</div>
+  <div class="metric metric-timeout">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "p.metrics.timeout" | t(locale=locale) }}</div>
+    <div class="text-3xl font-semibold text-slate-900 mt-1">{{ stats.timeout or 0 }}</div>
   </div>
 </div>
 
@@ -68,14 +68,14 @@
 </div>
 {% endif %}
 
-<h2 class="font-semibold mb-2">{{ "p.recent_sessions" | t(locale=locale) }}</h2>
-<table class="w-full bg-white rounded shadow text-sm">
-  <thead class="text-left border-b"><tr>
-    <th class="p-2">{{ "p.col.agent" | t(locale=locale) }}</th>
-    <th class="p-2">{{ "p.col.status" | t(locale=locale) }}</th>
-    <th class="p-2">{{ "p.col.topic" | t(locale=locale) }}</th>
-    <th class="p-2">{{ "p.col.started" | t(locale=locale) }}</th>
-    <th class="p-2"></th>
+<h2 class="font-semibold text-slate-900 mb-2">{{ "p.recent_sessions" | t(locale=locale) }}</h2>
+<table class="data-table">
+  <thead><tr>
+    <th>{{ "p.col.agent" | t(locale=locale) }}</th>
+    <th>{{ "p.col.status" | t(locale=locale) }}</th>
+    <th>{{ "p.col.topic" | t(locale=locale) }}</th>
+    <th>{{ "p.col.started" | t(locale=locale) }}</th>
+    <th></th>
   </tr></thead>
   <tbody>
   {% for s in sessions %}
@@ -84,54 +84,65 @@
   {% set is_running_row = s.status == 'running' %}
   {% set is_cmd_row = s.agent_name.startswith("cmd:") %}
   {% set display_name = s.agent_name.split(":", 2)[2] if is_cmd_row else s.agent_name %}
-  <tr class="border-b">
-    <td class="p-2 font-mono">
+  <tr>
+    <td class="font-mono text-xs">
       {{ display_name }}
-      {% if is_cmd_row %}<span class="ml-1 text-xs bg-slate-200 text-slate-700 rounded px-1 font-mono">cmd</span>{% endif %}
+      {% if is_cmd_row %}<span class="ml-1 badge badge-neutral">cmd</span>{% endif %}
     </td>
-    <td class="p-2">
+    <td>
       {% if is_running_row and not is_live %}
-        <span class="text-amber-700">running <span class="text-xs">(orphan)</span></span>
+        <span class="badge badge-timeout">running (orphan)</span>
+      {% elif s.status == 'success' %}
+        <span class="badge badge-success">{{ s.status }}</span>
+      {% elif s.status == 'failed' %}
+        <span class="badge badge-failed">{{ s.status }}</span>
+      {% elif s.status == 'timeout' %}
+        <span class="badge badge-timeout">{{ s.status }}</span>
+      {% elif s.status == 'running' %}
+        <span class="badge badge-live"><span class="dot dot-pulse" aria-hidden="true"></span>{{ s.status }}</span>
       {% else %}
-        {{ s.status or '—' }}
+        <span class="badge badge-neutral">{{ s.status or '—' }}</span>
       {% endif %}
     </td>
-    <td class="p-2 text-xs">{{ s.topic or '' }}</td>
-    <td class="p-2 text-xs muted">{{ s.started_at }}</td>
-    <td class="p-2 text-right whitespace-nowrap">
-      <a class="text-xs border rounded px-2 py-1 mr-1 text-slate-700" href="/p/{{ project.slug }}/sessions/{{ s.id }}/log">log</a>
+    <td class="text-xs">{{ s.topic or '' }}</td>
+    <td class="text-xs muted whitespace-nowrap">{{ s.started_at }}</td>
+    <td class="text-right whitespace-nowrap">
+      <a class="text-xs border border-slate-200 hover:border-slate-300 rounded px-2 py-1 mr-1 text-slate-700 hover:bg-slate-50 transition-colors inline-block" href="/p/{{ project.slug }}/sessions/{{ s.id }}/log">log</a>
       {% if is_running_row %}
         <form method="post" action="/p/{{ project.slug }}/sessions/{{ s.id }}/stop" class="inline"
             data-confirm="{{ "Stop running process for " if is_live else "Force-close orphan row for " }}{{ s.agent_name }}?" data-confirm-variant="danger">
-          <button class="text-xs border border-amber-500 text-amber-700 rounded px-2 py-1 mr-1">
+          <button class="text-xs border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded px-2 py-1 mr-1 transition-colors">
             {{ "Stop" if is_live else "Force-close" }}
           </button>
         </form>
       {% endif %}
       <form method="post" action="/p/{{ project.slug }}/sessions/{{ s.id }}/delete" class="inline"
             data-confirm="Permanently delete this session row?{{ "  (process is still running — it will be killed first)" if is_live else "" }}" data-confirm-variant="danger">
-        <button class="text-xs border border-red-400 text-red-700 rounded px-2 py-1">
+        <button class="text-xs border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded px-2 py-1 transition-colors">
           Delete
         </button>
       </form>
     </td>
   </tr>
   {% else %}
-  <tr><td class="p-3 muted" colspan="5">{{ "p.no_sessions_yet" | t(locale=locale) }}</td></tr>
+  <tr><td class="muted text-center py-4" colspan="5">{{ "p.no_sessions_yet" | t(locale=locale) }}</td></tr>
   {% endfor %}
   </tbody>
 </table>
 
-<h2 class="font-semibold mt-6 mb-2">{{ "p.active_runs" | t(locale=locale) }}</h2>
+<h2 class="font-semibold text-slate-900 mt-6 mb-2 flex items-center gap-2">
+  {{ "p.active_runs" | t(locale=locale) }}
+  {% if active_keys %}<span class="badge badge-live"><span class="dot dot-pulse" aria-hidden="true"></span>{{ active_keys|length }}</span>{% endif %}
+</h2>
 {% if active_keys %}
-<ul class="bg-white rounded shadow p-2">
+<ul class="bg-white rounded-lg border border-slate-200 shadow-sm divide-y divide-slate-100">
   {% for key in active_keys %}
     {% set agent = key.split(':', 1)[1] %}
-    <li class="font-mono text-sm flex items-center justify-between py-1">
-      <span>{{ key }}</span>
+    <li class="flex items-center justify-between px-3 py-2">
+      <span class="font-mono text-sm text-slate-700">{{ key }}</span>
       <form method="post" action="/p/{{ project.slug }}/live/kill/{{ agent }}" class="inline"
             data-confirm="Kill running process for {{ agent }}?" data-confirm-variant="danger">
-        <button class="text-xs border border-amber-500 text-amber-700 rounded px-2 py-1">
+        <button class="text-xs border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded px-2.5 py-1 transition-colors">
           Stop
         </button>
       </form>
