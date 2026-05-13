@@ -14,6 +14,7 @@ import asyncio
 import logging
 import re
 import shutil
+import subprocess
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -26,22 +27,33 @@ class GitHubIssueError(RuntimeError):
 _GH_URL_RE = re.compile(r"github\.com[:/]([^/]+)/([^/.\s]+)")
 
 
+async def _run(cmd: list[str]) -> tuple[int, bytes, bytes]:
+    """Run a subprocess in a thread so it works on any asyncio event loop.
+
+    Why: asyncio.create_subprocess_exec needs a ProactorEventLoop on Windows;
+    uvicorn under --reload sometimes uses SelectorEventLoop which raises
+    NotImplementedError. subprocess.run is sync and runs fine in a worker
+    thread regardless of the loop policy."""
+    def _do() -> tuple[int, bytes, bytes]:
+        try:
+            r = subprocess.run(
+                cmd, capture_output=True, check=False, shell=False,
+            )
+            return r.returncode, r.stdout, r.stderr
+        except OSError as e:
+            return -1, b"", str(e).encode("utf-8", errors="replace")
+    return await asyncio.to_thread(_do)
+
+
 async def _git_remote_repo(working_dir: str) -> str | None:
     """Return `owner/name` parsed from `git remote get-url origin`, or None."""
     if not Path(working_dir).exists():
         return None
     git = shutil.which("git") or "git"
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            git, "-C", working_dir, "remote", "get-url", "origin",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, _ = await proc.communicate()
-    except OSError as e:
-        log.warning("git remote lookup failed: %s", e)
-        return None
-    if proc.returncode != 0:
+    rc, stdout, _stderr = await _run(
+        [git, "-C", working_dir, "remote", "get-url", "origin"],
+    )
+    if rc != 0:
         return None
     url = stdout.decode("utf-8", errors="replace").strip()
     m = _GH_URL_RE.search(url)
@@ -81,21 +93,12 @@ async def _ensure_label(gh: str, repo: str, name: str) -> None:
     cmd = [gh, "label", "create", name, "--repo", repo, "--color", color]
     if description:
         cmd += ["--description", description]
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        _, stderr = await proc.communicate()
-        if proc.returncode != 0:
-            msg = stderr.decode("utf-8", errors="replace").lower()
-            # 'already_exists' is fine; anything else is just a warning.
-            if "already_exists" in msg or "already exists" in msg:
-                return
-            log.warning("gh label create %s in %s: %s", name, repo, msg.strip()[:200])
-    except OSError as e:
-        log.warning("gh label create OSError for %s: %s", name, e)
+    rc, _stdout, stderr = await _run(cmd)
+    if rc != 0:
+        msg = stderr.decode("utf-8", errors="replace").lower()
+        if "already_exists" in msg or "already exists" in msg:
+            return
+        log.warning("gh label create %s in %s: %s", name, repo, msg.strip()[:200])
 
 
 async def create_issue(
@@ -123,14 +126,7 @@ async def create_issue(
              "--body", body or "(no body — created by AI Dreaming Center)"]
         for lab in with_labels:
             c += ["--label", lab]
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *c, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await proc.communicate()
-            return proc.returncode, stdout, stderr
-        except OSError as e:
-            raise GitHubIssueError(f"Не удалось вызвать gh CLI: {e}") from None
+        return await _run(c)
 
     rc, stdout, stderr = await _try_create(labels or [])
     if rc != 0:
@@ -143,8 +139,14 @@ async def create_issue(
             rc, stdout, stderr = await _try_create([])
         if rc != 0:
             msg = stderr.decode("utf-8", errors="replace").strip() or "(no stderr)"
-            if "not logged into" in msg.lower():
+            msg_l = msg.lower()
+            if "not logged into" in msg_l or "auth login" in msg_l:
                 raise GitHubIssueError("gh CLI не залогинен — выполни `gh auth login`")
+            if rc == -1 and "no such file" in msg_l:
+                raise GitHubIssueError(
+                    "gh CLI не найден в PATH — установи https://cli.github.com/ "
+                    "и выполни `gh auth login`."
+                )
             raise GitHubIssueError(f"gh issue create failed: {msg}")
 
     url = stdout.decode("utf-8", errors="replace").strip().splitlines()[-1]
