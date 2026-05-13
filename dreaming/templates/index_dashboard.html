@@ -1,52 +1,100 @@
 {% extends "base.html" %}
 {% block content %}
-<header class="mb-6 flex items-baseline gap-4">
-  <h1 class="text-3xl font-bold">{{ "common.app_name" | t(locale=locale) }}</h1>
-  <span class="text-sm muted">{{ projects|length }} active projects</span>
+<header class="mb-6 flex items-baseline gap-3 flex-wrap">
+  <h1 class="text-3xl font-semibold tracking-tight text-slate-900">{{ "common.app_name" | t(locale=locale) }}</h1>
+  <span class="text-sm text-slate-500">{{ projects|length }} active projects</span>
 </header>
 
 <!-- Top-line metrics -->
-<div class="grid grid-cols-6 gap-3 mb-6">
-  <div class="bg-white p-3 rounded shadow"><div class="text-xs muted">{{ "p.metrics.success" | t(locale=locale) }} (week)</div><div class="text-2xl font-bold text-green-700">{{ totals.success }}</div></div>
-  <div class="bg-white p-3 rounded shadow"><div class="text-xs muted">{{ "p.metrics.failed" | t(locale=locale) }} (week)</div><div class="text-2xl font-bold text-red-700">{{ totals.failed }}</div></div>
-  <div class="bg-white p-3 rounded shadow"><div class="text-xs muted">{{ "p.metrics.timeout" | t(locale=locale) }} (week)</div><div class="text-2xl font-bold text-amber-700">{{ totals.timeout }}</div></div>
-  <div class="bg-white p-3 rounded shadow"><div class="text-xs muted">running now</div><div class="text-2xl font-bold text-blue-700">{{ totals.running }}</div></div>
-  <div class="bg-white p-3 rounded shadow"><div class="text-xs muted">{{ "p.tech_debt" | t(locale=locale) }}</div><div class="text-2xl font-bold">{{ totals.td }}</div></div>
-  <div class="bg-white p-3 rounded shadow"><div class="text-xs muted">{{ "p.ideas" | t(locale=locale) }}</div><div class="text-2xl font-bold">{{ totals.ideas }}</div></div>
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+  <div class="metric metric-success">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "p.metrics.success" | t(locale=locale) }} <span class="text-slate-400 normal-case font-normal">/ wk</span></div>
+    <div class="text-2xl font-semibold text-slate-900 mt-0.5">{{ totals.success }}</div>
+  </div>
+  <div class="metric metric-failed">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "p.metrics.failed" | t(locale=locale) }} <span class="text-slate-400 normal-case font-normal">/ wk</span></div>
+    <div class="text-2xl font-semibold text-slate-900 mt-0.5">{{ totals.failed }}</div>
+  </div>
+  <div class="metric metric-timeout">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "p.metrics.timeout" | t(locale=locale) }} <span class="text-slate-400 normal-case font-normal">/ wk</span></div>
+    <div class="text-2xl font-semibold text-slate-900 mt-0.5">{{ totals.timeout }}</div>
+  </div>
+  <div class="metric metric-running">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium flex items-center gap-1.5">
+      running now
+      {% if totals.running %}<span class="text-emerald-500 dot dot-pulse" aria-hidden="true"></span>{% endif %}
+    </div>
+    <div class="text-2xl font-semibold text-slate-900 mt-0.5">{{ totals.running }}</div>
+  </div>
+  <div class="metric">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "p.tech_debt" | t(locale=locale) }}</div>
+    <div class="text-2xl font-semibold text-slate-900 mt-0.5">{{ totals.td }}</div>
+  </div>
+  <div class="metric">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "p.ideas" | t(locale=locale) }}</div>
+    <div class="text-2xl font-semibold text-slate-900 mt-0.5">{{ totals.ideas }}</div>
+  </div>
 </div>
 
-<div class="grid grid-cols-3 gap-4">
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
   <!-- Project cards (2 cols) -->
-  <div class="col-span-2 grid grid-cols-2 gap-4">
+  <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
   {% for c in cards %}
     {% set p = c.project %}
-    <a href="/p/{{ p.slug }}/" class="bg-white p-4 rounded shadow hover:bg-slate-100">
-      <div class="flex items-baseline justify-between mb-2">
-        <h2 class="font-bold">{{ p.label }}</h2>
+    <a href="/p/{{ p.slug }}/" class="card-link group bg-white p-4 rounded-lg shadow-sm">
+      <div class="flex items-baseline justify-between mb-3">
+        <h2 class="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors">{{ p.label }}</h2>
         <span class="text-xs font-mono text-slate-400">{{ p.slug }}</span>
       </div>
       <div class="grid grid-cols-4 gap-2 text-center">
-        <div><div class="text-xs muted">ok</div><div class="font-bold text-green-700">{{ c.stats.success or 0 }}</div></div>
-        <div><div class="text-xs muted">fail</div><div class="font-bold text-red-700">{{ c.stats.failed or 0 }}</div></div>
-        <div><div class="text-xs muted">timeout</div><div class="font-bold text-amber-700">{{ c.stats.timeout or 0 }}</div></div>
-        <div><div class="text-xs muted">running</div><div class="font-bold text-blue-700">{{ c.running }}</div></div>
+        <div>
+          <div class="text-[10px] uppercase tracking-wide muted">ok</div>
+          <div class="font-semibold text-emerald-600">{{ c.stats.success or 0 }}</div>
+        </div>
+        <div>
+          <div class="text-[10px] uppercase tracking-wide muted">fail</div>
+          <div class="font-semibold text-red-600">{{ c.stats.failed or 0 }}</div>
+        </div>
+        <div>
+          <div class="text-[10px] uppercase tracking-wide muted">t/o</div>
+          <div class="font-semibold text-amber-600">{{ c.stats.timeout or 0 }}</div>
+        </div>
+        <div>
+          <div class="text-[10px] uppercase tracking-wide muted flex items-center justify-center gap-1">
+            run
+            {% if c.running %}<span class="text-emerald-500 dot dot-pulse" aria-hidden="true"></span>{% endif %}
+          </div>
+          <div class="font-semibold text-blue-600">{{ c.running }}</div>
+        </div>
       </div>
-      <div class="mt-3 flex gap-3 text-xs">
-        <span>{{ "p.tech_debt" | t(locale=locale) }}: <strong>{{ c.td_count }}</strong></span>
-        <span>{{ "p.ideas" | t(locale=locale) }}: <strong>{{ c.ideas_count }}</strong></span>
-        <span>{{ "p.wiki" | t(locale=locale) }}: <strong>{{ "✓" if c.wiki_present else "—" }}</strong></span>
+      <div class="mt-3 pt-3 border-t border-slate-100 flex gap-3 text-xs text-slate-600">
+        <span>{{ "p.tech_debt" | t(locale=locale) }} <strong class="text-slate-900">{{ c.td_count }}</strong></span>
+        <span>{{ "p.ideas" | t(locale=locale) }} <strong class="text-slate-900">{{ c.ideas_count }}</strong></span>
+        <span class="ml-auto">{{ "p.wiki" | t(locale=locale) }}
+          {% if c.wiki_present %}
+            <span class="badge badge-success">✓</span>
+          {% else %}
+            <span class="badge badge-neutral">—</span>
+          {% endif %}
+        </span>
       </div>
     </a>
   {% endfor %}
   </div>
 
   <!-- Right rail: active runs -->
-  <aside class="bg-white p-4 rounded shadow">
-    <h3 class="font-semibold mb-3">{{ "p.active_runs" | t(locale=locale) }}</h3>
+  <aside class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm h-fit">
+    <h3 class="font-semibold text-slate-900 mb-3 flex items-center gap-2">
+      {{ "p.active_runs" | t(locale=locale) }}
+      {% if active_runs %}<span class="badge badge-live"><span class="dot dot-pulse" aria-hidden="true"></span>{{ active_runs|length }}</span>{% endif %}
+    </h3>
     {% if active_runs %}
-    <ul class="text-sm space-y-1">
+    <ul class="space-y-1">
     {% for r in active_runs %}
-      <li class="font-mono text-xs"><a class="text-blue-600 underline" href="/p/{{ r.slug }}/live">{{ r.slug }}:{{ r.agent }}</a></li>
+      <li>
+        <a class="block px-2 py-1.5 rounded-md font-mono text-xs text-blue-700 hover:bg-blue-50 transition-colors"
+           href="/p/{{ r.slug }}/live">{{ r.slug }}<span class="text-slate-400">:</span>{{ r.agent }}</a>
+      </li>
     {% endfor %}
     </ul>
     {% else %}

@@ -7,9 +7,9 @@
     {{ stale_running }} stale <code>running</code> run{{ "s" if stale_running != 1 else "" }} (process gone, run never finished).
     Auto-reconcile тикает каждые 5 мин — или закрой принудительно сейчас.
   </span>
-  <form method="post" action="/p/{{ project.slug }}/orchestration/force-close-stale">
-    <button class="text-xs bg-amber-600 text-white rounded px-3 py-1"
-            onclick="return confirm('Mark all running orchestration runs for this project as cancelled?');">
+  <form method="post" action="/p/{{ project.slug }}/orchestration/force-close-stale"
+        data-confirm="Mark all running orchestration runs for this project as cancelled?" data-confirm-variant="danger">
+    <button class="text-xs bg-amber-600 text-white rounded px-3 py-1">
       Force-close all stale
     </button>
   </form>
@@ -42,7 +42,7 @@
     <td class="p-2 text-xs whitespace-nowrap">
       <a class="text-xs px-2 py-1 border rounded text-slate-700" href="/p/{{ project.slug }}/orchestration/{{ r.id }}/log">log</a>
       <form method="post" action="/p/{{ project.slug }}/orchestration/{{ r.id }}/delete" class="inline ml-1"
-            onsubmit="return confirm('Удалить run {{ r.id[:8] }}…?\nЭто удалит и все его messages/nodes/events. Файлы которые Orchestrator написал на диск — НЕ удаляются.');">
+            data-confirm="Удалить run {{ r.id[:8] }}…?\nЭто удалит и все его messages/nodes/events. Файлы которые Orchestrator написал на диск — НЕ удаляются." data-confirm-variant="danger">
         <button class="text-xs px-2 py-1 border rounded text-red-600">delete</button>
       </form>
     </td>

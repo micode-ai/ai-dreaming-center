@@ -3,15 +3,20 @@
 <html lang="{{ locale }}">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ "common.app_name" | t(locale=locale) }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="/static/app.css">
   <script src="https://unpkg.com/htmx.org@2"></script>
 </head>
-<body class="bg-slate-50 min-h-screen">
+<body class="min-h-screen">
   {% include "_navbar.html" %}
-  <main class="max-w-7xl mx-auto p-6">
+  <main class="max-w-[1400px] mx-auto px-6 py-6">
     {% block content %}{% endblock %}
   </main>
+  {% include "_app_modal.html" %}
 </body>
 </html>

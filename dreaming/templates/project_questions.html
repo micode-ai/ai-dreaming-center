@@ -37,7 +37,7 @@
       <button class="bg-amber-600 text-white rounded px-3 py-1 text-sm">Ответить</button>
     </form>
     <form method="post" action="/p/{{ project.slug }}/questions/{{ q.id }}/dismiss" class="mt-2"
-          onsubmit="return confirm('Закрыть вопрос без ответа? Агент получит пустую строку.');">
+          data-confirm="Закрыть вопрос без ответа? Агент получит пустую строку.">
       <button class="text-xs text-slate-600 underline">пропустить (dismiss)</button>
     </form>
   </div>

@@ -25,7 +25,9 @@
         <button class="text-xs px-2 py-1 border rounded">{{ "Disable" if p.enabled else "Enable" }}</button>
       </form>
       <form method="post" action="/projects/{{ p.id }}/delete" class="inline"
-            onsubmit="return prompt('Введите slug `{{ p.slug }}` чтобы удалить:')==='{{ p.slug }}'">
+            data-confirm="Введите slug `{{ p.slug }}` чтобы подтвердить удаление проекта:"
+            data-confirm-input="{{ p.slug }}"
+            data-confirm-variant="danger">
         <button class="text-xs px-2 py-1 border rounded text-red-600">Delete</button>
       </form>
     </td>

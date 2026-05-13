@@ -15,12 +15,12 @@
 
 <div class="mt-4 flex flex-wrap gap-2 items-center">
   <form method="post" action="/p/{{ project.slug }}/plans/{{ name }}/orchestrate" class="inline"
-        onsubmit="return confirm('Запустить Orchestrator продолжать этот план?');">
+        data-confirm="Запустить Orchestrator продолжать этот план?">
     <button class="text-sm px-3 py-1 rounded bg-purple-600 text-white font-semibold">Продолжить в Orchestrator</button>
   </form>
   {% if not item.github_issue %}
   <form method="post" action="/p/{{ project.slug }}/plans/{{ name }}/github" class="inline"
-        onsubmit="return confirm('Создать GitHub issue из этого плана?');">
+        data-confirm="Создать GitHub issue из этого плана?">
     <button class="text-sm px-3 py-1 border border-slate-500 text-slate-700 rounded">→ Создать GitHub issue</button>
   </form>
   {% else %}
@@ -37,7 +37,7 @@
     </select>
   </form>
   <form method="post" action="/p/{{ project.slug }}/plans/{{ name }}/delete" class="inline"
-        onsubmit="return confirm('Удалить {{ name }}.md?')">
+        data-confirm="Удалить {{ name }}.md?" data-confirm-variant="danger">
     <button class="text-sm px-3 py-1 border rounded text-red-600">delete file</button>
   </form>
   <a class="text-sm muted underline"
