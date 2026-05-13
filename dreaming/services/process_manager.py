@@ -14,6 +14,7 @@ from typing import AsyncIterator, Callable, TYPE_CHECKING
 from uuid import uuid4
 
 from dreaming.services.keep_awake import KeepAwake
+from dreaming.services._subprocess_compat import create_subprocess_exec_compat
 
 if TYPE_CHECKING:
     from dreaming.services.projects import Project
@@ -190,7 +191,7 @@ class ProcessManager:
         env["LEARNING_PROJECT_ID"] = str(project.id)
 
         try:
-            process = await asyncio.create_subprocess_exec(
+            process = await create_subprocess_exec_compat(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
@@ -314,7 +315,7 @@ class ProcessManager:
         env["LEARNING_PROJECT_ID"] = str(project.id)
 
         try:
-            process = await asyncio.create_subprocess_exec(
+            process = await create_subprocess_exec_compat(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
@@ -392,7 +393,7 @@ class ProcessManager:
         log.info("Starting raw command %s: %s", command_name, " ".join(argv[:8]))
 
         try:
-            process = await asyncio.create_subprocess_exec(
+            process = await create_subprocess_exec_compat(
                 *argv,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,

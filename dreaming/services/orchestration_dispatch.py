@@ -117,12 +117,13 @@ async def start_orchestration_run(
                 "DREAMING_RUN_ID": run_id,
             },
         )
-    except RuntimeError as e:
-        await hub.finish_run(run_id, status="failed", error_message=str(e))
-        await hub.append_event(run_id, "run_failed", {"error": str(e)})
-        log.warning("start_orchestration_run: spawn failed: %s", e)
+    except (RuntimeError, NotImplementedError) as e:
+        msg = str(e) or f"{type(e).__name__}: <no message>"
+        await hub.finish_run(run_id, status="failed", error_message=msg)
+        await hub.append_event(run_id, "run_failed", {"error": msg})
+        log.warning("start_orchestration_run: spawn failed: %r", e)
         return OrchestrationDispatchResult({
-            "run_id": run_id, "started": False, "reason": str(e),
+            "run_id": run_id, "started": False, "reason": msg,
         })
 
     claude_projects_dir = (
