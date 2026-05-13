@@ -1,45 +1,77 @@
 {% extends "_project_layout.html" %}
 {% set active='ai_usage' %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
 {% block project_content %}
 {% if summary.error %}
-<p class="text-red-700 text-sm">Ошибка: <code>{{ summary.error }}</code></p>
+<p style="color: var(--status-failed);" class="text-sm">Ошибка: <code>{{ summary.error }}</code></p>
 {% else %}
-<div class="grid grid-cols-4 gap-3 mb-6">
-  <div class="bg-white p-3 rounded shadow">
-    <div class="text-xs muted">Last 7d input</div>
-    <div class="text-2xl font-bold">{{ summary.last_7d.input_tokens or 0 }}</div>
+{% set total7 = (summary.last_7d.input_tokens or 0) + (summary.last_7d.output_tokens or 0) + (summary.last_7d.cache_read_tokens or 0) + (summary.last_7d.cache_creation_tokens or 0) %}
+{% set total30 = summary.last_30d.total_tokens or 0 %}
+{% set cache_read_30 = summary.last_30d.cache_read_tokens or 0 %}
+{% set cache_hit_rate = (100.0 * cache_read_30 / total30) if total30 else 0 %}
+
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+  <div class="metric metric-info">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">Last 7d total</div>
+    <div class="text-2xl font-semibold mt-1" style="color: var(--text-strong);">{{ "{:,}".format(total7) }}</div>
   </div>
-  <div class="bg-white p-3 rounded shadow">
-    <div class="text-xs muted">Last 7d output</div>
-    <div class="text-2xl font-bold">{{ summary.last_7d.output_tokens or 0 }}</div>
+  <div class="metric metric-running">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">Last 7d input</div>
+    <div class="text-2xl font-semibold mt-1" style="color: var(--text-strong);">{{ "{:,}".format(summary.last_7d.input_tokens or 0) }}</div>
   </div>
-  <div class="bg-white p-3 rounded shadow">
-    <div class="text-xs muted">Last 7d cache (read)</div>
-    <div class="text-2xl font-bold">{{ summary.last_7d.cache_read_tokens or 0 }}</div>
+  <div class="metric metric-success">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">Last 7d output</div>
+    <div class="text-2xl font-semibold mt-1" style="color: var(--text-strong);">{{ "{:,}".format(summary.last_7d.output_tokens or 0) }}</div>
   </div>
-  <div class="bg-white p-3 rounded shadow">
-    <div class="text-xs muted">Last 30d total</div>
-    <div class="text-2xl font-bold">{{ summary.last_30d.total_tokens or 0 }}</div>
+  <div class="metric metric-timeout">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">Last 7d cache_read</div>
+    <div class="text-2xl font-semibold mt-1" style="color: var(--text-strong);">{{ "{:,}".format(summary.last_7d.cache_read_tokens or 0) }}</div>
+  </div>
+  <div class="metric metric-info">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">Last 30d total</div>
+    <div class="text-2xl font-semibold mt-1" style="color: var(--text-strong);">{{ "{:,}".format(total30) }}</div>
+  </div>
+  <div class="metric metric-success">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">Cache hit rate (30d)</div>
+    <div class="text-2xl font-semibold mt-1" style="color: var(--text-strong);">{{ "{:.1f}".format(cache_hit_rate) }}%</div>
   </div>
 </div>
+
+{% if summary.daily %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+  <div class="lg:col-span-2 rounded-lg p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle); box-shadow: var(--shadow-card);">
+    <div class="text-sm font-semibold mb-2" style="color: var(--text-strong);">Расход по дням (7d)</div>
+    <div style="height: 280px;"><canvas id="ds-area"></canvas></div>
+  </div>
+  <div class="rounded-lg p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle); box-shadow: var(--shadow-card);">
+    <div class="text-sm font-semibold mb-2" style="color: var(--text-strong);">Main vs Subagents (30d)</div>
+    <div style="height: 280px;"><canvas id="ds-donut"></canvas></div>
+  </div>
+</div>
+{% endif %}
+
 {% if summary.by_model %}
-<h2 class="font-semibold mb-2">By model (last 30d)</h2>
-<table class="w-full bg-white rounded shadow text-sm">
-  <thead class="text-left border-b"><tr>
-    <th class="p-2">model</th>
-    <th class="p-2 text-right">input</th>
-    <th class="p-2 text-right">output</th>
-    <th class="p-2 text-right">cache_read</th>
-    <th class="p-2 text-right">events</th>
+<h2 class="font-semibold mb-2" style="color: var(--text-strong);">By model (last 30d)</h2>
+<table class="data-table">
+  <thead><tr>
+    <th>model</th>
+    <th class="text-right">input</th>
+    <th class="text-right">output</th>
+    <th class="text-right">cache_read</th>
+    <th class="text-right">cache_create</th>
+    <th class="text-right">events</th>
   </tr></thead>
   <tbody>
   {% for m in summary.by_model %}
-  <tr class="border-b">
-    <td class="p-2 font-mono text-xs">{{ m.model or '—' }}</td>
-    <td class="p-2 text-right">{{ m.input_tokens or 0 }}</td>
-    <td class="p-2 text-right">{{ m.output_tokens or 0 }}</td>
-    <td class="p-2 text-right">{{ m.cache_read_tokens or 0 }}</td>
-    <td class="p-2 text-right">{{ m.events or 0 }}</td>
+  <tr>
+    <td class="font-mono text-xs">{{ m.model or '—' }}</td>
+    <td class="text-right">{{ "{:,}".format(m.input_tokens or 0) }}</td>
+    <td class="text-right">{{ "{:,}".format(m.output_tokens or 0) }}</td>
+    <td class="text-right">{{ "{:,}".format(m.cache_read_tokens or 0) }}</td>
+    <td class="text-right">{{ "{:,}".format(m.cache_creation_tokens or 0) }}</td>
+    <td class="text-right">{{ m.events or 0 }}</td>
   </tr>
   {% endfor %}
   </tbody>
@@ -47,5 +79,72 @@
 {% else %}
 <p class="muted">Нет данных. Запусти ingest или подожди следующий тик cron'а.</p>
 {% endif %}
+
+<script>
+(() => {
+  const daily = {{ (summary.daily or []) | tojson }};
+  const mainSub = {{ (summary.main_sub or {'main': 0, 'sub': 0}) | tojson }};
+  if (!window.Chart) return;
+  Chart.defaults.color = '#94a3b8';
+  Chart.defaults.borderColor = '#1e293b';
+  Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+
+  if (daily && daily.length) {
+    const labels = daily.map(d => d.ts_date);
+    const mk = (label, color, fill, key) => ({
+      label, data: daily.map(d => d[key] || 0),
+      borderColor: color, backgroundColor: fill,
+      fill: true, tension: 0.3, borderWidth: 1.5,
+      pointRadius: 2, pointHoverRadius: 4,
+    });
+    new Chart(document.getElementById('ds-area'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          mk('input',      '#60a5fa', 'rgba(96, 165, 250, 0.20)', 'input_tokens'),
+          mk('output',     '#34d399', 'rgba(52, 211, 153, 0.20)', 'output_tokens'),
+          mk('cache_read', '#fbbf24', 'rgba(251, 191, 36, 0.18)', 'cache_read_tokens'),
+          mk('cache_create','#a78bfa','rgba(167, 139, 250, 0.20)','cache_creation_tokens'),
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 } } },
+          tooltip: { backgroundColor: '#111827', borderColor: '#1e293b', borderWidth: 1, padding: 8 },
+        },
+        scales: {
+          x: { grid: { color: 'rgba(30,41,59,0.5)' }, ticks: { font: { size: 11 } } },
+          y: { grid: { color: 'rgba(30,41,59,0.5)' }, ticks: { font: { size: 11 } }, stacked: true },
+        },
+      },
+    });
+  }
+
+  if (mainSub && (mainSub.main || mainSub.sub)) {
+    new Chart(document.getElementById('ds-donut'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Main', 'Subagents'],
+        datasets: [{
+          data: [mainSub.main, mainSub.sub],
+          backgroundColor: ['#6366f1', '#34d399'],
+          borderColor: '#0f1117', borderWidth: 2,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 } } },
+          tooltip: { backgroundColor: '#111827', borderColor: '#1e293b', borderWidth: 1, padding: 8 },
+        },
+        cutout: '60%',
+      },
+    });
+  }
+})();
+</script>
 {% endif %}
 {% endblock %}

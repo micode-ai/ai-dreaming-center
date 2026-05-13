@@ -1,22 +1,44 @@
 {% set locale = locale|default('ru') %}
 <!DOCTYPE html>
-<html lang="{{ locale }}">
+<html lang="{{ locale }}" class="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ "common.app_name" | t(locale=locale) }}</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%236366f1'/><text x='16' y='22' text-anchor='middle' fill='white' font-size='18' font-family='system-ui'>D</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: { colors: { dark: {
+        bg: '#0a0e1a', card: '#111827', sidebar: '#0f1117',
+        border: '#1e293b', hover: '#1a2332', surface: '#151c2c',
+      } } } }
+    }
+  </script>
   <link rel="stylesheet" href="/static/app.css">
   <script src="https://unpkg.com/htmx.org@2"></script>
+  {% block head %}{% endblock %}
 </head>
 <body class="min-h-screen">
-  {% include "_navbar.html" %}
-  <main class="max-w-[1400px] mx-auto px-6 py-6">
-    {% block content %}{% endblock %}
-  </main>
+  <div class="app-shell">
+    {% include "_sidebar.html" %}
+    <div class="app-content">
+      {% if flash %}
+      <div class="px-8 pt-4">
+        <div class="rounded-lg border p-4" style="background: var(--brand-soft); border-color: rgba(99,102,241,0.35);">
+          <p class="text-sm" style="color: #c7d2fe;">{{ flash.message }}</p>
+        </div>
+      </div>
+      {% endif %}
+      <main>
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
   {% include "_app_modal.html" %}
 </body>
 </html>

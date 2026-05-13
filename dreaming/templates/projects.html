@@ -1,6 +1,7 @@
 {% extends "base.html" %}
+{% set active = 'g_projects' %}
 {% block content %}
-<h1 class="text-2xl font-bold mb-4">{{ "projects.title" | t(locale=locale) }}</h1>
+<h1 class="text-2xl font-bold mb-4" style="color: var(--text-strong);">{{ "projects.title" | t(locale=locale) }}</h1>
 
 {% if projects %}
 <table class="w-full bg-white rounded shadow text-sm">

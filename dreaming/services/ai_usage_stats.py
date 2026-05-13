@@ -112,22 +112,81 @@ async def _events_total_all_time(db: SqliteDB) -> int:
     return int(row["c"]) if row else 0
 
 
+async def _daily_series(
+    db: SqliteDB,
+    *,
+    start: str,
+    end: str,
+    project_id: int | None = None,
+) -> list[dict[str, Any]]:
+    sql = (
+        "SELECT ts_date, "
+        "COALESCE(SUM(input_tokens), 0)          AS input_tokens, "
+        "COALESCE(SUM(output_tokens), 0)         AS output_tokens, "
+        "COALESCE(SUM(cache_read_tokens), 0)     AS cache_read_tokens, "
+        "COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens "
+        "FROM ai_usage_events "
+        "WHERE ts_date BETWEEN ? AND ? "
+    )
+    params: list[Any] = [start, end]
+    if project_id is not None:
+        sql += "AND project_id=? "
+        params.append(project_id)
+    sql += "GROUP BY ts_date ORDER BY ts_date ASC"
+    rows = await db.fetch_all(sql, tuple(params))
+    return [dict(r) for r in rows]
+
+
+async def _main_vs_sidechain(
+    db: SqliteDB,
+    *,
+    start: str,
+    end: str,
+    project_id: int | None = None,
+) -> dict[str, int]:
+    sql = (
+        "SELECT is_sidechain, "
+        "COALESCE(SUM(input_tokens+output_tokens+cache_read_tokens+cache_creation_tokens), 0) "
+        "  AS total_tokens "
+        "FROM ai_usage_events "
+        "WHERE ts_date BETWEEN ? AND ? "
+    )
+    params: list[Any] = [start, end]
+    if project_id is not None:
+        sql += "AND project_id=? "
+        params.append(project_id)
+    sql += "GROUP BY is_sidechain"
+    rows = await db.fetch_all(sql, tuple(params))
+    out = {"main": 0, "sub": 0}
+    for r in rows:
+        key = "sub" if int(r["is_sidechain"] or 0) else "main"
+        out[key] = int(r["total_tokens"] or 0)
+    return out
+
+
 # ── public API ────────────────────────────────────────────────────
 
 async def project_summary(db: SqliteDB, project_id: int) -> dict[str, Any]:
-    """Last-7d / last-30d totals + by_model breakdown for one project."""
+    """Last-7d / last-30d totals + by_model breakdown for one project.
+
+    Also returns daily series for the last 7 days and a main-vs-subagent
+    split for the last 30 days, both needed by the AI Usage charts."""
     s7, e7 = _date_window(7)
     s30, e30 = _date_window(30)
 
     last_7d = await _totals(db, start=s7, end=e7, project_id=project_id)
     last_30d = await _totals(db, start=s30, end=e30, project_id=project_id)
     by_model = await _by_model(db, start=s30, end=e30, project_id=project_id)
+    daily = await _daily_series(db, start=s7, end=e7, project_id=project_id)
+    main_sub = await _main_vs_sidechain(db, start=s30, end=e30, project_id=project_id)
 
     return {
         "project_id": project_id,
         "last_7d": last_7d,
         "last_30d": last_30d,
         "by_model": by_model,
+        "daily": daily,
+        "main_sub": main_sub,
     }
 
 

@@ -32,18 +32,27 @@
 </div>
 {% endif %}
 
-<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+{% set week_total = (stats.success or 0) + (stats.no_gap or 0) + (stats.failed or 0) + (stats.timeout or 0) + (stats.running or 0) %}
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+  <div class="metric metric-info">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "p.metrics.week_total" | t(locale=locale) }}</div>
+    <div class="text-3xl font-semibold mt-1" style="color: var(--text-strong);">{{ week_total }}</div>
+  </div>
   <div class="metric metric-success">
     <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "p.metrics.success" | t(locale=locale) }}</div>
-    <div class="text-3xl font-semibold text-slate-900 mt-1">{{ stats.success or 0 }}</div>
+    <div class="text-3xl font-semibold mt-1" style="color: var(--status-success);">{{ stats.success or 0 }}</div>
+  </div>
+  <div class="metric metric-running">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "p.metrics.no_gap" | t(locale=locale) }}</div>
+    <div class="text-3xl font-semibold mt-1" style="color: var(--status-running);">{{ stats.no_gap or 0 }}</div>
   </div>
   <div class="metric metric-failed">
     <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "p.metrics.failed" | t(locale=locale) }}</div>
-    <div class="text-3xl font-semibold text-slate-900 mt-1">{{ stats.failed or 0 }}</div>
+    <div class="text-3xl font-semibold mt-1" style="color: var(--status-failed);">{{ stats.failed or 0 }}</div>
   </div>
   <div class="metric metric-timeout">
     <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "p.metrics.timeout" | t(locale=locale) }}</div>
-    <div class="text-3xl font-semibold text-slate-900 mt-1">{{ stats.timeout or 0 }}</div>
+    <div class="text-3xl font-semibold mt-1" style="color: var(--status-timeout);">{{ stats.timeout or 0 }}</div>
   </div>
 </div>
 

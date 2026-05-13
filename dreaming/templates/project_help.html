@@ -1,0 +1,64 @@
+{% extends "_project_layout.html" %}
+{% set active='help' %}
+{% block project_content %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  <div class="rounded-lg p-5" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+    <h2 class="text-sm font-semibold mb-3" style="color: var(--text-strong);">Что это</h2>
+    <p class="text-sm" style="color: var(--text-body);">
+      AI Dreaming Center — оркестратор Claude CLI сессий, разнесённый по проектам. Каждая
+      строка в <code>projects</code> — это отдельная micode-папка со своими агентами,
+      настройками и расписанием ночного обучения.
+    </p>
+  </div>
+  <div class="rounded-lg p-5" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+    <h2 class="text-sm font-semibold mb-3" style="color: var(--text-strong);">Где живут агенты этого проекта</h2>
+    <p class="text-sm" style="color: var(--text-body);">
+      В <code>{{ project.working_dir }}/.claude/agents/</code> — оттуда тянутся
+      определения. Sidebar слева переключает между разделами этого проекта;
+      проектный select сверху — между проектами.
+    </p>
+  </div>
+</div>
+
+<h2 class="text-sm font-semibold mt-6 mb-3" style="color: var(--text-strong);">Разделы</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+  {% set sections = [
+    ('Панель', 'свод метрик за неделю + последние сессии + что сейчас запущено'),
+    ('Оркестрация', 'multi-agent runs: декомпозируй задачу, запусти orchestrator-сессию'),
+    ('Вопросы', 'вопросы от агентов, ожидающие ответа'),
+    ('Логи', 'live SSE-вывод всех процессов проекта'),
+    ('Ротация', 'кто из агентов обучается в какой день'),
+    ('Темы', 'custom topics для nightly_learning'),
+    ('Канбан', 'сейчас — форма для добавления тем; в роудмапе — 5-дневный план'),
+    ('Конспекты', 'learning-notes из docs/wiki/learning/'),
+    ('Findings', 'находки tech-debt сканера (детально)'),
+    ('Тех-долг', 'агрегированный обзор tech-debt'),
+    ('Идеи продукта', 'product ideas из product-idea-scan'),
+    ('Wiki', 'обзор docs/wiki/ — покрытие доменов и модули'),
+    ('Здоровье Wiki', 'тренды покрытия по неделям (Ф4.3)'),
+    ('AI Usage', 'токены, графики, breakdown по моделям и main vs subagents'),
+    ('Эволюции', 'эволюция агентов — версии и changelog'),
+    ('Циклы', 'Reflex Loops — итеративные саморефлексии агентов'),
+    ('Шаблоны loops', 'каталог .md-шаблонов для запуска loops'),
+    ('Планы', 'мультишаговые планы — что делал/делает агент'),
+    ('Каскад-затраты', 'стоимость оркестрационных каскадов по стадиям'),
+    ('Контракты', 'договорённости agents ↔ data shapes'),
+    ('Sidecar findings', 'замечания ревизоров — последние 7 дней'),
+    ('Настройки', 'per-project overrides поверх глобальных настроек'),
+  ] %}
+  {% for title, desc in sections %}
+  <div class="rounded-lg p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+    <div class="text-sm font-semibold mb-1" style="color: var(--text-strong);">{{ title }}</div>
+    <div class="text-xs" style="color: var(--text-muted);">{{ desc }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<h2 class="text-sm font-semibold mt-6 mb-3" style="color: var(--text-strong);">Полезное</h2>
+<ul class="text-sm space-y-1" style="color: var(--text-body);">
+  <li>• Глобальные дефолты живут на <a href="/settings" style="color: var(--brand-hover); text-decoration: underline;">/settings</a> — per-project overrides на <a href="/p/{{ project.slug }}/settings" style="color: var(--brand-hover); text-decoration: underline;">этой странице</a>.</li>
+  <li>• Сессии Claude CLI запускаются <code>ProcessManager</code>-ом; их stdout/stderr пишется в БД и стримится через <code>/p/{{ project.slug }}/live</code>.</li>
+  <li>• Расписание (ночное обучение) держит <code>AsyncIOScheduler</code> с per-project job'ами.</li>
+  <li>• Если что-то выглядит криво — сначала проверь рестарт uvicorn: <code>--reload</code> не подтягивает i18n кэш на лету (он читается один раз на старте I18n).</li>
+</ul>
+{% endblock %}

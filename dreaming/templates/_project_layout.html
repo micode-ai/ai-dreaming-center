@@ -1,39 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
-{% set tabs = [
-  ('dashboard',         '/',                  'p.dashboard'),
-  ('orchestration',     '/orchestration',     'p.orchestration'),
-  ('questions',         '/questions',         'p.questions'),
-  ('live',              '/live',              'p.live'),
-  ('rotation',          '/rotation',          'p.rotation'),
-  ('topics',            '/topics',            'p.topics'),
-  ('kanban',            '/kanban',            'p.kanban'),
-  ('notes',             '/notes',             'p.notes'),
-  ('findings',          '/findings',          'p.findings'),
-  ('tech_debt',         '/tech-debt',         'p.tech_debt'),
-  ('ideas',             '/ideas',             'p.ideas'),
-  ('wiki',              '/wiki',              'p.wiki'),
-  ('ai_usage',          '/ai-usage',          'p.ai_usage'),
-  ('evolutions',        '/evolutions',        'p.evolutions'),
-  ('loops',             '/loops',             'p.loops'),
-  ('plans',             '/plans',             'p.plans'),
-  ('cascade_costs',     '/cascade-costs',     'p.cascade_costs'),
-  ('contracts',         '/contracts',         'p.contracts'),
-  ('sidecar_findings',  '/sidecar-findings',  'p.sidecar_findings'),
-  ('settings',          '/settings',          'p.settings'),
-] %}
-<header class="mb-4 flex items-center gap-3 flex-wrap">
+<header class="mb-5 flex items-center gap-3 flex-wrap">
   <div class="flex items-baseline gap-3">
-    <h1 class="text-2xl font-semibold tracking-tight text-slate-900">{{ project.label }}</h1>
-    <span class="font-mono text-xs text-slate-400">{{ project.slug }}</span>
+    <h1 class="text-2xl font-semibold tracking-tight" style="color: var(--text-strong);">{{ project.label }}</h1>
+    <span class="font-mono text-xs" style="color: var(--text-faint);">{{ project.slug }}</span>
   </div>
 </header>
-<nav class="pill-nav mb-6" aria-label="Project sections">
-  {% for slug, href, key in tabs %}
-    <a class="pill {% if active == slug %}is-active{% endif %}"
-       {% if active == slug %}aria-current="page"{% endif %}
-       href="/p/{{ project.slug }}{{ href }}">{{ key | t(locale=locale) }}</a>
-  {% endfor %}
-</nav>
 {% block project_content %}{% endblock %}
 {% endblock %}

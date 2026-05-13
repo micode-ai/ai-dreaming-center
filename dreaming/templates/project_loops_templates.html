@@ -1,0 +1,34 @@
+{% extends "_project_layout.html" %}
+{% set active='loops_templates' %}
+{% block project_content %}
+<div class="rounded-lg p-4 mb-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+  <div class="text-xs uppercase tracking-wide" style="color: var(--text-faint);">Каталог шаблонов</div>
+  <div class="text-sm mt-1 font-mono break-all" style="color: var(--text-body);">{{ templates_dir or '—' }}</div>
+  {% if not templates_dir_exists %}
+  <div class="text-xs mt-2" style="color: var(--status-timeout);">Папка не существует. Создайте её, чтобы класть туда .md-шаблоны.</div>
+  {% endif %}
+</div>
+
+{% if items %}
+<table class="data-table">
+  <thead><tr>
+    <th>slug</th>
+    <th>имя</th>
+    <th class="text-right">размер</th>
+    <th>путь</th>
+  </tr></thead>
+  <tbody>
+  {% for it in items %}
+  <tr>
+    <td class="font-mono text-xs">{{ it.slug }}</td>
+    <td>{{ it.name }}</td>
+    <td class="text-right text-xs muted">{{ it.size_bytes }} б</td>
+    <td class="font-mono text-xs muted">{{ it.path }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Шаблонов пока нет. Положи <code>.md</code>-файл в указанную папку — он появится здесь.</p>
+{% endif %}
+{% endblock %}
