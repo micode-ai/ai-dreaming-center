@@ -1,8 +1,13 @@
 """GET /p/{slug}/wiki-health — per-project wiki trends & coverage.
 
-Parses `<working_dir>/docs/wiki/wiki-health-trends.md` (ALC convention) into
-time-series JSON, and renders a Chart.js page. If the file is missing we
-show graceful empty state with the resolved path.
+Reads from the resolved per-project `wiki_dir` (default `docs/wiki`). The
+trends file is looked up in a couple of conventional places:
+  1. <wiki_dir>/wiki-health-trends.md            (flat layout)
+  2. <wiki_dir>/reports/wiki-health-trends.md    (with-reports layout)
+  3. <wiki_dir>/03-Team/reports/wiki-health-trends.md (Obsidian convention)
+
+If none exist we still show coverage counts and a friendly empty-state
+pointing at the wiki_dir we resolved (and where to put the trends file).
 """
 from __future__ import annotations
 import re
@@ -62,23 +67,48 @@ def _parse_trends(text: str) -> list[dict[str, Any]]:
     return sections
 
 
-def _trends_path(working_dir: str | None) -> Path | None:
+def _resolve_wiki_dir(working_dir: str | None, wiki_dir_setting: str) -> Path | None:
+    """`wiki_dir_setting` can be absolute or relative-to-working_dir."""
+    if not wiki_dir_setting:
+        return None
+    p = Path(wiki_dir_setting)
+    if p.is_absolute():
+        return p
     if not working_dir:
         return None
-    p = Path(working_dir) / "docs" / "wiki" / "wiki-health-trends.md"
-    return p
+    return Path(working_dir) / p
 
 
-def _modules_snapshot(working_dir: str | None) -> dict[str, int]:
+def _trends_candidates(wiki_root: Path) -> list[Path]:
+    """Conventional locations where wiki-health-trends.md might live."""
+    return [
+        wiki_root / "wiki-health-trends.md",
+        wiki_root / "reports" / "wiki-health-trends.md",
+        wiki_root / "03-Team" / "reports" / "wiki-health-trends.md",
+    ]
+
+
+def _coverage_snapshot(wiki_root: Path | None) -> dict[str, int]:
+    """Count covered modules and learning notes inside `wiki_root`.
+
+    Covered = any `.md` file at the wiki root (or inside `domains/` for
+    the modular layout). Learning notes = files under `learning/` if it
+    exists. Both are best-effort heuristics; the original counted only
+    `<vault>/04-Knowledge/modules/<x>/<x>.md` pairs."""
     out = {"covered": 0, "learning_notes": 0}
-    if not working_dir:
+    if wiki_root is None or not wiki_root.exists():
         return out
-    wiki = Path(working_dir) / "docs" / "wiki"
-    if not wiki.exists():
-        return out
-    out["covered"] = sum(1 for d in wiki.iterdir() if d.is_dir())
-    learning = wiki / "learning"
-    if learning.exists():
+    domains = wiki_root / "domains"
+    if domains.is_dir():
+        out["covered"] = sum(1 for _ in domains.glob("*.md"))
+    else:
+        # Flat layout — count top-level .md files (excluding README/INDEX).
+        out["covered"] = sum(
+            1 for p in wiki_root.glob("*.md")
+            if p.stem.lower() not in ("readme", "index")
+        )
+    learning = wiki_root / "learning"
+    if learning.is_dir():
         out["learning_notes"] = sum(1 for _ in learning.rglob("*.md"))
     return out
 
@@ -86,20 +116,35 @@ def _modules_snapshot(working_dir: str | None) -> dict[str, int]:
 @router.get("/p/{slug}/wiki-health")
 async def project_wiki_health(request: Request, slug: str):
     project = request.state.project
-    path = _trends_path(project.working_dir)
+    resolver = request.app.state.resolver_factory(request)
+    wiki_dir_setting = await resolver.get(project, "wiki_dir", "docs/wiki")
+    wiki_root = _resolve_wiki_dir(project.working_dir, wiki_dir_setting)
+
     series: list[dict[str, Any]] = []
     error: str | None = None
-    if not path:
-        error = "Проект без working_dir — невозможно найти trends-файл."
-    elif not path.exists():
-        error = f"Файл не найден: {path}. Создайте его в docs/wiki/."
-    else:
-        try:
-            series = _parse_trends(path.read_text(encoding="utf-8"))
-        except Exception as e:
-            error = f"Ошибка парсинга: {type(e).__name__}: {e}"
+    trends_path: Path | None = None
 
-    snapshot = _modules_snapshot(project.working_dir)
+    if wiki_root is None:
+        error = "wiki_dir не настроен и working_dir пуст — заполните настройки проекта."
+    elif not wiki_root.exists():
+        error = f"Каталог вики не найден: {wiki_root}. Проверьте wiki_dir."
+    else:
+        for cand in _trends_candidates(wiki_root):
+            if cand.exists():
+                trends_path = cand
+                break
+        if trends_path is None:
+            error = (
+                f"Файл трендов не найден. Положите его сюда: "
+                f"{wiki_root / 'wiki-health-trends.md'}"
+            )
+        else:
+            try:
+                series = _parse_trends(trends_path.read_text(encoding="utf-8"))
+            except Exception as e:
+                error = f"Ошибка парсинга {trends_path}: {type(e).__name__}: {e}"
+
+    snapshot = _coverage_snapshot(wiki_root)
     latest = series[-1] if series else None
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
     projects = await request.app.state.projects.list_all(only_enabled=True)
@@ -112,7 +157,10 @@ async def project_wiki_health(request: Request, slug: str):
             "snapshot": snapshot,
             "latest": latest,
             "error": error,
-            "trends_path": str(path) if path else "",
+            "wiki_root": str(wiki_root) if wiki_root else "",
+            "trends_path": str(trends_path) if trends_path else (
+                str(wiki_root / "wiki-health-trends.md") if wiki_root else ""
+            ),
             "today": date.today().isoformat(),
             "projects": projects,
             "locale": locale,
