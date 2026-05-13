@@ -1,19 +1,23 @@
 """GET /p/{slug}/ai-usage — per-project token/cost analytics."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 
 
 router = APIRouter()
 
 
 @router.get("/p/{slug}/ai-usage")
-async def project_ai_usage(request: Request, slug: str):
+async def project_ai_usage(
+    request: Request, slug: str,
+    preset: str | None = Query(default=None),
+    model: str | None = Query(default=None),
+):
     project = request.state.project
     db = request.app.state.db
     from dreaming.services.ai_usage_stats import project_summary
     try:
-        summary = await project_summary(db, project.id)
+        summary = await project_summary(db, project.id, preset=preset, model=model)
     except Exception as e:
         summary = {"error": f"{type(e).__name__}: {e}"}
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)

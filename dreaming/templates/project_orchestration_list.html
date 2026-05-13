@@ -21,7 +21,8 @@
   <aside class="rounded-lg overflow-hidden flex flex-col" style="background: var(--bg-card); border:1px solid var(--border-subtle); max-height: 78vh;">
     <div class="px-3 py-2.5 flex items-center justify-between" style="border-bottom:1px solid var(--border-subtle);">
       <span class="text-xs font-semibold uppercase tracking-wider" style="color: var(--text-faint);">Запуски</span>
-      <a href="#start-form" class="text-xs rounded px-2 py-1" style="background: var(--brand); color:#fff;">+ Новый</a>
+      <button type="button" onclick="document.getElementById('orch-goal').focus(); document.getElementById('start-form').scrollIntoView({behavior:'smooth', block:'nearest'});"
+              class="text-xs rounded px-2.5 py-1" style="background: var(--brand); color:#fff;">+ Новый чат</button>
     </div>
     <div class="flex-1 overflow-y-auto">
       {% for r in runs %}
@@ -80,7 +81,7 @@
     <div class="p-4 flex-1 overflow-y-auto" id="start-form">
       <form method="post" action="/p/{{ project.slug }}/orchestration/start" class="space-y-3">
         <label class="block text-xs font-medium" style="color: var(--text-muted);">Цель orchestration-сессии</label>
-        <textarea name="goal" required rows="6" class="w-full rounded p-2 text-sm"
+        <textarea id="orch-goal" name="goal" required rows="6" class="w-full rounded p-2 text-sm"
                   placeholder="например: «декомпозируй фичу X и распиши план по этапам»"></textarea>
         <button class="w-full rounded py-2 text-sm font-semibold"
                 style="background: var(--brand); color:#fff;">Start Orchestrator</button>

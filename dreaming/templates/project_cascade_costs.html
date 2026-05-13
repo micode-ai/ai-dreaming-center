@@ -1,47 +1,131 @@
 {% extends "_project_layout.html" %}
 {% set active='cascade_costs' %}
 {% block project_content %}
+
 {% if error %}
-<p class="text-sm text-red-700">Ошибка: <code>{{ error }}</code></p>
-{% elif rows %}
-<div class="grid grid-cols-2 gap-4 mb-4">
-  <div class="bg-white p-3 rounded shadow">
-    <div class="text-xs muted">Runs (latest 50)</div>
-    <div class="text-2xl font-bold">{{ rows|length }}</div>
+<div class="rounded-lg p-3 mb-4 text-sm"
+     style="background: rgba(239, 68, 68, 0.10); border:1px solid rgba(239, 68, 68, 0.35); color: var(--status-failed);">
+  ⚠ {{ error }}
+</div>
+{% endif %}
+
+<div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+  <div>
+    <h2 class="text-lg font-semibold" style="color: var(--text-strong);">Стоимость оркестраций</h2>
+    <p class="text-xs mt-0.5" style="color: var(--text-faint);">
+      USD и токены по всем orchestration-запускам проекта · JOIN orchestrator_runs ⋈ ai_usage_events
+    </p>
   </div>
-  <div class="bg-white p-3 rounded shadow">
-    <div class="text-xs muted">Total cost USD</div>
-    <div class="text-2xl font-bold">${{ "%.4f" | format(total_cost) }}</div>
+  <div class="text-xs" style="color: var(--text-faint);">
+    Цены ориентировочные ($/1M): opus 15/75, sonnet 3/15, haiku 0.8/4
   </div>
 </div>
-<table class="w-full bg-white rounded shadow text-sm">
-  <thead class="text-left border-b"><tr>
-    <th class="p-2">run_id</th>
-    <th class="p-2">goal</th>
-    <th class="p-2">status</th>
-    <th class="p-2 text-right">events</th>
-    <th class="p-2 text-right">cost USD</th>
+
+{% set f = filters %}
+<div class="rounded-lg p-3 mb-5 flex flex-wrap items-center gap-3"
+     style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+  <div class="flex items-center gap-1">
+    {% for p_, label in [('today','Сегодня'), ('7d','7 дней'), ('30d','30 дней'), ('all','Всё')] %}
+    <a href="?preset={{ p_ }}{% if f.status %}&status={{ f.status }}{% endif %}"
+       class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+       style="{% if f.preset == p_ %}background: var(--brand); color:#fff; border:1px solid var(--brand);{% else %}background: var(--bg-card); color: var(--text-muted); border:1px solid var(--border-subtle);{% endif %}">
+      {{ label }}
+    </a>
+    {% endfor %}
+  </div>
+
+  <form method="get" class="flex items-center gap-2 ml-2" onchange="this.submit()">
+    <input type="hidden" name="preset" value="{{ f.preset }}">
+    <label class="text-xs" style="color: var(--text-muted);">Статус</label>
+    <select name="status" class="rounded-lg px-2 py-1.5 text-xs" style="min-width: 160px;">
+      <option value="">Все</option>
+      {% for s in ['running','completed','failed','cancelled'] %}
+      <option value="{{ s }}" {% if f.status == s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </form>
+
+  <div class="ml-auto text-xs font-mono" style="color: var(--text-faint);">
+    {% if f.start %}{{ f.start[:19] }} →{% else %}— →{% endif %}
+    {% if f.end %}{{ f.end[:19] }}{% else %}now{% endif %}
+  </div>
+</div>
+
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+  <div class="metric metric-info">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">Runs</div>
+    <div class="text-2xl font-semibold mt-1" style="color: var(--text-strong);">{{ kpi.runs }}</div>
+  </div>
+  <div class="metric metric-success">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">Total USD</div>
+    <div class="text-2xl font-semibold mt-1" style="color: var(--status-success);">${{ "%.4f" | format(kpi.total_cost_usd) }}</div>
+  </div>
+  <div class="metric metric-running">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">Total tokens</div>
+    <div class="text-2xl font-semibold mt-1" style="color: var(--text-strong);">{{ "{:,}".format(kpi.total_tokens) }}</div>
+  </div>
+  <div class="metric metric-timeout">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">Avg cost / run</div>
+    <div class="text-2xl font-semibold mt-1" style="color: var(--text-strong);">${{ "%.4f" | format(kpi.avg_cost_usd) }}</div>
+  </div>
+  <div class="metric metric-info">
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">Events</div>
+    <div class="text-2xl font-semibold mt-1" style="color: var(--text-strong);">{{ kpi.total_events }}</div>
+  </div>
+</div>
+
+{% if kpi.status_counts %}
+<div class="flex items-center gap-2 mb-5 flex-wrap">
+  <span class="text-xs uppercase tracking-wider" style="color: var(--text-faint);">По статусам</span>
+  {% for status, count in kpi.status_counts.items() %}
+  <span class="badge badge-{{ {'running':'running','completed':'success','failed':'failed','cancelled':'neutral'}.get(status, 'neutral') }}">
+    {{ status }} · {{ count }}
+  </span>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if rows %}
+<table class="data-table">
+  <thead><tr>
+    <th>run</th>
+    <th>goal</th>
+    <th>status</th>
+    <th>started</th>
+    <th class="text-right">events</th>
+    <th class="text-right">tokens</th>
+    <th class="text-right">cost USD</th>
   </tr></thead>
   <tbody>
   {% for r in rows %}
-  <tr class="border-b">
-    <td class="p-2 font-mono text-xs">{{ r.run_id[:8] }}…</td>
-    <td class="p-2 text-xs">{{ r.goal[:80] }}</td>
-    <td class="p-2 text-xs">{{ r.status }}</td>
-    <td class="p-2 text-right text-xs">{{ r.event_count }}</td>
-    <td class="p-2 text-right">${{ "%.4f" | format(r.total_cost_usd) }}</td>
+  <tr>
+    <td>
+      <a href="/p/{{ project.slug }}/orchestration/{{ r.run_id }}"
+         class="font-mono text-xs" style="color: var(--brand-hover); text-decoration: underline;">{{ r.run_id[:8] }}…</a>
+    </td>
+    <td class="text-xs">{{ r.goal[:90] }}</td>
+    <td>
+      <span class="badge badge-{{ {'running':'running','completed':'success','failed':'failed','cancelled':'neutral'}.get(r.status, 'neutral') }}">
+        {{ r.status or '—' }}
+      </span>
+    </td>
+    <td class="text-xs muted whitespace-nowrap font-mono">{{ (r.started_at or '')[:19] }}</td>
+    <td class="text-right text-xs">{{ r.event_count }}</td>
+    <td class="text-right text-xs">{{ "{:,}".format(r.total_tokens) }}</td>
+    <td class="text-right font-mono">${{ "%.4f" | format(r.total_cost_usd) }}</td>
   </tr>
   {% endfor %}
   </tbody>
 </table>
 {% else %}
-<div class="bg-white p-4 rounded shadow text-sm">
-  <p class="muted mb-2">Пока нет orchestration runs — соответственно нет и costs.</p>
-  <p class="text-xs muted">
+<div class="rounded-lg p-4 text-sm" style="background: var(--bg-card); border:1px solid var(--border-subtle); color: var(--text-muted);">
+  <p class="mb-2">Пока нет orchestration runs за выбранный период.</p>
+  <p class="text-xs" style="color: var(--text-faint);">
     Costs появляются автоматически после первого запуска Orchestrator на странице
-    <a class="text-blue-600 underline" href="/p/{{ project.slug }}/orchestration">Orchestration</a>.
+    <a class="underline" style="color: var(--brand-hover);" href="/p/{{ project.slug }}/orchestration">Оркестрация</a>.
     Каждый run копит usage-события (input/output токены, инструменты) — эта страница агрегирует
-    их в долларах по последним 50 runs.
+    их в долларах и токенах. Cost_usd ищется в payload_json orchestrator_events;
+    tokens приходят через JOIN ai_usage_events по claude session_id.
   </p>
 </div>
 {% endif %}
