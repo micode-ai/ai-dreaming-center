@@ -2,24 +2,71 @@
 {% set active='live' %}
 {% block project_content %}
 {% if active_runs %}
-<div class="space-y-4">
+<div class="flex flex-col gap-4 h-[calc(100vh-260px)]">
 {% for key, agent, is_cmd in active_runs %}
-  <div class="bg-white rounded shadow p-3">
-    <div class="flex items-baseline gap-3 mb-2">
-      <h2 class="font-semibold">{{ agent }}</h2>
-      {% if is_cmd %}<span class="text-xs bg-slate-200 text-slate-700 rounded px-2 py-0.5 font-mono">command</span>{% endif %}
+  <div class="bg-white rounded-lg border border-slate-200 shadow-sm p-3 flex flex-col flex-1 min-h-0">
+    <div class="flex items-center gap-3 mb-2">
+      <h2 class="font-semibold text-slate-900">{{ agent }}</h2>
+      {% if is_cmd %}<span class="badge badge-neutral">command</span>{% endif %}
       <span class="font-mono text-xs muted">{{ key }}</span>
+      <span class="badge badge-timeout"
+            data-status="connecting"
+            data-label-connecting="{{ 'p.live.status.connecting' | t(locale=locale) }}"
+            data-label-live="{{ 'p.live.status.live' | t(locale=locale) }}"
+            data-label-error="{{ 'p.live.status.error' | t(locale=locale) }}"
+            data-label-ended="{{ 'p.live.status.ended' | t(locale=locale) }}"
+            id="status-{{ agent }}">
+        <span class="status-dot dot dot-pulse" aria-hidden="true"></span>
+        <span class="status-label">{{ "p.live.status.connecting" | t(locale=locale) }}</span>
+      </span>
       <form method="post" action="/p/{{ project.slug }}/live/kill/{{ agent }}" class="ml-auto">
-        <button class="text-xs px-2 py-1 border rounded text-red-600">Kill</button>
+        <button class="text-xs px-3 py-1 rounded-md border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 hover:border-red-300 transition-colors duration-150">{{ "p.live.kill" | t(locale=locale) }}</button>
       </form>
     </div>
-    <pre id="log-{{ agent }}" class="bg-slate-900 text-slate-100 rounded p-3 overflow-auto max-h-96 text-xs"></pre>
+    <div class="relative flex-1 min-h-0">
+      <pre id="log-{{ agent }}"
+           role="log"
+           aria-live="polite"
+           aria-label="{{ agent }} log"
+           class="absolute inset-0 bg-slate-900 text-slate-100 rounded p-3 overflow-auto text-xs font-mono leading-relaxed whitespace-pre-wrap"></pre>
+      <div id="log-empty-{{ agent }}"
+           class="absolute inset-0 flex items-center justify-center text-slate-400 text-xs italic pointer-events-none select-none">
+        {{ "p.live.waiting" | t(locale=locale) }}
+      </div>
+    </div>
     <script>
       (() => {
         const target = document.getElementById('log-{{ agent }}');
+        const empty = document.getElementById('log-empty-{{ agent }}');
+        const statusEl = document.getElementById('status-{{ agent }}');
+        const dot = statusEl.querySelector('.status-dot');
+        const label = statusEl.querySelector('.status-label');
+
+        const setStatus = (state) => {
+          statusEl.dataset.status = state;
+          label.textContent = statusEl.dataset['label' + state.charAt(0).toUpperCase() + state.slice(1)];
+          statusEl.classList.remove('badge-timeout', 'badge-live', 'badge-failed', 'badge-neutral');
+          dot.classList.remove('dot-pulse');
+          if (state === 'connecting') { statusEl.classList.add('badge-timeout'); dot.classList.add('dot-pulse'); }
+          else if (state === 'live') { statusEl.classList.add('badge-live'); dot.classList.add('dot-pulse'); }
+          else if (state === 'error') { statusEl.classList.add('badge-failed'); }
+          else if (state === 'ended') { statusEl.classList.add('badge-neutral'); }
+        };
+
+        const nearBottom = () => (target.scrollHeight - target.scrollTop - target.clientHeight) < 40;
+
+        const append = (line) => {
+          if (empty) { empty.remove(); }
+          const stick = nearBottom();
+          target.textContent += line + "\n";
+          if (stick) { target.scrollTop = target.scrollHeight; }
+        };
+
         const es = new EventSource('/p/{{ project.slug }}/live/stream/{{ agent }}');
-        es.addEventListener('log', e => { target.textContent += e.data + "\n"; target.scrollTop = target.scrollHeight; });
-        es.addEventListener('end', () => { es.close(); target.textContent += "\n[stream ended]\n"; });
+        es.addEventListener('open', () => setStatus('live'));
+        es.addEventListener('log', e => { setStatus('live'); append(e.data); });
+        es.addEventListener('end', () => { es.close(); setStatus('ended'); append('\n[stream ended]'); });
+        es.addEventListener('error', () => { setStatus('error'); });
       })();
     </script>
   </div>
