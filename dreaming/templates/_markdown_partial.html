@@ -27,8 +27,8 @@
          );
        </script>
 #}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown-light.min.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown-dark.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github-dark.min.css">
 <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/highlight.js@11/highlight.min.js"></script>
 <style>
@@ -36,9 +36,19 @@
      which is too generous for narrower containers (modal, in-page card).
      Use 1.5rem padding (matching Tailwind's `p-6`) and let max-width be the
      container's width. Outer template should NOT add another `p-*` on the
-     same element — `.markdown-body` owns its own padding. */
-  .markdown-body { box-sizing: border-box; min-width: 200px; max-width: 100%; padding: 1.5rem; }
-  .markdown-body pre { background: #f6f8fa; }  /* hljs-github gives the code element its own bg */
+     same element — `.markdown-body` owns its own padding.
+
+     Dark surface that blends with the rest of the app shell. github-markdown-
+     dark.css uses GitHub's #0d1117 — we override to our --bg-card so it sits
+     flush inside our cards. */
+  .markdown-body {
+    box-sizing: border-box; min-width: 200px; max-width: 100%; padding: 1.5rem;
+    background-color: var(--bg-card) !important;
+    color: var(--text-body) !important;
+    border-radius: 0.625rem;
+  }
+  .markdown-body pre { background: #0c1322 !important; }
+  .markdown-body code:not(pre code) { background: var(--bg-elevated) !important; }
 </style>
 <script>
   (function() {
