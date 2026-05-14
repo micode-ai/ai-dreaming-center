@@ -365,3 +365,43 @@ async def cascade_finish(request: Request, run_id: str):
     if ok:
         await hub.append_event(run_id, "cascade_finished", {})
     return JSONResponse({"ok": ok})
+
+
+# -- Topics ingest (slash-command callback) ----------------------
+
+class TopicIngestIn(BaseModel):
+    title: str
+    module: str = ""
+    target_agents: str = ""
+    question: str = ""
+    why_important: str = ""
+
+
+@router.post("/p/{slug}/topics/ingest")
+async def topics_ingest(request: Request, slug: str, payload: TopicIngestIn):
+    """Called by /topics-scan slash-command running inside the project. One POST
+    per topic. We don't dedupe at this layer — the slash-command is responsible
+    for not proposing duplicates (it can GET /topics/list first)."""
+    project = await _resolve_project(request, slug)
+    title = payload.title.strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="title required")
+    tid = await request.app.state.db.add_custom_topic(
+        project.id, title, payload.module.strip(),
+        payload.target_agents.strip(), payload.question.strip(),
+        payload.why_important.strip(),
+    )
+    return JSONResponse({"id": tid}, status_code=201)
+
+
+@router.get("/p/{slug}/topics/list")
+async def topics_list(request: Request, slug: str):
+    """Called by /topics-scan to see what already exists so it can skip
+    duplicates. Returns active topics only."""
+    project = await _resolve_project(request, slug)
+    rows = await request.app.state.db.list_custom_topics(project.id, active_only=True)
+    return JSONResponse([
+        {"id": r["id"], "title": r["title"], "module": r["module"],
+         "target_agents": r["target_agents"]}
+        for r in rows
+    ])
