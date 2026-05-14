@@ -93,6 +93,11 @@ async def _nightly_learning(app_state, project_id: int):
             extra_prompt = await build_topics_extra_prompt(
                 db, proj.id, row["agent_name"],
             )
+        except Exception as e:
+            log.warning("nightly_learning [%s] %s: topics helper failed: %s",
+                        proj.slug, row["agent_name"], e)
+            extra_prompt = ""
+        try:
             await pm.start_session(
                 proj,
                 agent_name=row["agent_name"],
