@@ -4,48 +4,93 @@
 <h1 class="text-2xl font-bold mb-4" style="color: var(--text-strong);">{{ "projects.title" | t(locale=locale) }}</h1>
 
 {% if projects %}
-<table class="w-full bg-white rounded shadow text-sm">
-  <thead class="text-left border-b"><tr>
-    <th class="p-2">slug</th>
-    <th class="p-2">label</th>
-    <th class="p-2">working_dir</th>
-    <th class="p-2">enabled</th>
-    <th class="p-2">default</th>
-    <th class="p-2"></th>
+<table class="data-table">
+  <thead><tr>
+    <th>slug</th>
+    <th>label</th>
+    <th>working_dir</th>
+    <th>enabled</th>
+    <th>default</th>
+    <th></th>
   </tr></thead>
   <tbody>
   {% for p in projects %}
-  <tr class="border-b">
-    <td class="p-2 font-mono">{{ p.slug }}</td>
-    <td class="p-2">{{ p.label }}</td>
-    <td class="p-2 text-xs muted">{{ p.working_dir }}</td>
-    <td class="p-2">{{ "✓" if p.enabled else "—" }}</td>
-    <td class="p-2">{{ "★" if p.is_default else "" }}</td>
-    <td class="p-2">
-      <form method="post" action="/projects/{{ p.id }}/toggle" class="inline">
-        <button class="text-xs px-2 py-1 border rounded">{{ "Disable" if p.enabled else "Enable" }}</button>
+  <tr>
+    <td>
+      <form method="post" action="/projects/{{ p.id }}/rename"
+            class="flex items-center gap-1 js-slug-form" data-original-slug="{{ p.slug }}">
+        <input name="slug" value="{{ p.slug }}" required pattern="^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$"
+               class="font-mono text-xs rounded px-2 py-1" style="width: 14rem;"
+               title="a-z, 0-9 и дефис; начинается и кончается буквой/цифрой">
+        <button class="text-xs px-2 py-1 rounded" style="background: var(--bg-hover); color: var(--text-muted); border:1px solid var(--border-subtle);" title="Сохранить slug">↵</button>
       </form>
-      <form method="post" action="/projects/{{ p.id }}/delete" class="inline"
-            data-confirm="Введите slug `{{ p.slug }}` чтобы подтвердить удаление проекта:"
+    </td>
+    <td>
+      <form method="post" action="/projects/{{ p.id }}/rename" class="flex items-center gap-1">
+        <input name="label" value="{{ p.label }}" required class="rounded px-2 py-1" style="width: 16rem;">
+        <button class="text-xs px-2 py-1 rounded" style="background: var(--bg-hover); color: var(--text-muted); border:1px solid var(--border-subtle);" title="Сохранить название">↵</button>
+      </form>
+    </td>
+    <td class="text-xs font-mono" style="color: var(--text-faint);">{{ p.working_dir }}</td>
+    <td>{{ "✓" if p.enabled else "—" }}</td>
+    <td>{{ "★" if p.is_default else "" }}</td>
+    <td class="whitespace-nowrap">
+      <form method="post" action="/projects/{{ p.id }}/toggle" class="inline">
+        <button class="text-xs px-2 py-1 rounded" style="border:1px solid var(--border-subtle);">{{ "Disable" if p.enabled else "Enable" }}</button>
+      </form>
+      <form method="post" action="/projects/{{ p.id }}/delete" class="inline ml-1"
+            data-confirm="Введите slug &laquo;{{ p.slug }}&raquo; чтобы подтвердить удаление проекта:"
             data-confirm-input="{{ p.slug }}"
             data-confirm-variant="danger">
-        <button class="text-xs px-2 py-1 border rounded text-red-600">Delete</button>
+        <button class="text-xs px-2 py-1 rounded" style="color: var(--status-failed); border:1px solid var(--border-subtle);">Delete</button>
       </form>
     </td>
   </tr>
   {% endfor %}
   </tbody>
 </table>
+<p class="text-xs mt-3" style="color: var(--text-faint);">
+  ✏ Сохранить — нажми <span class="font-mono">↵</span> рядом с полем (или Enter в поле).
+  Slug меняет URL и job-ы расписания, поэтому требует подтверждение.
+</p>
+
+<script>
+  // Slug-rename confirmation: gate the submit only when the slug actually
+  // changed. The shared data-confirm/_app_modal protocol re-submits the form
+  // after the user clicks Confirm, which would loop our listener forever if
+  // we used it here — so we call window.appConfirm() directly and set an
+  // `acked` flag to let the next submit through.
+  document.querySelectorAll('form.js-slug-form').forEach(form => {
+    form.addEventListener('submit', async (e) => {
+      if (form.dataset.acked === '1') return;
+      const orig = form.dataset.originalSlug || '';
+      const next = (form.elements.slug.value || '').trim().toLowerCase();
+      if (!next || next === orig) return;  // no diff → submit straight away
+      e.preventDefault();
+      e.stopPropagation();
+      const ok = await window.appConfirm(
+        `Сменить slug проекта с «${orig}» на «${next}»?\n` +
+        `URL изменится: /p/${orig}/… → /p/${next}/… — старые закладки сломаются.\n` +
+        `Per-project настройки и сессии остаются (они привязаны к id), scheduler-job-ы будут перевешены.`,
+        { variant: 'danger' }
+      );
+      if (ok) {
+        form.dataset.acked = '1';
+        form.submit();
+      }
+    }, true);
+  });
+</script>
 {% else %}
 <p class="muted">{{ "projects.empty" | t(locale=locale) }}</p>
-<p class="mt-4"><a href="/setup" class="text-blue-600 underline">→ /setup</a></p>
+<p class="mt-4"><a href="/setup" style="color: var(--brand-hover); text-decoration: underline;">→ /setup</a></p>
 {% endif %}
 
-<div class="mt-6 bg-white p-4 rounded shadow">
-  <h2 class="font-semibold mb-2">Импорт из projects_root</h2>
-  <form method="post" action="/projects/import">
-    <input name="root" value="{{ settings.projects_root }}" class="border rounded p-1 w-96">
-    <button class="bg-blue-600 text-white px-3 py-1 rounded">Просканировать и импортировать новые</button>
+<div class="mt-6 rounded-lg p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+  <h2 class="font-semibold mb-2" style="color: var(--text-strong);">Импорт из projects_root</h2>
+  <form method="post" action="/projects/import" class="flex gap-2">
+    <input name="root" value="{{ settings.projects_root }}" class="rounded p-1 flex-1" style="max-width: 32rem;">
+    <button class="text-sm rounded px-3 py-1" style="background: var(--brand); color:#fff;">Просканировать и импортировать новые</button>
   </form>
 </div>
 {% endblock %}
