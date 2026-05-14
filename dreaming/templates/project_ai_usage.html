@@ -8,7 +8,19 @@
 <p style="color: var(--status-failed);" class="text-sm">Ошибка: <code>{{ summary.error }}</code></p>
 {% else %}
 
+{# Compact-number formatter used everywhere on this page. #}
+{% macro num(n) -%}
+  {%- if n is none -%}0
+  {%- elif n >= 1000000000 -%}{{ "%.2f"|format(n / 1000000000) }}B
+  {%- elif n >= 1000000 -%}{{ "%.2f"|format(n / 1000000) }}M
+  {%- elif n >= 1000 -%}{{ "%.1f"|format(n / 1000) }}K
+  {%- else -%}{{ n }}
+  {%- endif -%}
+{%- endmacro %}
+
 {% set f = summary.filters %}
+{% set k = summary.kpi %}
+
 <div class="rounded-lg p-3 mb-5 flex flex-wrap items-center gap-3"
      style="background: var(--bg-card); border:1px solid var(--border-subtle);">
   <div class="flex items-center gap-1">
@@ -21,12 +33,10 @@
     {% endfor %}
   </div>
 
-  <form method="get" class="flex items-center gap-2 ml-2"
-        onchange="this.submit()">
+  <form method="get" class="flex items-center gap-2 ml-2" onchange="this.submit()">
     <input type="hidden" name="preset" value="{{ f.preset }}">
     <label class="text-xs" style="color: var(--text-muted);">Модель</label>
-    <select name="model" class="rounded-lg px-2 py-1.5 text-xs"
-            style="min-width: 220px;">
+    <select name="model" class="rounded-lg px-2 py-1.5 text-xs" style="min-width: 220px;">
       <option value="">Все модели</option>
       {% for m in summary.models_catalog %}
       <option value="{{ m }}" {% if f.model == m %}selected{% endif %}>{{ m }}</option>
@@ -39,111 +49,193 @@
   </div>
 </div>
 
-{% set ft = summary.filtered %}
-{% set ft_total = ft.total_tokens or 0 %}
-{% set ft_cache_read = ft.cache_read_tokens or 0 %}
-{% set ft_hit = (100.0 * ft_cache_read / ft_total) if ft_total else 0 %}
-
-<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-  <div class="metric metric-info">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">Total (фильтр)</div>
-    <div class="text-2xl font-semibold mt-1" style="color: var(--text-strong);">{{ "{:,}".format(ft_total) }}</div>
+{# 1. KPI cards (same shape as original) #}
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+  <div class="rounded-xl p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+    <p class="text-xs uppercase tracking-wider mb-1" style="color: var(--text-faint);">Всего токенов</p>
+    <p class="text-2xl font-bold" style="color: var(--text-strong);">{{ num(k.grand_total) }}</p>
+    <p class="text-xs mt-1" style="color: var(--text-faint);">{{ k.events }} событий · {{ k.sessions }} сессий</p>
   </div>
-  <div class="metric metric-running">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">Input</div>
-    <div class="text-2xl font-semibold mt-1" style="color: var(--text-strong);">{{ "{:,}".format(ft.input_tokens or 0) }}</div>
+  <div class="rounded-xl p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+    <p class="text-xs uppercase tracking-wider mb-1" style="color: var(--text-faint);">Input / Output</p>
+    <p class="text-sm" style="color: var(--text-body);">
+      <span style="color: var(--status-success);">↑</span> {{ num(k.input) }}
+      <span style="color: var(--text-faint);" class="mx-1">·</span>
+      <span style="color: var(--status-running);">↓</span> {{ num(k.output) }}
+    </p>
+    <p class="text-xs mt-2" style="color: var(--text-faint);">avg/сессия: {{ num(k.avg_per_session) }}</p>
   </div>
-  <div class="metric metric-success">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">Output</div>
-    <div class="text-2xl font-semibold mt-1" style="color: var(--text-strong);">{{ "{:,}".format(ft.output_tokens or 0) }}</div>
+  <div class="rounded-xl p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+    <p class="text-xs uppercase tracking-wider mb-1" style="color: var(--text-faint);">Cache read / create</p>
+    <p class="text-sm" style="color: var(--text-body);">
+      <span style="color: #a78bfa;">⇣</span> {{ num(k.cache_read) }}
+      <span style="color: var(--text-faint);" class="mx-1">·</span>
+      <span style="color: var(--status-timeout);">⇡</span> {{ num(k.cache_creation) }}
+    </p>
+    <p class="text-xs mt-2" style="color: var(--text-faint);">cache hit: <span style="color: #c4b5fd;">{{ k.cache_hit_pct }}%</span></p>
   </div>
-  <div class="metric metric-timeout">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">Cache_read</div>
-    <div class="text-2xl font-semibold mt-1" style="color: var(--text-strong);">{{ "{:,}".format(ft_cache_read) }}</div>
-  </div>
-  <div class="metric metric-info">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">Cache_create</div>
-    <div class="text-2xl font-semibold mt-1" style="color: var(--text-strong);">{{ "{:,}".format(ft.cache_creation_tokens or 0) }}</div>
-  </div>
-  <div class="metric metric-success">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">Cache hit rate</div>
-    <div class="text-2xl font-semibold mt-1" style="color: var(--text-strong);">{{ "{:.1f}".format(ft_hit) }}%</div>
+  <div class="rounded-xl p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+    <p class="text-xs uppercase tracking-wider mb-1" style="color: var(--text-faint);">Subagents</p>
+    <p class="text-2xl font-bold" style="color: var(--text-strong);">{{ k.sidechain_share_pct }}%</p>
+    <p class="text-xs mt-1" style="color: var(--text-faint);">{{ num(k.sidechain_total) }} в sidechain</p>
   </div>
 </div>
 
+{# 2. Daily series #}
+<div class="rounded-xl p-5 mb-6" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+  <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">Расход по дням ({{ f.preset }})</h2>
+  <div style="height: 18rem;"><canvas id="dailyChart"></canvas></div>
+</div>
+
+{# 3 + 6. Models / sidechain side-by-side #}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+  <div class="rounded-xl p-5 lg:col-span-2" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+    <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">По моделям</h2>
+    {% if summary.by_model %}
+    <div style="height: 16rem;"><canvas id="modelChart"></canvas></div>
+    {% else %}
+    <p class="text-sm" style="color: var(--text-faint);">Нет данных</p>
+    {% endif %}
+  </div>
+  <div class="rounded-xl p-5" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+    <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">Main vs Subagents</h2>
+    <div style="height: 16rem;" class="flex items-center justify-center"><canvas id="sidechainChart"></canvas></div>
+    <div class="flex items-center justify-between text-xs mt-3">
+      <span style="color: var(--status-success);">Main · {{ num(summary.main_sub.main) }}</span>
+      <span style="color: var(--status-timeout);">Subagents · {{ num(summary.main_sub.sub) }}</span>
+    </div>
+  </div>
+</div>
+
+{# 5. Top sessions #}
+<div class="rounded-xl p-5 mb-6" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+  <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">Топ сессий</h2>
+  {% if summary.top_sessions %}
+  <table class="w-full text-sm">
+    <thead class="text-xs uppercase tracking-wider" style="color: var(--text-faint);">
+      <tr>
+        <th class="text-left pb-2">Session</th>
+        <th class="text-left pb-2">Модель</th>
+        <th class="text-right pb-2">Длительность</th>
+        <th class="text-right pb-2">События</th>
+        <th class="text-right pb-2">Токены</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in summary.top_sessions %}
+      <tr style="border-top:1px solid var(--border-subtle);">
+        <td class="py-2 font-mono text-xs" style="color: var(--text-faint);">{{ s.session_id[:8] }}…</td>
+        <td class="py-2 text-xs" style="color: var(--text-faint);">{{ s.model or '(unknown)' }}</td>
+        <td class="py-2 text-right" style="color: var(--text-faint);">{{ s.duration_minutes }} мин</td>
+        <td class="py-2 text-right" style="color: var(--text-faint);">{{ s.events }}</td>
+        <td class="py-2 text-right font-semibold" style="color: var(--text-strong);">{{ num(s.total_tokens) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="text-sm" style="color: var(--text-faint);">Нет данных</p>
+  {% endif %}
+</div>
+
+{# 7. Learning sessions (week stats + recent) #}
+{% set wk = summary.learning.week %}
+<div class="rounded-xl p-5 mb-6" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+  <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">Обучающие сессии (за неделю)</h2>
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+    <div class="rounded-lg p-3" style="background: var(--bg-hover);">
+      <p class="text-xs" style="color: var(--text-faint);">Всего</p>
+      <p class="text-xl font-bold" style="color: var(--text-strong);">{{ wk.total or 0 }}</p>
+    </div>
+    <div class="rounded-lg p-3" style="background: var(--bg-hover);">
+      <p class="text-xs" style="color: var(--text-faint);">Успешно</p>
+      <p class="text-xl font-bold" style="color: var(--status-success);">{{ wk.success or 0 }}</p>
+    </div>
+    <div class="rounded-lg p-3" style="background: var(--bg-hover);">
+      <p class="text-xs" style="color: var(--text-faint);">Нет пробела</p>
+      <p class="text-xl font-bold" style="color: var(--status-running);">{{ wk.no_gap or 0 }}</p>
+    </div>
+    <div class="rounded-lg p-3" style="background: var(--bg-hover);">
+      <p class="text-xs" style="color: var(--text-faint);">Ошибки</p>
+      <p class="text-xl font-bold" style="color: var(--status-failed);">{{ wk.failed or 0 }}</p>
+    </div>
+    <div class="rounded-lg p-3" style="background: var(--bg-hover);">
+      <p class="text-xs" style="color: var(--text-faint);">Таймаут</p>
+      <p class="text-xl font-bold" style="color: var(--status-timeout);">{{ wk.timeout or 0 }}</p>
+    </div>
+  </div>
+  {% if summary.learning.recent %}
+  <table class="w-full text-sm">
+    <thead class="text-xs uppercase tracking-wider" style="color: var(--text-faint);">
+      <tr>
+        <th class="text-left pb-2">Агент</th>
+        <th class="text-left pb-2">Тема</th>
+        <th class="text-left pb-2">Статус</th>
+        <th class="text-right pb-2">Начало</th>
+        <th class="text-right pb-2">Длит-ть</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in summary.learning.recent %}
+      <tr style="border-top:1px solid var(--border-subtle);">
+        <td class="py-2" style="color: var(--text-body);">{{ s.agent_name }}</td>
+        <td class="py-2 text-xs" style="color: var(--text-faint);">{{ s.topic or '—' }}</td>
+        <td class="py-2 text-xs">
+          {% if s.status == 'success' %}<span style="color: var(--status-success);">✓ {{ s.status }}</span>
+          {% elif s.status == 'no_gap' %}<span style="color: var(--status-running);">{{ s.status }}</span>
+          {% elif s.status == 'failed' %}<span style="color: var(--status-failed);">{{ s.status }}</span>
+          {% elif s.status == 'timeout' %}<span style="color: var(--status-timeout);">{{ s.status }}</span>
+          {% elif s.status == 'running' %}<span style="color: var(--brand-hover);">running</span>
+          {% else %}<span style="color: var(--text-faint);">{{ s.status or '—' }}</span>{% endif %}
+        </td>
+        <td class="py-2 text-right text-xs font-mono" style="color: var(--text-faint);">{{ (s.started_at or '')[:19] }}</td>
+        <td class="py-2 text-right" style="color: var(--text-faint);">{% if s.duration_minutes %}{{ s.duration_minutes }} мин{% else %}—{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+{# Reference unfiltered context #}
 <div class="flex items-center gap-4 mb-5 text-xs" style="color: var(--text-faint);">
   <span>Для контекста (без фильтра модели):</span>
   <span><span class="font-mono">7d</span> · {{ "{:,}".format(summary.last_7d.total_tokens or 0) }}</span>
   <span><span class="font-mono">30d</span> · {{ "{:,}".format(summary.last_30d.total_tokens or 0) }}</span>
 </div>
 
-{% if summary.daily %}
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-  <div class="lg:col-span-2 rounded-lg p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle); box-shadow: var(--shadow-card);">
-    <div class="text-sm font-semibold mb-2" style="color: var(--text-strong);">Расход по дням</div>
-    <div style="height: 280px;"><canvas id="ds-area"></canvas></div>
-  </div>
-  <div class="rounded-lg p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle); box-shadow: var(--shadow-card);">
-    <div class="text-sm font-semibold mb-2" style="color: var(--text-strong);">Main vs Subagents</div>
-    <div style="height: 280px;"><canvas id="ds-donut"></canvas></div>
-  </div>
-</div>
-{% endif %}
-
-{% if summary.by_model %}
-<h2 class="font-semibold mb-2" style="color: var(--text-strong);">По моделям</h2>
-<table class="data-table">
-  <thead><tr>
-    <th>model</th>
-    <th class="text-right">input</th>
-    <th class="text-right">output</th>
-    <th class="text-right">cache_read</th>
-    <th class="text-right">cache_create</th>
-    <th class="text-right">events</th>
-  </tr></thead>
-  <tbody>
-  {% for m in summary.by_model %}
-  <tr>
-    <td class="font-mono text-xs">{{ m.model or '—' }}</td>
-    <td class="text-right">{{ "{:,}".format(m.input_tokens or 0) }}</td>
-    <td class="text-right">{{ "{:,}".format(m.output_tokens or 0) }}</td>
-    <td class="text-right">{{ "{:,}".format(m.cache_read_tokens or 0) }}</td>
-    <td class="text-right">{{ "{:,}".format(m.cache_creation_tokens or 0) }}</td>
-    <td class="text-right">{{ m.events or 0 }}</td>
-  </tr>
-  {% endfor %}
-  </tbody>
-</table>
-{% else %}
-<p class="muted">Нет данных за выбранный период. Поменяй пресет или фильтр модели.</p>
-{% endif %}
-
 <script>
 (() => {
   const daily = {{ (summary.daily or []) | tojson }};
   const mainSub = {{ (summary.main_sub or {'main': 0, 'sub': 0}) | tojson }};
+  const byModel = {{ (summary.by_model or []) | tojson }};
   if (!window.Chart) return;
   Chart.defaults.color = '#94a3b8';
   Chart.defaults.borderColor = '#1e293b';
   Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+  const compact = v =>
+    Math.abs(v) >= 1e9 ? (v/1e9).toFixed(2) + 'B' :
+    Math.abs(v) >= 1e6 ? (v/1e6).toFixed(2) + 'M' :
+    Math.abs(v) >= 1e3 ? (v/1e3).toFixed(1) + 'K' : v;
 
-  if (daily && daily.length) {
+  // Daily line chart
+  if (daily.length) {
     const labels = daily.map(d => d.ts_date);
     const mk = (label, color, fill, key) => ({
       label, data: daily.map(d => d[key] || 0),
       borderColor: color, backgroundColor: fill,
-      fill: true, tension: 0.3, borderWidth: 1.5,
+      fill: true, tension: 0.3, borderWidth: 1.6,
       pointRadius: 2, pointHoverRadius: 4,
     });
-    new Chart(document.getElementById('ds-area'), {
+    new Chart(document.getElementById('dailyChart'), {
       type: 'line',
       data: {
         labels,
         datasets: [
-          mk('input',      '#60a5fa', 'rgba(96, 165, 250, 0.20)', 'input_tokens'),
-          mk('output',     '#34d399', 'rgba(52, 211, 153, 0.20)', 'output_tokens'),
-          mk('cache_read', '#fbbf24', 'rgba(251, 191, 36, 0.18)', 'cache_read_tokens'),
-          mk('cache_create','#a78bfa','rgba(167, 139, 250, 0.20)','cache_creation_tokens'),
+          mk('Input',       '#34d399', 'rgba(52,211,153,0.1)',  'input_tokens'),
+          mk('Output',      '#38bdf8', 'rgba(56,189,248,0.1)',  'output_tokens'),
+          mk('Cache read',  '#a78bfa', 'rgba(167,139,250,0.15)','cache_read_tokens'),
+          mk('Cache create','#f59e0b', 'rgba(245,158,11,0.10)', 'cache_creation_tokens'),
         ],
       },
       options: {
@@ -154,30 +246,56 @@
           tooltip: { backgroundColor: '#111827', borderColor: '#1e293b', borderWidth: 1, padding: 8 },
         },
         scales: {
-          x: { grid: { color: 'rgba(30,41,59,0.5)' }, ticks: { font: { size: 11 } } },
-          y: { grid: { color: 'rgba(30,41,59,0.5)' }, ticks: { font: { size: 11 } }, stacked: true },
+          x: { ticks: { font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+          y: { ticks: { font: { size: 11 }, callback: compact }, grid: { color: 'rgba(255,255,255,0.04)' } },
         },
       },
     });
   }
 
-  if (mainSub && (mainSub.main || mainSub.sub)) {
-    new Chart(document.getElementById('ds-donut'), {
-      type: 'doughnut',
+  // Stacked horizontal model bar
+  if (byModel.length) {
+    new Chart(document.getElementById('modelChart'), {
+      type: 'bar',
       data: {
-        labels: ['Main', 'Subagents'],
-        datasets: [{
-          data: [mainSub.main, mainSub.sub],
-          backgroundColor: ['#6366f1', '#34d399'],
-          borderColor: '#0f1117', borderWidth: 2,
-        }],
+        labels: byModel.map(m => m.model || '(unknown)'),
+        datasets: [
+          { label: 'Input',        data: byModel.map(m => m.input_tokens || 0),           backgroundColor: '#34d399' },
+          { label: 'Output',       data: byModel.map(m => m.output_tokens || 0),          backgroundColor: '#38bdf8' },
+          { label: 'Cache read',   data: byModel.map(m => m.cache_read_tokens || 0),      backgroundColor: '#a78bfa' },
+          { label: 'Cache create', data: byModel.map(m => m.cache_creation_tokens || 0),  backgroundColor: '#f59e0b' },
+        ],
       },
       options: {
+        indexAxis: 'y',
         responsive: true, maintainAspectRatio: false,
         plugins: {
           legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 } } },
           tooltip: { backgroundColor: '#111827', borderColor: '#1e293b', borderWidth: 1, padding: 8 },
         },
+        scales: {
+          x: { stacked: true, ticks: { font: { size: 11 }, callback: compact }, grid: { color: 'rgba(255,255,255,0.04)' } },
+          y: { stacked: true, ticks: { font: { size: 11 } }, grid: { display: false } },
+        },
+      },
+    });
+  }
+
+  // Sidechain doughnut
+  if (mainSub.main || mainSub.sub) {
+    new Chart(document.getElementById('sidechainChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Main', 'Subagents'],
+        datasets: [{
+          data: [mainSub.main, mainSub.sub],
+          backgroundColor: ['#34d399', '#f59e0b'],
+          borderColor: '#0f1117', borderWidth: 2,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
         cutout: '60%',
       },
     });
