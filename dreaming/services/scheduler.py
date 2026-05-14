@@ -199,12 +199,41 @@ async def _weekly_wiki_lint(app_state, project_id: int):
         log.warning("weekly_wiki_lint [%s]: %s", proj.slug, e)
 
 
+async def _weekly_topics_scan(app_state, project_id: int):
+    """Run /topics-scan via Claude CLI to generate fresh learning topics."""
+    proj = await app_state.projects.get_by_id(project_id)
+    if proj is None or not proj.enabled:
+        return
+    pm = app_state.process_manager
+    settings = app_state.settings
+    resolver = ConfigResolver(app_state.projects, settings)
+    try:
+        await pm.start_command(
+            proj,
+            command_name="weekly-topics-scan",
+            prompt="/topics-scan",
+            claude_path=await resolver.get(proj, "claude_path", "claude"),
+            working_dir=proj.working_dir,
+            model=await resolver.get(proj, "model", "sonnet"),
+            max_turns=int(await resolver.get(proj, "max_turns", 50)),
+            timeout_minutes=int(await resolver.get(proj, "timeout_minutes", 30)),
+            env_overrides={
+                "DREAMING_PROJECT_SLUG": proj.slug,
+                "DREAMING_API_URL": f"http://localhost:{settings.port}",
+            },
+        )
+    except RuntimeError as e:
+        log.warning("weekly_topics_scan [%s]: %s", proj.slug, e)
+
+
 # (kind, cron_setting_key, enabled_setting_key, default_cron, default_enabled, fn)
 _PER_PROJECT_JOBS = [
     ("nightly_learning", "cron_expression", "cron_enabled", "0 2 * * *", True, _nightly_learning),
     ("weekly_tech_debt_scan", "weekly_tech_debt_scan_cron", "weekly_tech_debt_scan_enabled", "0 4 * * 1", False, _weekly_tech_debt_scan),
     ("weekly_product_ideas_scan", "weekly_product_ideas_scan_cron", "weekly_product_ideas_scan_enabled", "0 5 * * 1", False, _weekly_product_ideas_scan),
     ("weekly_wiki_lint", "weekly_wiki_lint_cron", "weekly_wiki_lint_enabled", "0 6 * * 6", False, _weekly_wiki_lint),
+    ("weekly_topics_scan", "weekly_topics_scan_cron", "weekly_topics_scan_enabled",
+     "0 3 * * 1", False, _weekly_topics_scan),
 ]
 
 
