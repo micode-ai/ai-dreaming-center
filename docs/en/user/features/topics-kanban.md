@@ -8,6 +8,8 @@ Two pages about study topics:
 
 - [Topics: weekly checklist](#topics-weekly-checklist)
 - [Kanban: custom topics](#kanban-custom-topics)
+- [Generate-topics button](#generate-topics-button)
+- [Weekly auto-scan](#weekly-auto-scan)
 - [Form fields](#form-fields)
 - [How topics enter self-study](#how-topics-enter-self-study)
 - [Deleting a topic](#deleting-a-topic)
@@ -25,7 +27,7 @@ If the file is found — DC parses it into a list and shows it on the page:
 
 If the file is not found — you'll see a warning "Weekly checklist не найден. Ожидаемые пути: ..." (Weekly checklist not found. Expected paths: ...) and the list of the two candidates.
 
-**This is a read-only page.** The checklist is generated and edited by the starter-kit agent itself (e.g. `team-lead.md`) during its own self-study. The UI does not let you add/remove items — only read.
+**This is a read-only view of the `_weekly-learning-checklist.md` file.** The file is for human notes (if you use it at all). To get topics into agents, add them on the **Kanban** page — that's also where the «Generate topics» button lives. The Topics page only displays what's in the file; it never writes and doesn't invoke agents.
 
 If you don't have a starter kit — this page will always say "not found". That's fine, the page is optional.
 
@@ -36,6 +38,37 @@ If you don't have a starter kit — this page will always say "not found". That'
 On the page:
 - At the top — a white card with the add form.
 - Below — the table of existing topics (if any).
+
+## Generate-topics button
+
+To the right of the «Custom topics» heading — the **«Generate topics»** button.
+A POST to `/p/{slug}/topics/generate` launches Claude CLI in the project with
+the `/topics-scan` command (one-shot, not self-study). The command:
+
+1. reads `git log -50`, `.claude/agents/learning-notes/`,
+   `.claude/agents/sidecar-findings/`, `CLAUDE.md`, `README.md`;
+2. proposes 5–10 topics for the week;
+3. POSTs each one to `/api/p/{slug}/topics/ingest` → rows appear
+   in this same table after a page reload.
+
+While the command is running, the button is disabled (`Generating…`).
+Session log — at `/p/{slug}/live`.
+
+The command template lives at `templates/starter-kit/commands/topics-scan.md`
+— it is installed into the project via starter-kit install.
+
+## Weekly auto-scan
+
+The `weekly_topics_scan` cron job runs the same `/topics-scan` on a schedule
+(default: Monday 03:00 local). Disabled by default — enable it per-project on
+the Settings page:
+
+- `weekly_topics_scan_enabled` — true/false, default false.
+- `weekly_topics_scan_cron` — crontab expression (5 fields), default `0 3 * * 1`.
+
+Under the hood it uses a separate `command_name="weekly-topics-scan"` and
+doesn't collide with the manual button (`command_name="topics-scan"`), so the
+button and the cron can run in parallel even if they fire in the same minute.
 
 ## Form fields
 
@@ -53,12 +86,17 @@ If you submit an empty `title` — the browser blocks it (HTML required).
 
 ## How topics enter self-study
 
-When the nightly cron (or manual `Start session`) runs an agent, DC:
-1. Reads every `custom_topics` for this `project_id` where `active=true`.
-2. Filters by `target_agents`: if `*` or empty — everyone, if csv — does it contain agent_name.
-3. Mixes them into the prompt via template variables of the `/self-study` slash command. The exact mechanism depends on the starter kit's implementation, but typically env vars or extra args.
+When the nightly cron (or the `Start` button on the **Rotation** page) runs
+an agent, DC:
+1. Reads `custom_topics` for this `project_id` where `active=1`.
+2. Filters by `target_agents`: empty or `*` — for everyone; CSV — only if the
+   agent name is in the list.
+3. Formats them as a markdown block titled "## Темы на сегодня (из DC)" and
+   mixes it into the `/self-study <agent>` prompt via `extra_prompt`.
 
-For example, if there's a topic "Refactor auth" with `target_agents=vera`, and tonight the cron runs Vera — her prompt will include a section "Custom topics for tonight: …".
+The helper `dreaming/services/topics_prompt.py:build_topics_extra_prompt`
+returns `""` if there are no topics — projects without custom_topics behave
+exactly as before (zero regression).
 
 After the session ends `active` stays true (not auto-marked done). Intentional: you may want to keep a topic "in work" for several nights until you decide to delete.
 
