@@ -1,13 +1,16 @@
 """GET /p/{slug}/rotation — agent roster + tier/enabled inline edit + Start button."""
 from __future__ import annotations
+import logging
 from urllib.parse import urlparse
 from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.responses import RedirectResponse
 
 from dreaming.services.agents import list_agent_names
 from dreaming.services import starter_kit
+from dreaming.services.topics_prompt import build_topics_extra_prompt
 
 
+log = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -83,6 +86,15 @@ async def rotation_start(request: Request, slug: str, agent: str):
     project = request.state.project
     pm = request.app.state.process_manager
     settings = request.app.state.settings
+    db = request.app.state.db
+    try:
+        extra_prompt = await build_topics_extra_prompt(db, project.id, agent)
+    except Exception as e:
+        log.warning(
+            "rotation_start [%s] %s: topics helper failed: %s",
+            project.slug, agent, e,
+        )
+        extra_prompt = ""
     try:
         await pm.start_session(
             project,
@@ -93,6 +105,7 @@ async def rotation_start(request: Request, slug: str, agent: str):
             max_turns=getattr(settings, "max_turns", 25),
             timeout_minutes=getattr(settings, "timeout_minutes", 20),
             self_study_command=getattr(settings, "self_study_command", "/self-study"),
+            extra_prompt=extra_prompt,
             env_overrides={
                 "DREAMING_PROJECT_SLUG": project.slug,
                 "DREAMING_API_URL": f"http://localhost:{settings.port}",
