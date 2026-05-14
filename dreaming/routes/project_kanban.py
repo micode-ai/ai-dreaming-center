@@ -72,6 +72,8 @@ async def kanban_page(request: Request, slug: str):
     remaining = max(0, len(enabled) - idx)
 
     topics = await db.list_custom_topics(project.id, active_only=False)
+    pm = request.app.state.process_manager
+    topics_running = f"cmd:{project.slug}:topics-scan" in pm.list_running()
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
     projects = await request.app.state.projects.list_all(only_enabled=True)
     return request.app.state.templates.TemplateResponse(
@@ -83,6 +85,7 @@ async def kanban_page(request: Request, slug: str):
             "total_enabled": len(enabled),
             "remaining": remaining,
             "topics": [dict(t) for t in topics],
+            "topics_running": topics_running,
             "projects": projects,
             "locale": locale,
         },
@@ -111,3 +114,29 @@ async def kanban_delete(request: Request, slug: str, topic_id: str):
     project = request.state.project
     await request.app.state.db.delete_custom_topic(project.id, topic_id)
     return RedirectResponse(f"/p/{project.slug}/kanban", status_code=303)
+
+
+@router.post("/p/{slug}/topics/generate")
+async def topics_generate(request: Request, slug: str):
+    project = request.state.project
+    pm = request.app.state.process_manager
+    settings = request.app.state.settings
+    resolver = request.app.state.resolver_factory(request)
+    try:
+        await pm.start_command(
+            project,
+            command_name="topics-scan",
+            prompt="/topics-scan",
+            claude_path=await resolver.get(project, "claude_path", "claude"),
+            working_dir=project.working_dir,
+            model=await resolver.get(project, "model", "sonnet"),
+            max_turns=int(await resolver.get(project, "max_turns", 50)),
+            timeout_minutes=int(await resolver.get(project, "timeout_minutes", 30)),
+            env_overrides={
+                "DREAMING_PROJECT_SLUG": project.slug,
+                "DREAMING_API_URL": f"http://localhost:{settings.port}",
+            },
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return RedirectResponse(f"/p/{project.slug}/live", status_code=303)
