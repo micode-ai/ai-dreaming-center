@@ -61,5 +61,8 @@
   "modal.btn.ok": "ОК",
   "modal.btn.delete": "Удалить",
   "modal.input.placeholder": "Введите значение",
-  "modal.input.mismatch": "Значение не совпадает"
+  "modal.input.mismatch": "Значение не совпадает",
+  "topics.generate.button": "Сгенерировать темы",
+  "topics.generate.running": "Генерируется…",
+  "topics.editor_hint": "Редактирование и генерация тем — на странице Kanban."
 }

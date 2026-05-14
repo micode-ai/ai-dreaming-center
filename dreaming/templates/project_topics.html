@@ -61,6 +61,10 @@
     Секции <code>## Приоритет недели</code> и <code>## Общие (любой агент)</code>
     парсер пропускает, они только для человеческих заметок.
   </p>
+  <p class="text-xs mt-3 text-sky-900">
+    {{ "topics.editor_hint" | t(locale=locale) }}
+    <a href="/p/{{ project.slug }}/kanban" class="underline">Открыть Kanban →</a>
+  </p>
 </div>
 {% endif %}
 {% endblock %}

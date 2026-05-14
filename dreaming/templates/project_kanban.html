@@ -72,7 +72,7 @@
             class="text-xs rounded px-3 py-1.5 disabled:opacity-50"
             style="background: var(--brand); color: white; border:1px solid var(--brand-hover);"
             {% if topics_running %}disabled title="Уже выполняется"{% endif %}>
-      {% if topics_running %}Генерируется…{% else %}Сгенерировать темы{% endif %}
+      {% if topics_running %}{{ "topics.generate.running" | t(locale=locale) }}{% else %}{{ "topics.generate.button" | t(locale=locale) }}{% endif %}
     </button>
   </form>
 </div>
