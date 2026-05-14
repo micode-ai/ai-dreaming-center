@@ -215,6 +215,166 @@ async def _models_catalog(
     return [r["model"] for r in rows if r["model"]]
 
 
+async def _distinct_sessions(
+    db: SqliteDB, *, start: str, end: str,
+    project_id: int | None = None, model: str | None = None,
+) -> int:
+    sql = (
+        "SELECT COUNT(DISTINCT session_id) AS n FROM ai_usage_events "
+        "WHERE ts_date BETWEEN ? AND ? "
+    )
+    params: list[Any] = [start, end]
+    if project_id is not None:
+        sql += "AND project_id=? "
+        params.append(project_id)
+    if model:
+        sql += "AND model=? "
+        params.append(model)
+    row = await db.fetch_one(sql, tuple(params))
+    return int(row["n"]) if row else 0
+
+
+async def _top_sessions(
+    db: SqliteDB, *, start: str, end: str,
+    project_id: int | None = None, model: str | None = None,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Top-N sessions by total tokens. Model picked as the most-used per session."""
+    sql = (
+        "SELECT session_id, MIN(ts) AS started_at, MAX(ts) AS last_at, "
+        "COUNT(*) AS events, "
+        "SUM(input_tokens+output_tokens+cache_read_tokens+cache_creation_tokens) AS total_tokens, "
+        "(SELECT model FROM ai_usage_events e2 "
+        " WHERE e2.session_id=e1.session_id GROUP BY model ORDER BY COUNT(*) DESC LIMIT 1) AS model "
+        "FROM ai_usage_events e1 "
+        "WHERE ts_date BETWEEN ? AND ? "
+    )
+    params: list[Any] = [start, end]
+    if project_id is not None:
+        sql += "AND project_id=? "
+        params.append(project_id)
+    if model:
+        sql += "AND model=? "
+        params.append(model)
+    sql += "GROUP BY session_id ORDER BY total_tokens DESC LIMIT ?"
+    params.append(limit)
+    rows = await db.fetch_all(sql, tuple(params))
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        d = dict(r)
+        d["duration_minutes"] = _duration_min(d.get("started_at") or "", d.get("last_at") or "")
+        out.append(d)
+    return out
+
+
+def _duration_min(start_iso: str, end_iso: str) -> int:
+    """Minutes between two ISO timestamps; safe on empty/malformed input."""
+    def _parse(s: str) -> datetime | None:
+        if not s:
+            return None
+        try:
+            return datetime.fromisoformat(s.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    a, b = _parse(start_iso), _parse(end_iso)
+    if not a or not b:
+        return 0
+    return max(0, int((b - a).total_seconds() // 60))
+
+
+def _fill_daily_gaps(
+    rows: list[dict[str, Any]], start: str, end: str,
+) -> list[dict[str, Any]]:
+    """Fill missing dates in [start..end] with zeros so the chart is contiguous."""
+    by_date = {r["ts_date"]: r for r in rows}
+    try:
+        d0 = date.fromisoformat(start)
+        d1 = date.fromisoformat(end)
+    except ValueError:
+        return rows
+    if d1 < d0:
+        return rows
+    out: list[dict[str, Any]] = []
+    cur = d0
+    while cur <= d1:
+        key = cur.isoformat()
+        if key in by_date:
+            out.append(by_date[key])
+        else:
+            out.append({
+                "ts_date": key,
+                "input_tokens": 0, "output_tokens": 0,
+                "cache_read_tokens": 0, "cache_creation_tokens": 0,
+            })
+        cur += timedelta(days=1)
+    return out
+
+
+async def _week_stats_project(db: SqliteDB, project_id: int) -> dict[str, int]:
+    """Same shape as db.week_stats(project_id) but available for direct use here."""
+    now = datetime.now(timezone.utc)
+    monday = (now - timedelta(days=now.weekday())).replace(
+        hour=0, minute=0, second=0, microsecond=0,
+    )
+    row = await db.fetch_one(
+        """
+        SELECT
+            COALESCE(SUM(CASE WHEN status='success' THEN 1 ELSE 0 END), 0) AS success,
+            COALESCE(SUM(CASE WHEN status='no_gap' THEN 1 ELSE 0 END), 0) AS no_gap,
+            COALESCE(SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END), 0) AS failed,
+            COALESCE(SUM(CASE WHEN status='timeout' THEN 1 ELSE 0 END), 0) AS timeout,
+            COALESCE(SUM(CASE WHEN status='running' OR (status IS NULL AND finished_at IS NULL) THEN 1 ELSE 0 END), 0) AS running,
+            COUNT(*) AS total
+        FROM agent_learning_sessions
+        WHERE project_id=? AND started_at >= ?
+        """,
+        (project_id, monday.isoformat()),
+    )
+    return dict(row) if row else {
+        "success": 0, "no_gap": 0, "failed": 0, "timeout": 0, "running": 0, "total": 0,
+    }
+
+
+async def _recent_learning_sessions(
+    db: SqliteDB, project_id: int, limit: int = 10,
+) -> list[dict[str, Any]]:
+    rows = await db.fetch_all(
+        "SELECT id, agent_name, topic, status, started_at, finished_at "
+        "FROM agent_learning_sessions WHERE project_id=? "
+        "ORDER BY started_at DESC LIMIT ?",
+        (project_id, limit),
+    )
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        d = dict(r)
+        dur = _duration_min(d.get("started_at") or "", d.get("finished_at") or "")
+        d["duration_minutes"] = dur if dur else None
+        out.append(d)
+    return out
+
+
+def _kpi(
+    filtered: dict, main_sub: dict, sessions: int,
+) -> dict[str, Any]:
+    inp = int(filtered.get("input_tokens") or 0)
+    out = int(filtered.get("output_tokens") or 0)
+    cr  = int(filtered.get("cache_read_tokens") or 0)
+    cc  = int(filtered.get("cache_creation_tokens") or 0)
+    total = int(filtered.get("total_tokens") or 0)
+    events = int(filtered.get("events") or 0)
+    side = int(main_sub.get("sub") or 0)
+    return {
+        "input": inp, "output": out,
+        "cache_read": cr, "cache_creation": cc,
+        "events": events, "sessions": sessions,
+        "grand_total": total,
+        "sidechain_total": side,
+        "avg_per_session": int(total // sessions) if sessions else 0,
+        "cache_hit_pct": round(cr / (cr + inp) * 100, 1) if (cr + inp) else 0.0,
+        "sidechain_share_pct": round(side / total * 100, 1) if total else 0.0,
+    }
+
+
 # ── public API ────────────────────────────────────────────────────
 
 async def project_summary(
@@ -238,11 +398,21 @@ async def project_summary(
     last_7d = await _totals(db, start=s7, end=e7, project_id=project_id)
     last_30d = await _totals(db, start=s30, end=e30, project_id=project_id)
     by_model = await _by_model(db, start=fs, end=fe, project_id=project_id, model=model)
-    daily = await _daily_series(db, start=fs, end=fe, project_id=project_id, model=model)
+    daily_rows = await _daily_series(db, start=fs, end=fe, project_id=project_id, model=model)
+    daily = _fill_daily_gaps(daily_rows, fs, fe)
     main_sub = await _main_vs_sidechain(
         db, start=fs, end=fe, project_id=project_id, model=model,
     )
     models = await _models_catalog(db, project_id=project_id)
+    sessions = await _distinct_sessions(
+        db, start=fs, end=fe, project_id=project_id, model=model,
+    )
+    top_sessions = await _top_sessions(
+        db, start=fs, end=fe, project_id=project_id, model=model, limit=5,
+    )
+    kpi = _kpi(filtered, main_sub, sessions)
+    week = await _week_stats_project(db, project_id)
+    recent = await _recent_learning_sessions(db, project_id, limit=10)
 
     return {
         "project_id": project_id,
@@ -252,11 +422,14 @@ async def project_summary(
         },
         "models_catalog": models,
         "filtered": filtered,
+        "kpi": kpi,
         "last_7d": last_7d,
         "last_30d": last_30d,
         "by_model": by_model,
         "daily": daily,
         "main_sub": main_sub,
+        "top_sessions": top_sessions,
+        "learning": {"week": week, "recent": recent},
     }
 
 
