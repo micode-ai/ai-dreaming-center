@@ -16,6 +16,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from dreaming.services.config_resolver import ConfigResolver
+from dreaming.services.topics_prompt import build_topics_extra_prompt
 
 log = logging.getLogger(__name__)
 
@@ -89,6 +90,9 @@ async def _nightly_learning(app_state, project_id: int):
     log.info("nightly_learning [%s]: %d candidates", proj.slug, len(candidates))
     for row in candidates:
         try:
+            extra_prompt = await build_topics_extra_prompt(
+                db, proj.id, row["agent_name"],
+            )
             await pm.start_session(
                 proj,
                 agent_name=row["agent_name"],
@@ -98,6 +102,7 @@ async def _nightly_learning(app_state, project_id: int):
                 max_turns=int(await resolver.get(proj, "max_turns", 25)),
                 timeout_minutes=int(await resolver.get(proj, "timeout_minutes", 20)),
                 self_study_command=await resolver.get(proj, "self_study_command", "/self-study"),
+                extra_prompt=extra_prompt,
                 env_overrides={
                     "DREAMING_PROJECT_SLUG": proj.slug,
                     "DREAMING_API_URL": f"http://localhost:{settings.port}",
