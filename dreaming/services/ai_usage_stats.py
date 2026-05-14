@@ -433,19 +433,49 @@ async def project_summary(
     }
 
 
-async def global_summary(db: SqliteDB) -> dict[str, Any]:
-    """Totals across all projects + by_project breakdown (last 30d)."""
+async def global_summary(
+    db: SqliteDB,
+    *,
+    preset: str | None = None,
+    model: str | None = None,
+) -> dict[str, Any]:
+    """All-project AI usage summary — same shape as project_summary() so the
+    same template can render both, plus a `by_project` table that doesn't
+    exist on the per-project view."""
+    fs, fe, preset = resolve_preset(preset)
     s7, e7 = _date_window(7)
     s30, e30 = _date_window(30)
 
+    filtered = await _totals(db, start=fs, end=fe, project_id=None, model=model)
     last_7d = await _totals(db, start=s7, end=e7, project_id=None)
     last_30d = await _totals(db, start=s30, end=e30, project_id=None)
-    by_project = await _by_project(db, start=s30, end=e30)
+    by_model = await _by_model(db, start=fs, end=fe, project_id=None, model=model)
+    daily_rows = await _daily_series(db, start=fs, end=fe, project_id=None, model=model)
+    daily = _fill_daily_gaps(daily_rows, fs, fe)
+    main_sub = await _main_vs_sidechain(db, start=fs, end=fe, project_id=None, model=model)
+    models = await _models_catalog(db, project_id=None)
+    sessions = await _distinct_sessions(db, start=fs, end=fe, project_id=None, model=model)
+    top_sessions = await _top_sessions(
+        db, start=fs, end=fe, project_id=None, model=model, limit=5,
+    )
+    by_project = await _by_project(db, start=fs, end=fe)
     events_total = await _events_total_all_time(db)
+    kpi = _kpi(filtered, main_sub, sessions)
 
     return {
+        "filters": {
+            "preset": preset, "model": model or "",
+            "start": fs, "end": fe,
+        },
+        "models_catalog": models,
+        "filtered": filtered,
+        "kpi": kpi,
         "last_7d": last_7d,
         "last_30d": last_30d,
+        "by_model": by_model,
         "by_project": by_project,
+        "daily": daily,
+        "main_sub": main_sub,
+        "top_sessions": top_sessions,
         "events_total": events_total,
     }
