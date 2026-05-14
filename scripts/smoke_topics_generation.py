@@ -82,6 +82,7 @@ async def main():
 
     db = SqliteDB(DB_PATH)
     await db.connect()
+    pid = None
     try:
         row = await db.fetch_one(
             "SELECT id FROM projects WHERE slug=?", (slug,),
@@ -98,12 +99,17 @@ async def main():
             print(f"--- block ---\n{block}\n---", file=sys.stderr)
             return 1
         print("helper block contains all titles")
-
-        for tid in ids:
-            await db.delete_custom_topic(pid, tid)
-        print(f"cleaned up {len(ids)} topics. OK.")
     finally:
+        if pid is not None:
+            for tid in ids:
+                try:
+                    await db.delete_custom_topic(pid, tid)
+                except Exception as e:
+                    print(f"cleanup: failed to delete {tid}: {e}",
+                          file=sys.stderr)
+            print(f"cleaned up {len(ids)} topics.")
         await db.close()
+    print("OK.")
     return 0
 
 
