@@ -61,5 +61,8 @@
   "modal.btn.ok": "OK",
   "modal.btn.delete": "Delete",
   "modal.input.placeholder": "Enter value",
-  "modal.input.mismatch": "Value does not match"
+  "modal.input.mismatch": "Value does not match",
+  "topics.generate.button": "Generate topics",
+  "topics.generate.running": "Generating…",
+  "topics.editor_hint": "Editing and generation live on the Kanban page."
 }
