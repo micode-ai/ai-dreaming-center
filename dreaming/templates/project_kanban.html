@@ -65,7 +65,17 @@
 
 <hr style="border-color: var(--border-subtle); margin: 1.5rem 0;">
 
-<h2 class="text-sm font-semibold mb-3" style="color: var(--text-strong);">Custom topics</h2>
+<div class="flex items-center justify-between mb-3 gap-3">
+  <h2 class="text-sm font-semibold" style="color: var(--text-strong);">Custom topics</h2>
+  <form method="post" action="/p/{{ project.slug }}/topics/generate">
+    <button type="submit"
+            class="text-xs rounded px-3 py-1.5 disabled:opacity-50"
+            style="background: var(--brand); color: white; border:1px solid var(--brand-hover);"
+            {% if topics_running %}disabled title="Уже выполняется"{% endif %}>
+      {% if topics_running %}Генерируется…{% else %}Сгенерировать темы{% endif %}
+    </button>
+  </form>
+</div>
 <form method="post" action="/p/{{ project.slug }}/kanban/add" class="rounded-lg p-4 mb-4 grid grid-cols-2 gap-3"
       style="background: var(--bg-card); border:1px solid var(--border-subtle);">
   <input name="title" placeholder="Заголовок темы" required class="rounded p-2 col-span-2">
