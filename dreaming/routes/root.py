@@ -2,7 +2,7 @@
 from __future__ import annotations
 from pathlib import Path
 
-from fastapi import APIRouter, Request, Form
+from fastapi import APIRouter, Query, Request, Form
 from fastapi.responses import RedirectResponse, JSONResponse
 
 
@@ -107,11 +107,15 @@ async def index(request: Request):
 
 
 @router.get("/ai-usage")
-async def global_ai_usage(request: Request):
+async def global_ai_usage(
+    request: Request,
+    preset: str | None = Query(default=None),
+    model: str | None = Query(default=None),
+):
     db = request.app.state.db
     from dreaming.services.ai_usage_stats import global_summary
     try:
-        summary = await global_summary(db)
+        summary = await global_summary(db, preset=preset, model=model)
     except Exception as e:
         summary = {"error": f"{type(e).__name__}: {e}"}
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)

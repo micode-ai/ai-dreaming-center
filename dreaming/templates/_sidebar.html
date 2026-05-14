@@ -122,6 +122,10 @@
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
       <span>{{ "projects.title" | t(locale=locale) }}</span>
     </a>
+    <a class="app-sidebar__nav-link{% if active == 'g_ai_usage' %} is-active{% endif %}" href="/ai-usage">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18M5 17V9M11 17v-7M17 17V6"/></svg>
+      <span>{{ "p.ai_usage" | t(locale=locale) }}</span>
+    </a>
     <a class="app-sidebar__nav-link{% if active == 'g_settings' %} is-active{% endif %}" href="/settings">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15c-.2.5-.1 1.1.3 1.5l.1.1c.3.3.5.7.5 1.1 0 .9-.7 1.7-1.7 1.7-.4 0-.8-.2-1.1-.5l-.1-.1c-.4-.4-1-.5-1.5-.3-.5.2-.8.7-.8 1.3v.2c0 .9-.8 1.7-1.7 1.7s-1.7-.8-1.7-1.7v-.1c0-.6-.4-1.1-.9-1.3-.5-.2-1.1-.1-1.5.3l-.1.1c-.3.3-.7.5-1.1.5-.9 0-1.7-.8-1.7-1.7 0-.4.2-.8.5-1.1l.1-.1c.4-.4.5-1 .3-1.5"/></svg>
       <span>{{ "settings.title" | t(locale=locale) }}</span>
