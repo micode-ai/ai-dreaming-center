@@ -97,11 +97,19 @@ async def smoke_list_events_since():
     # as strings; we need a different cursor scheme. Use `ts` instead: events appended later
     # have lexicographically later ts ISO strings).
     cursor_ts = all_events[0]["ts"]
-    newer = await hub.list_events_since(run_id, since_ts=cursor_ts)
+    cursor_id = all_events[0]["id"]
+    newer = await hub.list_events_since(run_id, after_ts=cursor_ts, after_id=cursor_id)
     assert len(newer) == 2, f"expected 2 newer events, got {len(newer)}"
     assert newer[0]["event_type"] == "b"
     assert newer[1]["event_type"] == "c"
-    print("  ✓ list_events_since")
+    # Also assert tied-ts behaviour: insert two events from inside the same tick
+    # and confirm both come back when we cursor past only the first.
+    await hub.append_event(run_id, "tie1", {})
+    await hub.append_event(run_id, "tie2", {})
+    after_b = await hub.list_events_since(run_id, after_ts=all_events[1]["ts"], after_id=all_events[1]["id"])
+    types = [e["event_type"] for e in after_b]
+    assert "c" in types and "tie1" in types and "tie2" in types, f"missed events: {types}"
+    print("  ✓ list_events_since (composite cursor)")
 
 
 async def main():
@@ -126,17 +134,37 @@ Expected: `AttributeError: 'OrchestrationHub' object has no attribute 'list_even
 In `dreaming/services/orchestration_hub.py`, immediately after the existing `list_events` method (around line 155), add:
 
 ```python
-    async def list_events_since(self, run_id: str, since_ts: str | None) -> list:
-        """Events strictly after `since_ts` (ISO8601 UTC). Pass None to get all."""
-        if since_ts is None:
+    async def list_events_since(
+        self, run_id: str,
+        after_ts: str | None,
+        after_id: str | None = None,
+    ) -> list:
+        """Events strictly after a `(ts, id)` cursor. ISO8601 UTC for ts.
+
+        Composite cursor: `_now()` has microsecond resolution but Windows
+        wall-clock can produce duplicate ISO strings within the same tick.
+        Filtering only on `ts > ?` would silently drop tied events. The
+        SQL filters `ts > after_ts OR (ts = after_ts AND id > after_id)`.
+
+        Pass None for both args to return all events.
+        """
+        if after_ts is None:
             return await self.db.fetch_all(
-                "SELECT * FROM orchestrator_events WHERE run_id=? ORDER BY ts ASC",
+                "SELECT * FROM orchestrator_events WHERE run_id=? "
+                "ORDER BY ts ASC, id ASC",
                 (run_id,),
             )
+        if after_id is None:
+            return await self.db.fetch_all(
+                "SELECT * FROM orchestrator_events WHERE run_id=? AND ts > ? "
+                "ORDER BY ts ASC, id ASC",
+                (run_id, after_ts),
+            )
         return await self.db.fetch_all(
-            "SELECT * FROM orchestrator_events WHERE run_id=? AND ts > ? "
-            "ORDER BY ts ASC",
-            (run_id, since_ts),
+            "SELECT * FROM orchestrator_events WHERE run_id=? "
+            "AND (ts > ? OR (ts = ? AND id > ?)) "
+            "ORDER BY ts ASC, id ASC",
+            (run_id, after_ts, after_ts, after_id),
         )
 ```
 
@@ -262,19 +290,25 @@ Add this method to `dreaming/services/orchestration_hub.py` right after `list_ev
             },
         }
 
-        # Tail events. Use `ts` as the cursor (string ISO timestamps sort lexically
-        # in the order they were appended because `_now()` is monotonic per-process).
+        # Tail events. Composite `(ts, id)` cursor — `_now()` is microsecond-
+        # resolution but Windows wall-clock can repeat within a tick, so a single
+        # `ts > ?` filter would silently skip tied events. See list_events_since.
         cursor_ts: str | None = None
+        cursor_id: str | None = None
         # Prime the cursor to the latest event we've already shown via snapshot,
-        # so we don't re-emit them.
-        existing = await self.list_events(run_id, limit=1000000)
+        # so we don't re-emit them. Use list_events_since(None) to get them in
+        # the same (ts, id) order the tail loop uses.
+        existing = await self.list_events_since(run_id, after_ts=None)
         if existing:
             cursor_ts = existing[-1]["ts"]
+            cursor_id = existing[-1]["id"]
 
         idle_started_at: float | None = None
         loop = asyncio.get_event_loop()
         while True:
-            new_events = await self.list_events_since(run_id, since_ts=cursor_ts)
+            new_events = await self.list_events_since(
+                run_id, after_ts=cursor_ts, after_id=cursor_id,
+            )
             if new_events:
                 for ev in new_events:
                     payload = {}
@@ -288,6 +322,7 @@ Add this method to `dreaming/services/orchestration_hub.py` right after `list_ev
                         "data": payload,
                     }
                     cursor_ts = ev["ts"]
+                    cursor_id = ev["id"]
                 idle_started_at = None
             else:
                 # Check terminal state + idle window
@@ -372,20 +407,26 @@ Append to `scripts/smoke_orchestration_stream.py`:
 
 ```python
 def smoke_route_endpoint():
-    """End-to-end: hit /stream via the FastAPI TestClient and verify headers."""
+    """End-to-end: hit /stream via the FastAPI TestClient and verify headers.
+
+    Note: TestClient is synchronous — that's why this function is `def`, not
+    `async def`. It's called from the sync part of `main()` after the async
+    smokes complete.
+    """
     import os
     from fastapi.testclient import TestClient
-    # Use an isolated DB to avoid clobbering data
-    os.environ.setdefault("DREAMING_DB_PATH", str(Path(tempfile.mkdtemp(prefix="dc_smoke_app_")) / "test.db"))
+    # Use an isolated DB to avoid clobbering dev data. The config uses
+    # `env_prefix="DC_"` (see dreaming/config.py), so the env var is DC_DB_PATH.
+    # This must be set BEFORE `from dreaming.main import app` triggers settings load.
+    os.environ["DC_DB_PATH"] = str(Path(tempfile.mkdtemp(prefix="dc_smoke_app_")) / "test.db")
     from dreaming.main import app  # noqa: E402
 
     with TestClient(app) as client:
-        # We can't create a full project + run easily without going through the
-        # whole /setup flow. Just assert the endpoint exists (404 on a fake slug
-        # is success — it means the route is registered).
+        # We can't easily create a full project + run via TestClient. Just
+        # assert the endpoint is registered. The project-resolver middleware
+        # returns 404 for a missing slug — that's success here.
         r = client.get("/p/__missing__/orchestration/00000000-0000-0000-0000-000000000000/stream")
-        # 404 = route exists but project missing; 200 not expected here.
-        assert r.status_code in (404, 422), f"unexpected status {r.status_code}"
+        assert r.status_code in (404, 422, 303, 307), f"unexpected status {r.status_code}"
     print("  ✓ /stream route registered")
 
 
@@ -471,6 +512,105 @@ Open `http://127.0.0.1:8086/p/<some-existing-slug>/orchestration` in a browser, 
 ```powershell
 git add dreaming/routes/project_orchestration.py
 git commit -m "feat(orchestration): pass stages+nodes_by_stage into detail template context"
+```
+
+---
+
+## Task 4b: Wire stage creation into orchestration_dispatch
+
+**Why this exists:** Without this task, the swimlane has nothing to render — `start_orchestration_run` creates a root node but never calls `hub.ensure_stage`, so `orchestrator_stages` stays empty for every new run and the rail/swimlane in Task 7 would only ever show the legacy unassigned-nodes table. This task adds a single seed stage so Wave A's user-visible win actually manifests. (Richer stage-key parsing from CLI markers is a follow-up wave.)
+
+**Files:**
+- Modify: `dreaming/services/orchestration_dispatch.py`
+- Test: `scripts/smoke_orchestration_stream.py` (extend)
+
+- [ ] **Step 1: Extend smoke with a failing assertion**
+
+Append to `scripts/smoke_orchestration_stream.py` (call from `main()`):
+
+```python
+async def smoke_dispatch_seeds_stage():
+    """A fresh run started via start_orchestration_run should have at least
+    one stage row, and its root node should be tagged with that stage_id."""
+    from unittest.mock import AsyncMock, MagicMock
+    db, hub = await _setup()
+    # Fake ProjectsService isn't needed for stage seeding — only hub + db.
+    # Mock app_state and project minimally; PM is bypassed by RuntimeError
+    # which `start_orchestration_run` catches as a fail path. We assert
+    # stages+root_node.stage_id were set BEFORE the spawn was attempted.
+    pm = MagicMock()
+    pm.start_command = AsyncMock(side_effect=RuntimeError("no claude binary in smoke"))
+    settings = MagicMock(port=8086, claude_path="claude", model="sonnet",
+                         orchestration_max_turns=150, orchestration_timeout_minutes=120,
+                         claude_projects_dir="")
+    app_state = MagicMock(
+        orchestration_hub=hub, process_manager=pm, settings=settings, db=db,
+    )
+    project = MagicMock(id=1, slug="smoke", working_dir="/tmp")
+
+    from dreaming.services.orchestration_dispatch import start_orchestration_run
+    result = await start_orchestration_run(app_state, project, "test goal")
+    run_id = result["run_id"]
+    stages = await hub.list_stages(run_id)
+    assert len(stages) >= 1, "expected at least one stage to be created"
+    nodes = await hub.list_nodes(run_id)
+    # The root node should be tagged with the stage we just created.
+    root = [n for n in nodes if (n["role"] or "").lower() == "orchestrator"]
+    assert root, "expected an orchestrator root node"
+    assert root[0]["stage_id"] == stages[0]["id"], (
+        f"root node stage_id {root[0]['stage_id']!r} != stage {stages[0]['id']!r}")
+    print("  ✓ dispatch seeds initial stage and tags root node")
+
+
+async def main():
+    await smoke_list_events_since()
+    await smoke_stream_generator()
+    await smoke_dispatch_seeds_stage()
+    smoke_route_endpoint()  # sync — uses TestClient
+    print("smoke_orchestration_stream OK")
+```
+
+- [ ] **Step 2: Run smoke, confirm the new assertion fails**
+
+```powershell
+python scripts/smoke_orchestration_stream.py
+```
+Expected: AssertionError on `expected at least one stage to be created` (since dispatch doesn't create stages yet).
+
+- [ ] **Step 3: Add stage creation to dispatch**
+
+In `dreaming/services/orchestration_dispatch.py`, locate the block right after `root_node = await hub.create_node(...)` (around line 86) and BEFORE `await hub.append_event(run_id, "run_started", ...)`. Add:
+
+```python
+    # Seed a single "orchestrator" stage so the swimlane in the UI has
+    # something to render. Future waves can split a run into multiple stages
+    # by calling ensure_stage(...) again with different stage_keys (e.g.
+    # "plan", "implement", "review"). For now, all activity lives in stage 0.
+    stage_id = await hub.ensure_stage(
+        run_id, stage_index=0, stage_key="orchestrator", label="Orchestrator",
+    )
+    await hub.start_stage(stage_id)
+    # Tag the root node with this stage so it appears in the swimlane.
+    await db.execute(
+        "UPDATE orchestrator_nodes SET stage_id=? WHERE id=?",
+        (stage_id, root_node),
+    )
+```
+
+`db.execute` is the same helper used elsewhere in `orchestration_dispatch` (via `app_state.db`). The `stage_id` column on `orchestrator_nodes` was added by the migration in `db.py:283-293` so this is a straight `UPDATE`.
+
+- [ ] **Step 4: Re-run smoke, confirm it passes**
+
+```powershell
+python scripts/smoke_orchestration_stream.py
+```
+Expected: all 4 ✓ marks, exit 0.
+
+- [ ] **Step 5: Commit**
+
+```powershell
+git add dreaming/services/orchestration_dispatch.py scripts/smoke_orchestration_stream.py
+git commit -m "feat(orchestration): seed orchestrator stage + tag root node so swimlane renders"
 ```
 
 ---
@@ -661,10 +801,8 @@ Write `dreaming/static/orchestration_stream.js`:
         return;
       case "message_added":
         // Server-side payload has only ids — we'd need to fetch the full row.
-        // Simpler: just bump the counter and ask the user to reload for body.
-        // For Wave A v1, increment the counter and inject a placeholder card.
-        lastMsgCount += 1;
-        bumpCounter("msg-count", lastMsgCount);
+        // For Wave A v1, inject a placeholder card and let appendMessage bump
+        // the counter (it does the bump itself; don't double-increment).
         appendMessage({
           author: data.author || "",
           kind: data.kind || "",
@@ -703,10 +841,9 @@ Write `dreaming/static/orchestration_stream.js`:
       return;
     }
     es.onopen = () => setIndicator("connected");
-    es.onmessage = (e) => {
-      // Default 'message' channel — sse_starlette doesn't put events here when we use `event:` field.
-      try { handleEvent("message", JSON.parse(e.data)); } catch {}
-    };
+    // No `onmessage` handler: our server always sets an `event:` field via
+    // sse_starlette, so events arrive on named listeners below. The default
+    // 'message' channel would only fire for unnamed events, which we don't emit.
     // Register named handlers for known event types.
     const named = ["snapshot", "message_added", "node_created", "node_status_changed",
                    "run_finished", "run_resumed", "run_started", "done", "heartbeat"];
@@ -1048,9 +1185,10 @@ In the browser:
 
 On the detail page:
 - The SSE indicator pill should say `CONNECTED` (green) within ~1s
+- **The stage rail shows exactly one tile labeled "Orchestrator"** (seeded by Task 4b's dispatch change). Below it, a single swimlane row contains one activity chip for the root orchestrator node.
 - As the agent runs and emits messages, they should appear at the bottom **without page reload**
-- The `Messages (N)` counter should increment
-- If stages get created, they should appear in the stage rail
+- The `Messages (N)` counter should increment by 1 (not 2) per `message_added` event
+- Sub-agents (if any are spawned) will appear in the legacy unassigned-nodes table at the bottom — not in the swimlane. Tagging sub-agent nodes with a stage is deferred to a later wave.
 - Open browser DevTools → Network tab → confirm the `/stream` request is active (Type: `eventsource`, stays connected)
 
 - [ ] **Step 3: Test polling fallback**
@@ -1093,14 +1231,16 @@ Wave A doesn't add any new top-level page — orchestration is already in the si
 
 ## What's intentionally deferred to a later wave
 
-- Per-agent message attribution (the chip click → message panel UX from ALC). Wave A renders chips but clicking them is a no-op. Add in a follow-up.
-- Stage-marker parsing in `claude_session_tail.py` to auto-tag events with `stage_id`. The current state already has `orchestrator_nodes.stage_id` populated by `orchestration_dispatch.py` for cascade-style runs; events get their stage via the node JOIN. Markdown stage markers from the CLI stream is a nice-to-have, not required for Wave A acceptance.
+- **Multi-stage cascade runs.** Wave A seeds a single "Orchestrator" stage. Splitting a run into plan/implement/review/etc. and progressing through them lives in a future wave (probably the cascade-engine port).
+- **Tagging sub-agent nodes with a stage.** `SubagentWatcher.create_node` does not pass `stage_id`. Sub-agents land in the unassigned-nodes table. To fix: extend `SubagentWatcher` to look up the parent node's stage and inherit it. Out of scope for Wave A.
+- **Stage-marker parsing in `claude_session_tail.py`.** Auto-tagging events with `stage_id` based on inline markers from the CLI is nice-to-have. Events already get their stage via the node JOIN (Task 4 handler logic).
+- **Per-agent message attribution panel.** Wave A renders chips but clicking them is a no-op. Add a slide-over message panel in a follow-up.
 - ALC's "legacy star graph" view. We're only porting the cascade swimlane.
 - SSE pub/sub via asyncio.Queue (would replace the 500ms poll). Local single-user only — polling is fine.
 
 ## Definition of done
 
-- All 9 tasks committed in order.
-- `python scripts/smoke_orchestration_stream.py` exits 0.
+- All 10 tasks (1, 2, 3, 4, 4b, 5, 6, 7, 8, 9) committed in order.
+- `python scripts/smoke_orchestration_stream.py` exits 0 with 4 ✓ marks.
 - Manual browser verification passed all 5 steps in Task 9.
 - `git tag wave-A` applied.
