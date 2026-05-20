@@ -33,7 +33,8 @@ The user has called out Orchestration as the highest priority ("у нас нам
 ## Non-goals
 
 - Cross-project orchestration (out of scope per ADC's existing design).
-- Schema changes to `orchestrator_*` tables — they already include `stages`, `events`, `nodes`, `messages`.
+- Schema changes to `orchestrator_*` tables — they already include `stages`, `events`, `nodes`, `messages`. Wave A derives stage association for events by JOIN through `orchestrator_nodes.stage_id` rather than denormalizing.
+- Removing the existing `/p/{slug}/orchestration/{run_id}/refresh` polling route — kept as JS-disabled fallback.
 - Migrating ALC data into ADC — greenfield seeding only.
 - Adding tests/CI — ADC inherits ALC's "no test suite" choice (smoke scripts only).
 - Globalizing the loop templates directory. Seeds live inside the project's working directory, not a shared/global folder.
@@ -69,14 +70,15 @@ Wave F  Review triage page                      ── depends on C being a per-
 - `dreaming/services/orchestration_hub.py` — add `async def stream_run_events(project_id, run_id)` async generator. Yields:
   - Initial snapshot: full `stages`, `nodes`, `messages` (so clients connecting mid-run get state)
   - Incremental: new rows from `orchestrator_events` since last seen `id` (poll every 500ms; this is in-process, the table is small per run)
+  - Stage association of each event is derived via JOIN: `orchestrator_events` → `payload_json.node_id` → `orchestrator_nodes.stage_id`. The events table itself has no `stage_id` column (verified schema: `id, run_id, ts, event_type, payload_json`). Events with no `node_id` in payload are tagged as stage-agnostic.
   - Terminates when run status ∈ `{success, fail, timeout, canceled}` AND no new events for 3s
-- `dreaming/services/claude_session_tail.py` — confirm it already emits `orchestrator_events` rows tagged by `stage_id`. If not, plug the gap by extending the existing parser with the stage-tagging regex from ALC (lines 29-45 of ALC's `claude_session_tail.py`).
+- `dreaming/services/claude_session_tail.py` — already produces `orchestrator_events` rows. The gap (if any) is the stage-tagging regex from ALC's parser (ALC's `claude_session_tail.py` lines 29-45). During implementation: read ADC's parser end-to-end first and only add what's missing — do not regress existing parsing.
 - `dreaming/templates/project_orchestration_detail.html` — replace polling JS with `EventSource`. Layout:
   - Top bar: run id, status badge, goal preview, "force-finish" button, link back to list.
-  - Stage rail: 5 cells in a row, one per stage (`brainstorm`, `plan`, `implement`, `review`, `finish` — names come from `orchestrator_stages.kind`). Each cell shows: stage status, elapsed time, message count.
-  - Swimlane body below the rail: for each stage, a horizontal track of activity chips. Each chip is a `node` (`agent_spawn`) with current state (`queued`/`active`/`done`/`rejected`) — clicking a chip opens its messages in a slide-over panel.
+  - Stage rail: one cell per row in `orchestrator_stages` for this run, ordered by `stage_index`. Each cell shows: `label` (from `orchestrator_stages.label`), `status`, `iteration`, elapsed time, message count. The number of cells is dynamic — typically 5 for cascade runs but the rail does not hard-code that. Stage identity is `stage_key` (verified column name; there is no `kind` column).
+  - Swimlane body below the rail: for each stage row, a horizontal track of activity chips. Each chip is a `node` (rows in `orchestrator_nodes` for this stage) with current state derived from `orchestrator_events` events about that node — clicking a chip opens its messages in a slide-over panel.
   - History fade: older chips dimmed via opacity (matches ALC's `dim-history` CSS).
-- `dreaming/static/orchestration_stream.js` — new file, EventSource client. On each event, mutate the relevant DOM node (chip color, message append, stage progress). Falls back to the existing `/refresh` polling endpoint on EventSource error.
+- `dreaming/static/orchestration_stream.js` — new file, EventSource client. On each event, mutate the relevant DOM node (chip color, message append, stage progress). On EventSource `error` (network drop, server restart) falls back to polling `/refresh` until SSE reconnects. After normal stream completion (server-side `done` event + close) the client does NOT start polling.
 
 **Data flow:**
 ```
@@ -97,7 +99,8 @@ EventSource client ◄── EventSourceResponse ◄── orchestration_hub.str
 **Acceptance:**
 - Start an orchestration run. Detail page shows stage rail, swimlane fills as agents spawn, chips change color as they progress.
 - Kill the browser tab mid-run, reopen — page shows current state correctly (initial snapshot works).
-- Run completes → SSE closes, polling fallback stays disabled.
+- Run completes → SSE closes via server-sent `done` event; polling does NOT restart.
+- Mid-run SSE error → client falls back to `/refresh` polling and continues updating; resumes SSE on next page load.
 - Disable JavaScript → page renders initial state via server-side render and shows a "live updates disabled" hint.
 - Smoke: `scripts/smoke_orchestration.py` (new) hits the stream endpoint, asserts at least one event arrives within 5s of a synthetic run.
 
@@ -113,7 +116,7 @@ EventSource client ◄── EventSourceResponse ◄── orchestration_hub.str
 
 **Source files in ALC to mirror:**
 - `app/services/loop_templates.py` — `LoopTemplate` dataclass + `list_templates`/`read_template`/`write_template`.
-- `app/services/loop_templates_seed.py` — `_SEEDS` list (16 entries, lines 13-348) and `seed_if_empty()` (lines 366-375).
+- `app/services/loop_templates_seed.py` — `_SEEDS` list (16 entries) and `seed_if_empty()` (function around line 357).
 - `app/templates/loop_templates_list.html` + `app/templates/loop_template_view.html`.
 - `app/routes/loop_templates.py` — full CRUD route set.
 
@@ -139,9 +142,10 @@ EventSource client ◄── EventSourceResponse ◄── orchestration_hub.str
 - Delete via UI button (confirm dialog) → file removed.
 - Smoke: `scripts/smoke_loop_templates.py` (new) imports the new service, asserts seed count == 16 for a tmp working_dir.
 
+**Idempotency note (correcting earlier draft):** `seed_if_empty` in ALC does NOT actually require an empty directory. It iterates the seed list and skips entries whose target slug already exists on disk, writing only missing ones. So re-running it after a user has added their own templates is safe: their files are untouched, and any missing seed is filled in. The name is historical; the behavior is "fill in any missing seeds". ADC keeps this behavior.
+
 **Risks:**
-- Existing user-authored templates in a project: `seed_if_empty` only seeds when the directory is EMPTY (per ALC). Confirm this is what we want for ADC — yes, because a non-empty dir means the project already has its own templates.
-- Frontmatter parser already exists in ALC; ADC needs to confirm `pyyaml` handles the same shape. It does (`yaml.safe_load`).
+- Frontmatter parser already exists in ALC; ADC needs `pyyaml` to handle the same shape (`yaml.safe_load` already in deps).
 
 ---
 
@@ -154,14 +158,12 @@ EventSource client ◄── EventSourceResponse ◄── orchestration_hub.str
 - `app/templates/td_view.html` — single-item view with rendered markdown body + frontmatter badges
 - `app/routes/findings.py` — `GET /findings`, `GET /findings/{td_id}/view`, `POST /findings/{td_id}/close|delete`
 
+**The actual gap is the templates.** ADC's `dreaming/routes/project_findings.py` already implements the full route set: list, single-item, close, delete, status, github, orchestrate. The page is "stats-only" because `project_findings.html` and `project_findings_detail.html` render minimal layouts.
+
 **Target files in ADC:**
-- `dreaming/routes/project_findings.py` — already exists; verify route set and add what's missing. Required:
-  - `GET /p/{slug}/findings` — list with `?status=open|in-progress|closed&module=X&sort=priority|created` query params
-  - `GET /p/{slug}/findings/{td_id}` — single-item view
-  - `POST /p/{slug}/findings/{td_id}/close` — flip frontmatter `status: closed`
-  - `POST /p/{slug}/findings/{td_id}/delete` — delete .md file
-- `dreaming/templates/project_findings.html` — port ALC's `findings.html` layout: table with filter chips at top, columns `[id, title, status, priority, module, complexity, autonomy, confidence, created]`, sortable column headers.
-- `dreaming/templates/project_findings_detail.html` — port ALC's `td_view.html`: frontmatter badges row + markdown-rendered body + action buttons (close, delete with confirm).
+- `dreaming/templates/project_findings.html` — replace with ALC's `findings.html` layout: filter chips at top (status / module), columns `[id, title, status, priority, module, complexity, autonomy, confidence, created]`, sortable column headers. Filtering and sorting are server-side via query params; route already accepts them or needs trivial extension.
+- `dreaming/templates/project_findings_detail.html` — replace with ALC's `td_view.html`: frontmatter badges row + markdown-rendered body + action buttons (close, delete with confirm dialog).
+- `dreaming/routes/project_findings.py` — extend the GET list handler to accept `?status=`, `?module=`, `?sort=` query params if not already supported. Verify during implementation.
 - The current `/p/{slug}/tech-debt` page (stats-only) STAYS as a dashboard summary; the list view lives at `/p/{slug}/findings`. Add a sidebar link "Tech debt items" → `/p/{slug}/findings`.
 
 **Acceptance:**
@@ -176,23 +178,25 @@ EventSource client ◄── EventSourceResponse ◄── orchestration_hub.str
 
 ### Wave D — Evolution rubric panel
 
-**Goal:** Add a rubric pass/fail/warning aggregation panel to `/p/{slug}/evolutions`, showing per-agent verdict counts from evolution reports.
+**Goal:** Add a rubric aggregation panel to `/p/{slug}/evolutions`, showing how many of the project's evolution proposals have rubric metadata and how the verdicts break down.
 
 **Source files in ALC:**
-- `app/services/evolution_rubric.py` (241 LOC) — `collect_stats()` scans `resolved_evolutions_dir` for report files, extracts verdicts, aggregates by agent.
+- `app/services/evolution_rubric.py` (241 LOC) — `collect_stats(evolutions_dir)` returns `ReportRubricStats(total, with_rubric, auto, review, reject, incomplete)`. Verdict buckets are `auto / review / reject / incomplete` (decided by the rubric rules: `auto` = evidence≠weak AND durability≠one_off AND safety≠unsafe; `reject` = unsafe; `review` = otherwise; `incomplete` = rubric block partial). Aggregation is **across the whole evolutions dir, not per agent**. Scans `*.md` glob, skips entries with `_` prefix.
 
 **Target files in ADC:**
-- `dreaming/services/evolution_rubric.py` (new) — port `collect_stats(reports_dir)`. Adapt path: takes `working_dir` and resolves to `<working_dir>/.claude/agents/_context/reports/` (or whatever ADC's evolution reports dir convention is — verify during implementation).
-- `dreaming/routes/project_evolutions.py` — call rubric service, pass stats into template context.
-- `dreaming/templates/project_evolutions.html` — add a rubric panel above the existing list: grid of agents × verdict counts (pass / fail / warning), with totals.
+- `dreaming/services/evolution_rubric.py` (new) — port `collect_stats(evolutions_dir)` verbatim including the `ReportRubricStats` dataclass and the rubric parsing helpers (`parse_rubric`, `parse_rubric_from_file`, `extract_frontmatter`).
+- `dreaming/routes/project_evolutions.py` — already resolves the project's evolutions directory (currently `.claude/agents/_context/`). Pass that directory into `collect_stats`. Add `rubric_stats` to template context.
+- `dreaming/templates/project_evolutions.html` — add a rubric panel above the existing list: a single horizontal stat strip showing `total`, `with_rubric`, and the four verdict-bucket counts (`auto`, `review`, `reject`, `incomplete`) as labeled badges. Optional bar/donut visualization is a stretch — start with badges.
+
+**Scope clarification — not in this wave:** per-agent grouping. ALC's rubric is project-wide; we keep that. If per-agent breakdown is wanted later, it's a follow-up.
 
 **Acceptance:**
-- Page renders rubric stats. If no reports exist, shows "no evolution reports yet" placeholder.
-- Stats update when a new report file appears (no caching beyond request lifecycle).
-- Smoke: `scripts/smoke_evolutions.py` (extend existing if any) covers the rubric.
+- Page renders rubric stats from existing evolution files. If `with_rubric == 0`, panel shows "no rubric data yet" hint.
+- Stats compute fresh each request (no caching).
+- Smoke: optional — manual visual check with at least one fixture file containing a rubric frontmatter block.
 
 **Risks:**
-- Evolution report file naming/structure may differ between ALC and ADC. Mitigation: during implementation, first verify what ADC actually writes by examining the autoconfig templates and existing `/evolve-agent` outputs.
+- ADC evolution files may not contain rubric blocks (older `/evolve-agent` versions don't emit them). Expected outcome: `total > 0`, `with_rubric == 0`, panel renders the empty-data hint. That's correct behavior, not a bug.
 
 ---
 
@@ -210,7 +214,7 @@ EventSource client ◄── EventSourceResponse ◄── orchestration_hub.str
 - `dreaming/services/dashboard_tiles.py` (new) — port tile builders. Each builder gets `(db, project_id)` and returns tile data. Some tiles are reused for both per-project and global views with the global view aggregating across all projects.
 - `dreaming/routes/project_dashboard.py` — replace existing render with new tile-driven layout. Add `GET /p/{slug}/api/dashboard/tile/{tile_id}` for AJAX reload.
 - `dreaming/routes/root.py` — global `/` becomes a cross-project aggregate, same partial structure with different builders.
-- `dreaming/templates/project_dashboard.html` + `dreaming/templates/index_dashboard.html` — bento grid.
+- `dreaming/templates/project_dashboard.html` + `dreaming/templates/index_dashboard.html` — replaced with bento grid (both files are already in `git status` modified list — fine to overwrite contents).
 - `dreaming/templates/partials/dashboard/_tile_*.html` (new dir) — per-tile partials.
 - **Tile inventory** (subset adapted to ADC's data sources):
   - `alerts` — failed sessions, stale runs
@@ -245,9 +249,9 @@ EventSource client ◄── EventSourceResponse ◄── orchestration_hub.str
 
 **Target files in ADC:**
 - `dreaming/routes/project_review.py` (new) — `GET /p/{slug}/review`. Queries:
-  - Evolutions with frontmatter `status: proposed` (from `evolutions.list_overrides`)
-  - Tech-debt items with `status: open` AND priority in `{high, urgent}` (from `tech_debt.parse_tech_debt`)
-  - Sidecar findings recent / unread (from existing service)
+  - Evolutions with frontmatter `status: proposed` (via `dreaming.services.evolutions.list_evolutions(evolutions_dir)` — note: ADC uses `list_evolutions`, not ALC's `list_overrides`)
+  - Tech-debt items with `status: open` AND priority in `{high, urgent}` (via `dreaming.services.tech_debt.parse_tech_debt`)
+  - Sidecar findings recent / unread (from existing sidecar service)
 - `dreaming/templates/project_review.html` (new) — grid with 3 sections (Evolutions / Tech-debt / Sidecar), each showing top N items with a link to the canonical detail page.
 - Sidebar entry under project section, pointing to `/p/{slug}/review`.
 
@@ -277,7 +281,7 @@ Each wave ships a `scripts/smoke_<wave>.py` script following the pattern in `scr
 Wave done → `git tag wave-A` … `wave-F`. Smoke must pass before tagging.
 
 ### Sidebar / navigation
-After each wave, verify the per-project sidebar (`templates/_partials/sidebar.html` or equivalent) lists the new/changed pages. EN + RU labels added together.
+After each wave, verify the per-project sidebar (`dreaming/templates/_sidebar.html`) lists the new/changed pages. EN + RU labels added together.
 
 ## Open questions for review
 
