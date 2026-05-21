@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 
 
 @router.get("/p/{slug}/orchestration")
-async def orchestration_list(request: Request, slug: str):
+async def orchestration_list(request: Request, slug: str, run_id: str | None = None):
     project = request.state.project
     hub = request.app.state.orchestration_hub
     pm = request.app.state.process_manager
@@ -37,13 +37,41 @@ async def orchestration_list(request: Request, slug: str):
         1 for r in runs
         if r["status"] == "running" and _ext(r) not in live_session_ids
     )
+
+    # Optional inline detail — when ?run_id=... is set and the run belongs to
+    # this project, load the swimlane data so the centre column can render it
+    # without an extra page navigation.
+    selected_run = None
+    selected_nodes: list = []
+    selected_messages: list = []
+    selected_stages: list = []
+    nodes_by_stage: dict[str, list] = {}
+    if run_id:
+        run_row = await hub.get_run(run_id)
+        if run_row is not None and run_row["project_id"] == project.id:
+            selected_run = dict(run_row)
+            selected_nodes = [dict(n) for n in await hub.list_nodes(run_id)]
+            selected_messages = [dict(m) for m in await hub.list_messages(run_id)]
+            selected_stages = [dict(s) for s in await hub.list_stages(run_id)]
+            for n in selected_nodes:
+                key = n.get("stage_id") or "_unassigned"
+                nodes_by_stage.setdefault(key, []).append(n)
+
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
     projects = await request.app.state.projects.list_all(only_enabled=True)
     return request.app.state.templates.TemplateResponse(
         request, "project_orchestration_list.html",
-        {"project": project, "runs": [dict(r) for r in runs],
-         "stale_running": stale_running,
-         "projects": projects, "locale": locale},
+        {
+            "project": project, "runs": [dict(r) for r in runs],
+            "stale_running": stale_running,
+            "selected_run": selected_run,
+            "selected_run_id": run_id,
+            "selected_nodes": selected_nodes,
+            "selected_messages": selected_messages,
+            "selected_stages": selected_stages,
+            "nodes_by_stage": nodes_by_stage,
+            "projects": projects, "locale": locale,
+        },
     )
 
 
@@ -83,32 +111,11 @@ async def orchestration_delete(request: Request, slug: str, run_id: str):
 
 @router.get("/p/{slug}/orchestration/{run_id}")
 async def orchestration_detail(request: Request, slug: str, run_id: str):
+    """Compatibility redirect: the run detail lives inline in the list view now.
+    Old bookmarks and links continue to work via this 303."""
     project = request.state.project
-    hub = request.app.state.orchestration_hub
-    run = await hub.get_run(run_id)
-    if run is None or run["project_id"] != project.id:
-        raise HTTPException(status_code=404, detail="run not found in this project")
-    nodes = [dict(n) for n in await hub.list_nodes(run_id)]
-    messages = [dict(m) for m in await hub.list_messages(run_id)]
-    stages = [dict(s) for s in await hub.list_stages(run_id)]
-
-    # Group nodes by their stage_id (column added via migration; nodes with no stage_id
-    # land in the "_unassigned" bucket).
-    nodes_by_stage: dict[str, list] = {}
-    for n in nodes:
-        key = n.get("stage_id") or "_unassigned"
-        nodes_by_stage.setdefault(key, []).append(n)
-
-    locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
-    projects = await request.app.state.projects.list_all(only_enabled=True)
-    return request.app.state.templates.TemplateResponse(
-        request, "project_orchestration_detail.html",
-        {"project": project, "run": dict(run),
-         "nodes": nodes,
-         "messages": messages,
-         "stages": stages,
-         "nodes_by_stage": nodes_by_stage,
-         "projects": projects, "locale": locale},
+    return RedirectResponse(
+        f"/p/{project.slug}/orchestration?run_id={run_id}", status_code=303,
     )
 
 
@@ -133,9 +140,19 @@ async def orchestration_finish_form(request: Request, slug: str, run_id: str):
     run = await hub.get_run(run_id)
     if run is None or run["project_id"] != project.id:
         raise HTTPException(status_code=404)
+    # Finalize any still-running stages and nodes so the swimlane reflects
+    # reality. Done BEFORE finish_run so events are written in sensible order.
+    # NOTE: auto-reconcile / cancel_stale_orchestration_runs_for_project still
+    # has the same gap — TODO follow-up wave.
+    for s in await hub.list_stages(run_id):
+        if s["status"] == "running":
+            await hub.finish_stage(s["id"], "completed")
+    for n in await hub.list_nodes(run_id):
+        if n["status"] == "running":
+            await hub.update_node_status(n["id"], "completed")
     await hub.finish_run(run_id, status="completed")
     await hub.append_event(run_id, "run_finished", {"status": "completed"})
-    return RedirectResponse(f"/p/{project.slug}/orchestration", status_code=303)
+    return RedirectResponse(f"/p/{project.slug}/orchestration?run_id={run_id}", status_code=303)
 
 
 @router.get("/p/{slug}/orchestration/{run_id}/refresh")
