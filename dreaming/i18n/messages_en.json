@@ -64,5 +64,14 @@
   "modal.input.mismatch": "Value does not match",
   "topics.generate.button": "Generate topics",
   "topics.generate.running": "Generating…",
-  "topics.editor_hint": "Editing and generation live on the Kanban page."
+  "topics.editor_hint": "Editing and generation live on the Kanban page.",
+  "orchestration.stages": "Stages",
+  "orchestration.nodes_unassigned": "Unassigned nodes",
+  "orchestration.no_agents_yet": "no agents yet",
+  "orchestration.sse_status": "Live update connection status",
+  "orchestration.mark_completed": "Mark completed",
+  "orchestration.resume": "Resume",
+  "orchestration.view_log": "View log",
+  "orchestration.delete_run": "Delete run",
+  "orchestration.messages": "Messages"
 }

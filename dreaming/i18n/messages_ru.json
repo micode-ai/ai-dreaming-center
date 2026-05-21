@@ -64,5 +64,14 @@
   "modal.input.mismatch": "Значение не совпадает",
   "topics.generate.button": "Сгенерировать темы",
   "topics.generate.running": "Генерируется…",
-  "topics.editor_hint": "Редактирование и генерация тем — на странице Kanban."
+  "topics.editor_hint": "Редактирование и генерация тем — на странице Kanban.",
+  "orchestration.stages": "Стадии",
+  "orchestration.nodes_unassigned": "Узлы без стадии",
+  "orchestration.no_agents_yet": "пока без агентов",
+  "orchestration.sse_status": "Статус соединения live-обновлений",
+  "orchestration.mark_completed": "Отметить как завершено",
+  "orchestration.resume": "Продолжить",
+  "orchestration.view_log": "Лог",
+  "orchestration.delete_run": "Удалить запуск",
+  "orchestration.messages": "Сообщения"
 }
