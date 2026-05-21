@@ -69,24 +69,22 @@ async def _resolve_node_for_subagent(
         if _node_external_id(n) == agent_hash:
             return _node_field(n, "id")
 
+    # Look up the parent's stage_id so sub-agents appear in the same swimlane
+    # row as the orchestrator that spawned them. Pass it into create_node so
+    # the node_created SSE event carries it from the start.
+    parent_stage_id: str | None = None
+    if parent_node_id:
+        for n in nodes:
+            if _node_field(n, "id") == parent_node_id:
+                parent_stage_id = _node_field(n, "stage_id")
+                break
+
     node_id = await hub.create_node(
         run_id, project_id,
         agent_name=agent_type, role="worker",
         parent_node_id=parent_node_id, external_id=agent_hash,
+        stage_id=parent_stage_id,
     )
-    # Inherit the parent's stage_id so sub-agents appear in the same swimlane
-    # row as the orchestrator that spawned them. Without this, sub-agent rows
-    # land in the "unassigned" bucket and don't render in the main swimlane.
-    if parent_node_id and node_id:
-        try:
-            await db.execute(
-                "UPDATE orchestrator_nodes "
-                "SET stage_id = (SELECT stage_id FROM orchestrator_nodes WHERE id = ?) "
-                "WHERE id = ? AND stage_id IS NULL",
-                (parent_node_id, node_id),
-            )
-        except Exception as e:
-            log.warning("subagent stage_id inheritance failed: %s", e)
     return node_id
 
 
@@ -191,24 +189,31 @@ class SubagentWatcher:
         hub: OrchestrationHub,
         db: SqliteDB,
         claude_projects_dir: str | None = None,
+        working_dir: str | None = None,
     ):
         self.run_id = run_id
         self.parent_node_id = parent_node_id
         self.hub = hub
         self.db = db
         self.claude_projects_dir = claude_projects_dir
+        self.working_dir = working_dir
         self._stop = asyncio.Event()
         self._task: asyncio.Task | None = None
         self._tails: dict[str, asyncio.Task] = {}
 
     async def _resolve_folder(self) -> Path | None:
-        """Locate this run's subagents/ folder.
+        """Compute this run's subagents/ folder path.
 
-        We need the main session jsonl basename + working_dir-encoded folder.
-        Look up the run's external_id (the main session UUID) and search for
-        any project folder under claude_projects_dir that contains
-        `<external_id>.jsonl` — the sibling `<external_id>/subagents/` is what
-        we want to watch.
+        When `working_dir` is known (the common case — dispatcher passes it),
+        derive the path directly from `(claude_projects_dir, working_dir,
+        external_id)` so we can return the EXPECTED path even before Claude
+        has created it. The polling loop in `watch_subagents_for_run` tolerates
+        a not-yet-existing folder and picks it up the moment Claude writes the
+        first subagent meta file.
+
+        Fallback (legacy callers without working_dir): rglob the projects root
+        for `<external_id>.jsonl`. Returns None if external_id is missing or
+        the legacy lookup finds nothing.
         """
         run = await self.hub.get_run(self.run_id)
         if run is None:
@@ -218,9 +223,10 @@ class SubagentWatcher:
             return None
         root = Path(self.claude_projects_dir) if self.claude_projects_dir \
             else session_tail.claude_projects_root()
+        if self.working_dir:
+            return root / session_tail.encode_workdir(self.working_dir) / external_id / "subagents"
         if not root.exists():
             return None
-        # Find the project folder owning this session jsonl.
         for path in root.rglob(f"{external_id}.jsonl"):
             if path.is_file():
                 return path.parent / external_id / "subagents"
