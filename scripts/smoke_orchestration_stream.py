@@ -102,32 +102,34 @@ async def smoke_stream_generator():
 
 
 def smoke_route_endpoint():
-    """End-to-end: hit /stream via the FastAPI TestClient and verify the route exists.
+    """Verify the SSE stream route is registered on the FastAPI app.
 
-    Note: TestClient is synchronous — that's why this function is `def`, not
-    `async def`. It's called from the sync part of `main()` after the async
-    smokes complete.
+    We could TestClient-roundtrip, but `setup_gate_middleware` returns
+    303 -> /setup before the router runs when the projects table is empty,
+    making a roundtrip indistinguishable between "route exists" and "route
+    doesn't exist". Inspecting `app.routes` directly proves the registration.
     """
     import os
-    from fastapi.testclient import TestClient
-    # Use an isolated DB to avoid clobbering dev data. The config uses
-    # `env_prefix="DC_"` (see dreaming/config.py), so the env var is DC_DB_PATH.
-    # This must be set BEFORE `from dreaming.main import app` triggers settings load.
+    # Use an isolated DB so settings load with no clobber.
     os.environ["DC_DB_PATH"] = str(Path(tempfile.mkdtemp(prefix="dc_smoke_app_")) / "test.db")
     from dreaming.main import app  # noqa: E402
 
-    with TestClient(app) as client:
-        # We can't easily create a full project + run via TestClient. Just
-        # assert the endpoint is registered. The project-resolver middleware
-        # returns 404 for a missing slug — that's success here.
-        # `follow_redirects=False` so the setup_gate 303->/setup doesn't get
-        # transparently followed into a 200 on the setup page.
-        r = client.get(
-            "/p/__missing__/orchestration/00000000-0000-0000-0000-000000000000/stream",
-            follow_redirects=False,
-        )
-        assert r.status_code in (404, 422, 303, 307), f"unexpected status {r.status_code}"
-    print("  [OK] /stream route registered")
+    target_path = "/p/{slug}/orchestration/{run_id}/stream"
+    registered = [r.path for r in app.routes if hasattr(r, "path")]
+    assert target_path in registered, (
+        f"expected route {target_path!r} to be registered. "
+        f"Found {len(registered)} routes; first 10: {registered[:10]!r}"
+    )
+    # Also confirm it's specifically a GET on that path.
+    target_methods = None
+    for r in app.routes:
+        if getattr(r, "path", None) == target_path:
+            target_methods = getattr(r, "methods", None)
+            break
+    assert target_methods and "GET" in target_methods, (
+        f"expected GET on {target_path}, got methods={target_methods}"
+    )
+    print("  [OK] /stream route registered (GET on /p/{slug}/orchestration/{run_id}/stream)")
 
 
 async def main():
