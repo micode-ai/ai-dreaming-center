@@ -1,6 +1,6 @@
 """GET /p/{slug}/orchestration — list runs + per-run detail."""
 from __future__ import annotations
-import json as _json
+import json
 import logging
 
 from fastapi import APIRouter, Request, Form, HTTPException
@@ -158,7 +158,7 @@ async def orchestration_refresh(request: Request, slug: str, run_id: str):
 @router.get("/p/{slug}/orchestration/{run_id}/stream")
 async def orchestration_stream(request: Request, slug: str, run_id: str):
     """SSE live-tail of orchestration events. Yields:
-      - one `snapshot` event with full {stages, nodes, messages}
+      - one `snapshot` event with full {run, stages, nodes, messages}
       - one event per `orchestrator_events` row as it appears
       - a final `done` event when the run terminates
     Client should fall back to polling `/refresh` on EventSource error.
@@ -174,7 +174,7 @@ async def orchestration_stream(request: Request, slug: str, run_id: str):
             # sse_starlette expects {"event", "data"} with `data` already a string.
             yield {
                 "event": ev["event"],
-                "data": _json.dumps(ev["data"], ensure_ascii=False, default=str),
+                "data": json.dumps(ev["data"], ensure_ascii=False, default=str),
             }
             if await request.is_disconnected():
                 break
