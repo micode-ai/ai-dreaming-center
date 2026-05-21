@@ -1,0 +1,23 @@
+<div class="rounded-lg p-4 flex flex-col" style="background: var(--bg-card); border:1px solid var(--border-subtle); min-height: 9rem;">
+  <div class="flex items-center justify-between mb-2">
+    <div class="text-xs uppercase tracking-wide font-semibold" style="color: var(--text-faint);">{{ "tile.orchestration.title" | t(locale=locale) }}</div>
+    <a href="/p/{{ project.slug }}/orchestration" class="text-xs" style="color: var(--brand-hover);">→</a>
+  </div>
+  {% if tile_orchestration.error %}
+    <div class="text-xs" style="color: var(--status-failed);">{{ tile_orchestration.error }}</div>
+  {% else %}
+    <div class="flex items-baseline gap-2">
+      <div class="text-3xl font-bold" style="color: var(--text-strong);">{{ tile_orchestration.running_count or 0 }}</div>
+      <div class="text-xs" style="color: var(--text-muted);">{{ "tile.orchestration.running" | t(locale=locale) }}</div>
+    </div>
+    {% if tile_orchestration.last_completed %}
+    <div class="text-xs mt-2 pt-2" style="color: var(--text-muted); border-top:1px solid var(--border-subtle);">
+      <div class="font-mono">{{ tile_orchestration.last_completed.id }}…</div>
+      <div class="truncate" title="{{ tile_orchestration.last_completed.goal }}">{{ tile_orchestration.last_completed.goal }}</div>
+      <div class="mt-0.5" style="color: var(--text-faint);">{{ tile_orchestration.last_completed.status }} · {{ tile_orchestration.last_completed.finished_at }}</div>
+    </div>
+    {% else %}
+    <div class="text-xs mt-auto pt-2" style="color: var(--text-faint);">{{ "tile.orchestration.no_runs" | t(locale=locale) }}</div>
+    {% endif %}
+  {% endif %}
+</div>

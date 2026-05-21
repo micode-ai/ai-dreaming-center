@@ -1,0 +1,23 @@
+<div class="rounded-lg p-4 flex flex-col" style="background: var(--bg-card); border:1px solid var(--border-subtle); min-height: 9rem;">
+  <div class="flex items-center justify-between mb-2">
+    <div class="text-xs uppercase tracking-wide font-semibold" style="color: var(--text-faint);">{{ "tile.evolutions.title" | t(locale=locale) }}</div>
+    <a href="/p/{{ project.slug }}/evolutions" class="text-xs" style="color: var(--brand-hover);">→</a>
+  </div>
+  {% if tile_evolutions.error %}
+    <div class="text-xs" style="color: var(--status-failed);">{{ tile_evolutions.error }}</div>
+  {% elif tile_evolutions.missing %}
+    <div class="text-xs" style="color: var(--text-faint);">{{ "tile.evolutions.no_dir" | t(locale=locale) }}</div>
+  {% else %}
+    <div class="flex items-baseline gap-2">
+      <div class="text-3xl font-bold" style="color: var(--text-strong);">{{ tile_evolutions.total or 0 }}</div>
+      <div class="text-xs" style="color: var(--text-muted);">{{ "tile.evolutions.proposals" | t(locale=locale) }}</div>
+    </div>
+    {% if tile_evolutions.buckets %}
+    <div class="text-xs mt-2 pt-2 grid grid-cols-2 gap-1" style="color: var(--text-muted); border-top:1px solid var(--border-subtle);">
+      {% for status, n in tile_evolutions.buckets.items() %}
+      <div><span class="font-mono">{{ status }}</span>: <strong>{{ n }}</strong></div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  {% endif %}
+</div>

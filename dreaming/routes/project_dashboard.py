@@ -37,6 +37,21 @@ async def dashboard(request: Request, slug: str):
 
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
     projects = await request.app.state.projects.list_all(only_enabled=True)
+
+    # Wave E MVP: bento-tile data
+    from dreaming.services.dashboard_tiles import (
+        build_orchestration_tile, build_evolutions_tile, build_loops_tile,
+    )
+    tile_orchestration = await build_orchestration_tile(
+        request.app.state.db,
+        request.app.state.orchestration_hub,
+        project,
+    )
+    tile_evolutions = await build_evolutions_tile(
+        request.app.state.db, request.app.state.projects, project,
+    )
+    tile_loops = await build_loops_tile(request.app.state.db, project)
+
     return request.app.state.templates.TemplateResponse(
         request,
         "project_dashboard.html",
@@ -47,6 +62,9 @@ async def dashboard(request: Request, slug: str):
          "kit_status": kit_status,
          "missing_dirs": missing_dirs,
          "bootstrap_needed": bootstrap_needed,
+         "tile_orchestration": tile_orchestration,
+         "tile_evolutions": tile_evolutions,
+         "tile_loops": tile_loops,
          "projects": projects, "locale": locale},
     )
 
