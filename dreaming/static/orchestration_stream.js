@@ -82,7 +82,7 @@
       case "done":
         normalClose = true;
         setStatus(data.status || "completed");
-        setIndicator("connected");
+        setIndicator("done");
         if (es) { es.close(); es = null; }
         return;
       default:
@@ -154,10 +154,11 @@
     }
   }
 
-  if (initialStatus === "running" || initialStatus === "pending") {
+  // create_run always inserts status='running'; non-running means terminal.
+  if (initialStatus === "running") {
     startStream();
   } else {
-    setIndicator("connected");
+    setIndicator("done");
   }
 
   window.addEventListener("beforeunload", () => {

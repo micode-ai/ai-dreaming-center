@@ -60,5 +60,6 @@
 /* SSE status indicator (top-right of detail page) */
 .sse-indicator { font-size: 10px; padding: 2px 8px; border-radius: 9999px; font-family: monospace; }
 .sse-indicator.connected { background: rgba(52,211,153,.12); color:#047857; }
+.sse-indicator.done { background: rgba(99,102,241,.12); color:#4338ca; }
 .sse-indicator.disconnected { background: rgba(248,113,113,.12); color:#b91c1c; }
 .sse-indicator.polling { background: rgba(245,158,11,.12); color:#92400e; }

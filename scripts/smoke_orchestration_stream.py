@@ -87,7 +87,7 @@ async def smoke_stream_generator():
     async def collect():
         async for ev in hub.stream_run_events(run_id, idle_close_seconds=1.0):
             collected.append(ev)
-            if len(collected) >= 4:  # snapshot + warmup + 2 live (events that already exist are NOT re-emitted; tail starts after snapshot's cursor priming)
+            if len(collected) >= 4:  # snapshot + 2 live + done (warmup is in snapshot only, not re-emitted)
                 break
 
     await asyncio.wait_for(asyncio.gather(feeder(), collect()), timeout=6.0)
