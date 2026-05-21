@@ -19,8 +19,10 @@ Deliberately not provided (clients poll instead):
   that fires the next run from the completion handler.
 """
 from __future__ import annotations
+import asyncio
 import json
 import logging
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -205,8 +207,6 @@ class OrchestrationHub:
         polls. This is fine for a local single-user dashboard; for multi-user fan-out
         an asyncio.Queue pub/sub would be preferable.
         """
-        import asyncio
-
         # Initial snapshot.
         run = await self.get_run(run_id)
         if run is None:
@@ -230,6 +230,11 @@ class OrchestrationHub:
         # `ts > ?` filter would silently skip tied events. See list_events_since.
         cursor_ts: str | None = None
         cursor_id: str | None = None
+        # TODO(wave-B): prime cursor BEFORE snapshot to close the T0..T5 race
+        # window where events appended between snapshot reads and cursor priming
+        # land in the cursor but not in the snapshot, so are silently dropped.
+        # Acceptable for Wave A (single-user, ~500ms poll, missed events only
+        # under-count the message counter and self-heal on page reload).
         # Prime the cursor to the latest event we've already shown via snapshot,
         # so we don't re-emit them.
         existing = await self.list_events_since(run_id, after_ts=None)
@@ -238,7 +243,6 @@ class OrchestrationHub:
             cursor_id = existing[-1]["id"]
 
         idle_started_at: float | None = None
-        loop = asyncio.get_event_loop()
         while True:
             new_events = await self.list_events_since(
                 run_id, after_ts=cursor_ts, after_id=cursor_id,
@@ -247,7 +251,6 @@ class OrchestrationHub:
                 for ev in new_events:
                     payload = {}
                     try:
-                        import json
                         payload = json.loads(ev["payload_json"]) if ev["payload_json"] else {}
                     except (ValueError, TypeError):
                         payload = {}
@@ -264,8 +267,8 @@ class OrchestrationHub:
                 status = run["status"] if run else "unknown"
                 if status not in ("running",):
                     if idle_started_at is None:
-                        idle_started_at = loop.time()
-                    elif loop.time() - idle_started_at >= idle_close_seconds:
+                        idle_started_at = time.monotonic()
+                    elif time.monotonic() - idle_started_at >= idle_close_seconds:
                         yield {"event": "done", "data": {"status": status}}
                         return
             await asyncio.sleep(poll_interval)
