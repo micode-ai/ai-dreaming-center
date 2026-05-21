@@ -187,6 +187,89 @@ class OrchestrationHub:
             (run_id, after_ts, after_ts, after_id),
         )
 
+    async def stream_run_events(
+        self, run_id: str, *,
+        poll_interval: float = 0.5,
+        idle_close_seconds: float = 3.0,
+    ):
+        """Async generator that yields dicts of shape `{"event": str, "data": dict}`.
+
+        First yield is always `{"event": "snapshot", "data": {run, stages, nodes, messages}}`
+        so a client connecting mid-run gets full state.
+
+        Subsequent yields are `{"event": <event_type>, "data": <payload>}` for each
+        new row in `orchestrator_events`. The generator terminates when the run is in
+        a terminal status AND no new events have arrived for `idle_close_seconds`.
+
+        Implementation note: tails the events table via repeated `list_events_since`
+        polls. This is fine for a local single-user dashboard; for multi-user fan-out
+        an asyncio.Queue pub/sub would be preferable.
+        """
+        import asyncio
+
+        # Initial snapshot.
+        run = await self.get_run(run_id)
+        if run is None:
+            yield {"event": "error", "data": {"message": f"run {run_id} not found"}}
+            return
+        stages = [dict(r) for r in await self.list_stages(run_id)]
+        nodes = [dict(r) for r in await self.list_nodes(run_id)]
+        messages = [dict(r) for r in await self.list_messages(run_id)]
+        yield {
+            "event": "snapshot",
+            "data": {
+                "run": dict(run),
+                "stages": stages,
+                "nodes": nodes,
+                "messages": messages,
+            },
+        }
+
+        # Tail events. Composite `(ts, id)` cursor — `_now()` is microsecond-
+        # resolution but Windows wall-clock can repeat within a tick, so a single
+        # `ts > ?` filter would silently skip tied events. See list_events_since.
+        cursor_ts: str | None = None
+        cursor_id: str | None = None
+        # Prime the cursor to the latest event we've already shown via snapshot,
+        # so we don't re-emit them.
+        existing = await self.list_events_since(run_id, after_ts=None)
+        if existing:
+            cursor_ts = existing[-1]["ts"]
+            cursor_id = existing[-1]["id"]
+
+        idle_started_at: float | None = None
+        loop = asyncio.get_event_loop()
+        while True:
+            new_events = await self.list_events_since(
+                run_id, after_ts=cursor_ts, after_id=cursor_id,
+            )
+            if new_events:
+                for ev in new_events:
+                    payload = {}
+                    try:
+                        import json
+                        payload = json.loads(ev["payload_json"]) if ev["payload_json"] else {}
+                    except (ValueError, TypeError):
+                        payload = {}
+                    yield {
+                        "event": ev["event_type"],
+                        "data": payload,
+                    }
+                    cursor_ts = ev["ts"]
+                    cursor_id = ev["id"]
+                idle_started_at = None
+            else:
+                # Check terminal state + idle window
+                run = await self.get_run(run_id)
+                status = run["status"] if run else "unknown"
+                if status not in ("running",):
+                    if idle_started_at is None:
+                        idle_started_at = loop.time()
+                    elif loop.time() - idle_started_at >= idle_close_seconds:
+                        yield {"event": "done", "data": {"status": status}}
+                        return
+            await asyncio.sleep(poll_interval)
+
     # ── Stages ───────────────────────────────────────
 
     async def ensure_stage(
