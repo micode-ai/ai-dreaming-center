@@ -44,14 +44,17 @@
     const list = document.getElementById("messages-list");
     if (!list) return;
     const card = document.createElement("div");
-    card.className = "bg-white rounded shadow p-3";
+    card.className = "rounded p-3 msg-card";
+    card.style.background = "var(--bg-elevated)";
+    card.style.border = "1px solid var(--border-subtle)";
+    if (msg.node_id) card.dataset.nodeId = msg.node_id;
     card.innerHTML = `
-      <div class="text-xs muted mb-1">
+      <div class="text-xs mb-1" style="color: var(--text-faint);">
         <span class="font-mono">${msg.author || ""}</span> ·
         <span class="font-mono">${msg.kind || ""}</span> ·
         ${msg.ts || ""}
       </div>
-      <pre class="whitespace-pre-wrap text-sm font-mono"></pre>`;
+      <pre class="whitespace-pre-wrap text-sm font-mono" style="color: var(--text-body);"></pre>`;
     card.querySelector("pre").textContent = msg.text || "";
     list.appendChild(card);
     lastMsgCount += 1;
@@ -67,6 +70,7 @@
           author: data.author || "",
           kind: data.kind || "",
           ts: data.ts || "",
+          node_id: data.node_id || "",
           text: "(new message — reload to see full content)",
         });
         return;

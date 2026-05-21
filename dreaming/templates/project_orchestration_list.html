@@ -159,9 +159,15 @@
 
       <h3 class="font-semibold mb-2 mt-4 text-sm">{{ "orchestration.messages" | t(locale=locale) }} (<span id="msg-count">{{ selected_messages|length }}</span>)</h3>
       {% if selected_messages %}
+      <div id="msg-filter-bar" class="hidden mb-2 flex items-center gap-2 text-xs">
+        <span style="color: var(--text-faint);">{{ "orchestration.filter_node" | t(locale=locale) }}:</span>
+        <span id="msg-filter-label" class="font-mono px-2 py-0.5 rounded" style="background: var(--bg-elevated); color: var(--text-body);"></span>
+        <button id="msg-filter-clear" type="button" class="underline" style="color: var(--brand-hover);">{{ "common.clear" | t(locale=locale) }}</button>
+      </div>
       <div id="messages-list" class="space-y-2">
       {% for m in selected_messages %}
-        <div class="rounded p-3" style="background: var(--bg-elevated); border:1px solid var(--border-subtle);">
+        <div class="rounded p-3 msg-card" data-node-id="{{ m.node_id }}"
+             style="background: var(--bg-elevated); border:1px solid var(--border-subtle);">
           <div class="text-xs mb-1" style="color: var(--text-faint);">
             <span class="font-mono">{{ m.author }}</span> ·
             <span class="font-mono">{{ m.kind }}</span> ·
@@ -171,6 +177,58 @@
         </div>
       {% endfor %}
       </div>
+      <script>
+      (function() {
+        // Per-node message filtering: click a chip to filter; click again or
+        // hit "clear" to show the full chat.
+        const list = document.getElementById("messages-list");
+        const bar = document.getElementById("msg-filter-bar");
+        const label = document.getElementById("msg-filter-label");
+        const clearBtn = document.getElementById("msg-filter-clear");
+        if (!list || !bar) return;
+        let selectedNodeId = null;
+
+        function applyFilter() {
+          const cards = list.querySelectorAll(".msg-card");
+          if (!selectedNodeId) {
+            cards.forEach(c => c.style.display = "");
+            bar.classList.add("hidden");
+            document.querySelectorAll(".activity-chip.selected").forEach(c => c.classList.remove("selected"));
+            return;
+          }
+          cards.forEach(c => {
+            c.style.display = (c.dataset.nodeId === selectedNodeId) ? "" : "none";
+          });
+          bar.classList.remove("hidden");
+        }
+
+        function pickNode(chip) {
+          const nodeId = chip.dataset.nodeId;
+          if (!nodeId) return;
+          if (selectedNodeId === nodeId) {
+            selectedNodeId = null;
+            label.textContent = "";
+          } else {
+            selectedNodeId = nodeId;
+            const name = (chip.querySelector(".chip-action") || {}).textContent || nodeId.substring(0, 8);
+            label.textContent = name.trim();
+            document.querySelectorAll(".activity-chip.selected").forEach(c => c.classList.remove("selected"));
+            chip.classList.add("selected");
+          }
+          applyFilter();
+        }
+
+        document.querySelectorAll(".activity-chip").forEach(chip => {
+          chip.addEventListener("click", () => pickNode(chip));
+        });
+        if (clearBtn) {
+          clearBtn.addEventListener("click", () => {
+            selectedNodeId = null;
+            applyFilter();
+          });
+        }
+      })();
+      </script>
       {% else %}
       <div id="messages-list" class="space-y-2"></div>
       <p class="text-sm" style="color: var(--text-faint);">{{ "orchestration.no_messages" | t(locale=locale) }}</p>

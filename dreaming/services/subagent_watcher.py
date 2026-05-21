@@ -11,10 +11,11 @@ this agent_hash (idempotent — same hash always maps to the same node), and
 (2) launches a `tail_session_file` task on the matching jsonl. From that point
 on subagent messages stream into their own node in real time.
 
-This is a port of agent-learning-center's subagent_watcher adapted to the
-slimmer ai-dreaming-center OrchestrationHub. Stage-attachment / placeholder
-node reuse logic from ALC is intentionally omitted — Wave 3 lean has no
-stage tables yet.
+Ported from agent-learning-center's subagent_watcher. The ALC original also
+reused pre-created placeholder nodes per stage; here we always create a fresh
+worker node per subagent jsonl. Stage tables now exist (orchestrator_stages),
+but stage→node attachment is left for callers that need it — the default
+case (one orchestrator + N workers) does not require stage binding.
 """
 
 from __future__ import annotations
@@ -68,11 +69,25 @@ async def _resolve_node_for_subagent(
         if _node_external_id(n) == agent_hash:
             return _node_field(n, "id")
 
-    return await hub.create_node(
+    node_id = await hub.create_node(
         run_id, project_id,
         agent_name=agent_type, role="worker",
         parent_node_id=parent_node_id, external_id=agent_hash,
     )
+    # Inherit the parent's stage_id so sub-agents appear in the same swimlane
+    # row as the orchestrator that spawned them. Without this, sub-agent rows
+    # land in the "unassigned" bucket and don't render in the main swimlane.
+    if parent_node_id and node_id:
+        try:
+            await db.execute(
+                "UPDATE orchestrator_nodes "
+                "SET stage_id = (SELECT stage_id FROM orchestrator_nodes WHERE id = ?) "
+                "WHERE id = ? AND stage_id IS NULL",
+                (parent_node_id, node_id),
+            )
+        except Exception as e:
+            log.warning("subagent stage_id inheritance failed: %s", e)
+    return node_id
 
 
 async def watch_subagents_for_run(
