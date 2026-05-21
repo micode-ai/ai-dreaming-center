@@ -132,9 +132,38 @@ def smoke_route_endpoint():
     print("  [OK] /stream route registered (GET on /p/{slug}/orchestration/{run_id}/stream)")
 
 
+async def smoke_dispatch_seeds_stage():
+    """A fresh run started via start_orchestration_run should have at least
+    one stage row, and its root node should be tagged with that stage_id."""
+    from unittest.mock import AsyncMock, MagicMock
+    db, hub = await _setup()
+    pm = MagicMock()
+    pm.start_command = AsyncMock(side_effect=RuntimeError("no claude binary in smoke"))
+    settings = MagicMock(port=8086, claude_path="claude", model="sonnet",
+                         orchestration_max_turns=150, orchestration_timeout_minutes=120,
+                         claude_projects_dir="")
+    app_state = MagicMock(
+        orchestration_hub=hub, process_manager=pm, settings=settings, db=db,
+    )
+    project = MagicMock(id=1, slug="smoke", working_dir="/tmp")
+
+    from dreaming.services.orchestration_dispatch import start_orchestration_run
+    result = await start_orchestration_run(app_state, project, "test goal")
+    run_id = result["run_id"]
+    stages = await hub.list_stages(run_id)
+    assert len(stages) >= 1, "expected at least one stage to be created"
+    nodes = await hub.list_nodes(run_id)
+    root = [n for n in nodes if (n["role"] or "").lower() == "orchestrator"]
+    assert root, "expected an orchestrator root node"
+    assert root[0]["stage_id"] == stages[0]["id"], (
+        f"root node stage_id {root[0]['stage_id']!r} != stage {stages[0]['id']!r}")
+    print("  [OK] dispatch seeds initial stage and tags root node")
+
+
 async def main():
     await smoke_list_events_since()
     await smoke_stream_generator()
+    await smoke_dispatch_seeds_stage()
     print("smoke_orchestration_stream OK (async smokes)")
 
 
