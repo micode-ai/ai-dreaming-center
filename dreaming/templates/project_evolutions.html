@@ -1,11 +1,45 @@
 {% extends "_project_layout.html" %}
-{% from "_autoconfig_banner.html" import autoconfig_banner %}
+{% from "_autoconfig_banner.html" import autoconfig_banner with context %}
 {% set active='evolutions' %}
 {% block project_content %}
+{% if rubric_stats and rubric_stats.total %}
+<div class="rounded-lg p-4 mb-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+  <div class="flex items-center justify-between mb-3">
+    <div>
+      <div class="text-xs uppercase tracking-wide" style="color: var(--text-faint);">{{ "evolutions.rubric.title" | t(locale=locale) }}</div>
+      <div class="text-xs mt-0.5" style="color: var(--text-muted);">{{ "evolutions.rubric.subtitle" | t(locale=locale) }}</div>
+    </div>
+    <div class="text-xs" style="color: var(--text-faint);">
+      {{ "evolutions.rubric.coverage" | t(locale=locale, with_rubric=rubric_stats.with_rubric, total=rubric_stats.total) }}
+    </div>
+  </div>
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+    <div class="rounded p-2 text-center" style="background: rgba(52,211,153,.10); border:1px solid rgba(52,211,153,.30);">
+      <div class="text-lg font-bold" style="color: #047857;">{{ rubric_stats.auto }}</div>
+      <div class="text-xs uppercase tracking-wide" style="color: var(--text-muted);">{{ "evolutions.rubric.auto" | t(locale=locale) }}</div>
+    </div>
+    <div class="rounded p-2 text-center" style="background: rgba(245,158,11,.10); border:1px solid rgba(245,158,11,.30);">
+      <div class="text-lg font-bold" style="color: #92400e;">{{ rubric_stats.review }}</div>
+      <div class="text-xs uppercase tracking-wide" style="color: var(--text-muted);">{{ "evolutions.rubric.review" | t(locale=locale) }}</div>
+    </div>
+    <div class="rounded p-2 text-center" style="background: rgba(248,113,113,.10); border:1px solid rgba(248,113,113,.30);">
+      <div class="text-lg font-bold" style="color: #b91c1c;">{{ rubric_stats.reject }}</div>
+      <div class="text-xs uppercase tracking-wide" style="color: var(--text-muted);">{{ "evolutions.rubric.reject" | t(locale=locale) }}</div>
+    </div>
+    <div class="rounded p-2 text-center" style="background: rgba(156,163,175,.10); border:1px solid rgba(156,163,175,.30);">
+      <div class="text-lg font-bold" style="color: #475569;">{{ rubric_stats.incomplete }}</div>
+      <div class="text-xs uppercase tracking-wide" style="color: var(--text-muted);">{{ "evolutions.rubric.incomplete" | t(locale=locale) }}</div>
+    </div>
+  </div>
+  {% if rubric_stats.with_rubric == 0 %}
+  <div class="text-xs mt-3" style="color: var(--text-faint);">{{ "evolutions.rubric.no_data_hint" | t(locale=locale) }}</div>
+  {% endif %}
+</div>
+{% endif %}
 {% if not exists %}
 {{ autoconfig_banner(project, "evolutions_dir", evolutions_dir, "Evolutions (_context)") }}
 {% elif error %}
-<p class="text-sm text-red-700">Ошибка: <code>{{ error }}</code></p>
+<p class="text-sm text-red-700">{{ "common.error" | t(locale=locale) }}: <code>{{ error }}</code></p>
 {% elif items %}
 <p class="text-xs muted mb-3">{{ items|length }} evolutions in <code>{{ evolutions_dir }}</code></p>
 <table class="w-full bg-white rounded shadow text-sm">
@@ -48,19 +82,23 @@
     </td>
     <td class="p-2 text-xs whitespace-nowrap">
       <form method="post" action="/p/{{ project.slug }}/evolutions/apply" class="inline"
-            data-confirm="Запустить Orchestrator: применить эту правку к `.claude/agents/{{ it.agent_name }}.md`?">
+            data-confirm="{% if it.has_conflict %}{{ 'evolutions.confirm_apply_force' | t(locale=locale, name=it.agent_name) }}{% else %}{{ 'evolutions.confirm_apply' | t(locale=locale, name=it.agent_name) }}{% endif %}"
+            {% if it.has_conflict %}data-confirm-variant="danger"{% endif %}>
         <input type="hidden" name="path" value="{{ it.relative_path }}">
-        <button class="text-xs px-2 py-1 border border-purple-500 text-purple-700 rounded">Apply</button>
+        {% if it.has_conflict %}<input type="hidden" name="force" value="1">{% endif %}
+        <button class="text-xs px-2 py-1 border rounded {% if it.has_conflict %}border-red-500 text-red-700 bg-red-50{% else %}border-purple-500 text-purple-700{% endif %}">
+          {% if it.has_conflict %}Apply (force){% else %}Apply{% endif %}
+        </button>
       </form>
       {% if not it.github_issue %}
       <form method="post" action="/p/{{ project.slug }}/evolutions/github" class="inline ml-1"
-            data-confirm="Создать GitHub issue из этого evolution?">
+            data-confirm="{{ 'evolutions.confirm_gh' | t(locale=locale) }}">
         <input type="hidden" name="path" value="{{ it.relative_path }}">
         <button class="text-xs px-2 py-1 border border-slate-500 text-slate-700 rounded">→ GH</button>
       </form>
       {% endif %}
       <form method="post" action="/p/{{ project.slug }}/evolutions/delete" class="inline ml-1"
-            data-confirm="Удалить файл {{ it.relative_path }}?" data-confirm-variant="danger">
+            data-confirm="{{ 'evolutions.confirm_delete' | t(locale=locale, path=it.relative_path) }}" data-confirm-variant="danger">
         <input type="hidden" name="path" value="{{ it.relative_path }}">
         <button class="text-xs px-2 py-1 border rounded text-red-600">del</button>
       </form>
@@ -100,7 +138,7 @@
     const rawUrl = `/p/${slug}/evolutions/raw?path=${encodeURIComponent(path)}`;
     title.textContent = name + " — " + path;
     rawLink.href = rawUrl;
-    body.innerHTML = '<p class="muted" style="padding: 1.5rem;">Загрузка…</p>';
+    body.innerHTML = '<p class="muted" style="padding: 1.5rem;">{{ "evolutions.modal_loading" | t(locale=locale) }}</p>';
     modal.showModal();
     try {
       const r = await fetch(rawUrl);
@@ -108,7 +146,7 @@
       const text = await r.text();
       window.dcRenderMarkdown(body, text);
     } catch (e) {
-      body.innerHTML = '<p class="text-red-700 font-mono text-xs" style="padding: 1.5rem;">Ошибка: ' + (e.message || e) + '</p>';
+      body.innerHTML = '<p class="text-red-700 font-mono text-xs" style="padding: 1.5rem;">{{ "common.error" | t(locale=locale) }}: ' + (e.message || e) + '</p>';
     }
   };
   window.closeEvolution = function() { modal.close(); };
@@ -118,6 +156,6 @@
 })();
 </script>
 {% else %}
-<p class="muted">Нет evolution-файлов в <code>{{ evolutions_dir }}</code>.</p>
+<p class="muted">{{ "evolutions.empty" | t(locale=locale, dir=evolutions_dir) }}</p>
 {% endif %}
 {% endblock %}
