@@ -1,7 +1,22 @@
 """OrchestrationHub — DB-backed runs/nodes/messages tracking for Roman-style multi-agent flows.
 
-Wave 3 lean scope: create runs, append messages, list runs, simple status updates.
-SSE fan-out, sub-agent watching, cascade pipelines — Wave 3 full.
+What this module provides:
+- CRUD over `orchestrator_runs`, `_nodes`, `_messages`, `_events`,
+  `_stages`, `_gate_verdicts`, `_artifacts`.
+- Idempotent stage create + start/finish transitions.
+- Artifact dedup via `(run_id, dedup_hash)` unique constraint.
+
+Deliberately not provided (clients poll instead):
+- Real-time SSE/WebSocket fan-out of new messages/events. The UI polls
+  `/p/<slug>/orchestration/{run_id}` periodically; if you need push,
+  build a pub/sub layer (asyncio.Queue per run) around `append_message`
+  and `append_event` and expose `/events/{run_id}/stream`.
+- Sub-agent process supervision. `create_node` records the row, but the
+  actual sub-process lifecycle is managed elsewhere (process_manager) or
+  externally (harness_client when configured).
+- Multi-run cascading. Each run is independent; chained cascades would
+  need a `parent_run_id` column on `orchestrator_runs` plus a dispatcher
+  that fires the next run from the completion handler.
 """
 from __future__ import annotations
 import json
@@ -137,6 +152,39 @@ class OrchestrationHub:
             "SELECT * FROM orchestrator_events WHERE run_id=? "
             "ORDER BY ts ASC LIMIT ?",
             (run_id, limit),
+        )
+
+    async def list_events_since(
+        self, run_id: str,
+        after_ts: str | None,
+        after_id: str | None = None,
+    ) -> list:
+        """Events strictly after a `(ts, id)` cursor. ISO8601 UTC for ts.
+
+        Composite cursor: `_now()` has microsecond resolution but Windows
+        wall-clock can produce duplicate ISO strings within the same tick.
+        Filtering only on `ts > ?` would silently drop tied events. The
+        SQL filters `ts > after_ts OR (ts = after_ts AND id > after_id)`.
+
+        Pass None for both args to return all events.
+        """
+        if after_ts is None:
+            return await self.db.fetch_all(
+                "SELECT * FROM orchestrator_events WHERE run_id=? "
+                "ORDER BY ts ASC, id ASC",
+                (run_id,),
+            )
+        if after_id is None:
+            return await self.db.fetch_all(
+                "SELECT * FROM orchestrator_events WHERE run_id=? AND ts > ? "
+                "ORDER BY ts ASC, id ASC",
+                (run_id, after_ts),
+            )
+        return await self.db.fetch_all(
+            "SELECT * FROM orchestrator_events WHERE run_id=? "
+            "AND (ts > ? OR (ts = ? AND id > ?)) "
+            "ORDER BY ts ASC, id ASC",
+            (run_id, after_ts, after_ts, after_id),
         )
 
     # ── Stages ───────────────────────────────────────
