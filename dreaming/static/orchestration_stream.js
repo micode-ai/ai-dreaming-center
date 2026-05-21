@@ -61,6 +61,101 @@
     bumpCounter("msg-count", lastMsgCount);
   }
 
+  function chipStateClass(status) {
+    if (status === "running") return "state-active";
+    if (status === "completed") return "state-done";
+    if (status === "failed" || status === "cancelled") return "state-rejected";
+    return "state-idle";
+  }
+
+  function ensureSwimCell(stageId) {
+    // Locate the swim-cell for this stage, or fall back to creating one
+    // (rare — happens if a node arrives for a stage that the page hasn't
+    // server-rendered yet, e.g. when stages are created live).
+    if (!stageId) return null;
+    let cell = document.querySelector('.swim-cell[data-stage-id="' + stageId + '"]');
+    if (cell) {
+      // Drop any "no agents yet" placeholder so the new chip can land alongside.
+      const placeholder = cell.querySelector("span.text-xs.muted");
+      if (placeholder && !placeholder.classList.contains("chip-action")) placeholder.remove();
+    }
+    return cell;
+  }
+
+  function addNodeChip(data) {
+    const cell = ensureSwimCell(data.stage_id);
+    if (!cell) return;
+    // Don't duplicate if the chip is already there (server-render + late event).
+    if (cell.querySelector('.activity-chip[data-node-id="' + data.node_id + '"]')) return;
+    const chip = document.createElement("div");
+    chip.className = "activity-chip " + chipStateClass(data.status);
+    chip.dataset.nodeId = data.node_id;
+    const action = document.createElement("span");
+    action.className = "chip-action";
+    action.textContent = data.agent_name || "agent";
+    chip.appendChild(action);
+    const meta = document.createElement("span");
+    meta.className = "text-xs muted";
+    meta.textContent = (data.role || "") + " · " + (data.status || "");
+    chip.appendChild(meta);
+    // Bump the swim-row's agent counter ("N agents") if it's there.
+    const row = cell.closest(".swim-row");
+    if (row) {
+      const counter = row.querySelector(".swim-agent-role");
+      if (counter) {
+        const n = row.querySelectorAll(".activity-chip").length + 1;
+        counter.textContent = n + " agent" + (n === 1 ? "" : "s");
+      }
+    }
+    // Wire the click-to-filter handler that the inline script in the template
+    // attached to the server-rendered chips.
+    chip.addEventListener("click", () => {
+      const list = document.getElementById("messages-list");
+      if (!list) return;
+      const bar = document.getElementById("msg-filter-bar");
+      const label = document.getElementById("msg-filter-label");
+      const already = chip.classList.contains("selected");
+      document.querySelectorAll(".activity-chip.selected").forEach(c => c.classList.remove("selected"));
+      if (already) {
+        list.querySelectorAll(".msg-card").forEach(c => c.style.display = "");
+        if (bar) bar.classList.add("hidden");
+        return;
+      }
+      chip.classList.add("selected");
+      const nid = chip.dataset.nodeId;
+      list.querySelectorAll(".msg-card").forEach(c => {
+        c.style.display = (c.dataset.nodeId === nid) ? "" : "none";
+      });
+      if (label) label.textContent = (data.agent_name || nid.slice(0, 8));
+      if (bar) bar.classList.remove("hidden");
+    });
+    cell.appendChild(chip);
+  }
+
+  function updateNodeChipStatus(nodeId, newStatus) {
+    const chip = document.querySelector('.activity-chip[data-node-id="' + nodeId + '"]');
+    if (!chip) return;
+    chip.classList.remove("state-active", "state-done", "state-rejected", "state-idle");
+    chip.classList.add(chipStateClass(newStatus));
+    const meta = chip.querySelector(".text-xs.muted");
+    if (meta) {
+      const role = meta.textContent.split("·")[0].trim();
+      meta.textContent = role + " · " + newStatus;
+    }
+  }
+
+  function updateStageStatus(stageId, newStatus) {
+    const tile = document.querySelector('.stage-tile[data-stage-id="' + stageId + '"]');
+    if (!tile) return;
+    tile.classList.remove("running", "completed", "failed", "cancelled", "pending");
+    tile.classList.add(newStatus);
+    const pill = tile.querySelector(".status-pill");
+    if (pill) {
+      pill.className = "status-pill status-" + newStatus;
+      pill.textContent = newStatus;
+    }
+  }
+
   function handleEvent(eventType, data) {
     switch (eventType) {
       case "snapshot":
@@ -75,9 +170,15 @@
         });
         return;
       case "node_created":
-      case "node_status_changed":
-        lastNodeCount = data.node_count || lastNodeCount + 1;
+        addNodeChip(data);
+        lastNodeCount += 1;
         bumpCounter("node-count", lastNodeCount);
+        return;
+      case "node_status_changed":
+        if (data.node_id && data.status) updateNodeChipStatus(data.node_id, data.status);
+        return;
+      case "stage_status_changed":
+        if (data.stage_id && data.status) updateStageStatus(data.stage_id, data.status);
         return;
       case "run_finished":
       case "run_resumed":

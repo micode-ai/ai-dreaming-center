@@ -99,15 +99,23 @@ class OrchestrationHub:
     async def create_node(
         self, run_id: str, project_id: int, agent_name: str, role: str = "executor",
         parent_node_id: str | None = None, external_id: str | None = None,
+        stage_id: str | None = None,
     ) -> str:
         node_id = str(uuid.uuid4())
         ts = _now()
         await self.db.execute(
             "INSERT INTO orchestrator_nodes "
-            "(id, project_id, run_id, external_id, parent_node_id, agent_name, role, status, started_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, 'running', ?)",
-            (node_id, project_id, run_id, external_id, parent_node_id, agent_name, role, ts),
+            "(id, project_id, run_id, external_id, parent_node_id, agent_name, role, status, started_at, stage_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, 'running', ?, ?)",
+            (node_id, project_id, run_id, external_id, parent_node_id,
+             agent_name, role, ts, stage_id),
         )
+        # Live-stream signal so SSE clients can add a chip without page reload.
+        await self.append_event(run_id, "node_created", {
+            "node_id": node_id, "agent_name": agent_name, "role": role,
+            "status": "running", "stage_id": stage_id,
+            "parent_node_id": parent_node_id, "started_at": ts,
+        })
         return node_id
 
     async def list_nodes(self, run_id: str) -> list:
@@ -123,6 +131,19 @@ class OrchestrationHub:
             "WHERE id=?",
             (status, finished, _now(), node_id),
         )
+        # Live-stream signal — find the run_id so we can emit the event.
+        row = await self.db.fetch_one(
+            "SELECT run_id FROM orchestrator_nodes WHERE id=?", (node_id,),
+        )
+        if row is not None:
+            try:
+                run_id = row["run_id"]
+            except (KeyError, TypeError, IndexError):
+                run_id = None
+            if run_id:
+                await self.append_event(run_id, "node_status_changed", {
+                    "node_id": node_id, "status": status,
+                })
 
     # -- Messages -------------------------------------
 
@@ -308,17 +329,35 @@ class OrchestrationHub:
         )
         return stage_id
 
+    async def _emit_stage_status(self, stage_id: str, status: str) -> None:
+        """Emit `stage_status_changed` event for SSE clients."""
+        row = await self.db.fetch_one(
+            "SELECT run_id FROM orchestrator_stages WHERE id=?", (stage_id,),
+        )
+        if row is None:
+            return
+        try:
+            run_id = row["run_id"]
+        except (KeyError, TypeError, IndexError):
+            return
+        if run_id:
+            await self.append_event(run_id, "stage_status_changed", {
+                "stage_id": stage_id, "status": status,
+            })
+
     async def start_stage(self, stage_id: str) -> None:
         await self.db.execute(
             "UPDATE orchestrator_stages SET status='running', started_at=? WHERE id=?",
             (_now(), stage_id),
         )
+        await self._emit_stage_status(stage_id, "running")
 
     async def finish_stage(self, stage_id: str, status: str = "completed") -> None:
         await self.db.execute(
             "UPDATE orchestrator_stages SET status=?, finished_at=? WHERE id=?",
             (status, _now(), stage_id),
         )
+        await self._emit_stage_status(stage_id, status)
 
     async def list_stages(self, run_id: str) -> list:
         return await self.db.fetch_all(
