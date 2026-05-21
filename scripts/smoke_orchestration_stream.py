@@ -66,8 +66,44 @@ async def smoke_list_events_since():
     print("  [OK] list_events_since (composite cursor)")
 
 
+async def smoke_stream_generator():
+    db, hub = await _setup()
+    project_id = 1
+    run_id = await hub.create_run(project_id, goal="stream-smoke")
+    # Pre-seed one event so the snapshot is non-empty
+    await hub.append_event(run_id, "warmup", {"i": 0})
+
+    # Collect events from the generator with a 6s deadline
+    collected: list[dict] = []
+
+    async def feeder():
+        await asyncio.sleep(0.1)
+        await hub.append_event(run_id, "live", {"i": 1})
+        await asyncio.sleep(0.1)
+        await hub.append_event(run_id, "live", {"i": 2})
+        # End the run so the generator terminates after idle window
+        await hub.finish_run(run_id, status="completed")
+
+    async def collect():
+        async for ev in hub.stream_run_events(run_id, idle_close_seconds=1.0):
+            collected.append(ev)
+            if len(collected) >= 4:  # snapshot + warmup + 2 live (events that already exist are NOT re-emitted; tail starts after snapshot's cursor priming)
+                break
+
+    await asyncio.wait_for(asyncio.gather(feeder(), collect()), timeout=6.0)
+    # First yield should be snapshot
+    assert collected[0]["event"] == "snapshot", f"expected snapshot first, got {collected[0]['event']}"
+    snap = collected[0]["data"]
+    assert "stages" in snap and "nodes" in snap and "messages" in snap, f"snapshot missing keys: {list(snap.keys())}"
+    # Remaining yields are the 'live' events; 'warmup' was already there before stream started so it won't be re-emitted
+    event_types = [c["event"] for c in collected[1:]]
+    assert "live" in event_types, f"expected live events in {event_types}"
+    print("  [OK] stream_run_events generator yields snapshot + events")
+
+
 async def main():
     await smoke_list_events_since()
+    await smoke_stream_generator()
     print("smoke_orchestration_stream OK")
 
 
