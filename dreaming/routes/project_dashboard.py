@@ -63,6 +63,16 @@ async def bootstrap_all(request: Request, slug: str):
     await autoconfig.apply_all_defaults(
         request.app.state.projects, project, skip_existing=True,
     )
+    # Seed the 16 built-in loop templates into the project's loops_templates_dir.
+    # Idempotent — skips entries whose slug already exists on disk.
+    try:
+        await autoconfig.seed_loop_templates_for_project(
+            request.app.state.projects, project,
+        )
+    except Exception as e:
+        # Non-fatal: bootstrap should not abort if seeding fails. Log via logger if available.
+        import logging
+        logging.getLogger(__name__).warning("loop_templates seed failed: %s", e)
     raw = request.headers.get("referer") or ""
     path = urlparse(raw).path if raw else ""
     if not path.startswith(f"/p/{project.slug}"):

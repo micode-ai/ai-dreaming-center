@@ -1,0 +1,91 @@
+{% extends "_project_layout.html" %}
+{% set active='loops_templates' %}
+{% block project_content %}
+<a href="/p/{{ project.slug }}/loops/templates" class="text-sm" style="color: var(--brand-hover);">{{ "common.back_to_list" | t(locale=locale) }}</a>
+
+<h1 class="text-xl font-bold mt-3 mb-4">
+  {% if is_new %}{{ "loops_tpl.new_title" | t(locale=locale) }}{% else %}{{ tpl.name }}{% endif %}
+</h1>
+
+<form method="post" action="/p/{{ project.slug }}/loops/templates" class="space-y-3 max-w-3xl">
+  <div class="grid gap-3 grid-cols-2">
+    <label class="block">
+      <span class="text-xs font-medium" style="color: var(--text-muted);">slug</span>
+      <input name="tpl_slug" value="{{ tpl.slug }}" required pattern="[a-z0-9]([a-z0-9\-]*[a-z0-9])?"
+             {% if not is_new %}readonly{% endif %}
+             class="w-full rounded p-2 text-sm font-mono mt-1"
+             style="background: var(--bg-elevated); border:1px solid var(--border-subtle); color: var(--text-body);">
+    </label>
+    <label class="block">
+      <span class="text-xs font-medium" style="color: var(--text-muted);">{{ "loops_tpl.field.name" | t(locale=locale) }}</span>
+      <input name="name" value="{{ tpl.name }}" required
+             class="w-full rounded p-2 text-sm mt-1"
+             style="background: var(--bg-elevated); border:1px solid var(--border-subtle); color: var(--text-body);">
+    </label>
+  </div>
+
+  <label class="block">
+    <span class="text-xs font-medium" style="color: var(--text-muted);">{{ "loops_tpl.field.description" | t(locale=locale) }}</span>
+    <input name="description" value="{{ tpl.description }}"
+           class="w-full rounded p-2 text-sm mt-1"
+           style="background: var(--bg-elevated); border:1px solid var(--border-subtle); color: var(--text-body);">
+  </label>
+
+  <div class="grid gap-3 grid-cols-3">
+    <label class="block">
+      <span class="text-xs font-medium" style="color: var(--text-muted);">engine</span>
+      <select name="engine" class="w-full rounded p-2 text-sm mt-1"
+              style="background: var(--bg-elevated); border:1px solid var(--border-subtle); color: var(--text-body);">
+        <option value="loop"{% if tpl.engine == 'loop' %} selected{% endif %}>loop</option>
+        <option value="cascade"{% if tpl.engine == 'cascade' %} selected{% endif %}>cascade</option>
+        <option value="oneshot"{% if tpl.engine == 'oneshot' %} selected{% endif %}>oneshot</option>
+      </select>
+    </label>
+    <label class="block">
+      <span class="text-xs font-medium" style="color: var(--text-muted);">{{ "loops_tpl.field.max_iterations" | t(locale=locale) }}</span>
+      <input name="max_iterations" value="{{ tpl.max_iterations or '' }}" type="number" min="1"
+             class="w-full rounded p-2 text-sm mt-1"
+             style="background: var(--bg-elevated); border:1px solid var(--border-subtle); color: var(--text-body);">
+    </label>
+    <label class="block">
+      <span class="text-xs font-medium" style="color: var(--text-muted);">{{ "loops_tpl.field.preset" | t(locale=locale) }}</span>
+      <input name="preset" value="{{ tpl.preset }}"
+             class="w-full rounded p-2 text-sm mt-1"
+             style="background: var(--bg-elevated); border:1px solid var(--border-subtle); color: var(--text-body);">
+    </label>
+  </div>
+
+  <label class="block">
+    <span class="text-xs font-medium" style="color: var(--text-muted);">{{ "loops_tpl.field.tags" | t(locale=locale) }}</span>
+    <input name="tags" value="{{ (tpl.tags or [])|join(', ') }}"
+           placeholder="dev, scm, investigation"
+           class="w-full rounded p-2 text-sm mt-1"
+           style="background: var(--bg-elevated); border:1px solid var(--border-subtle); color: var(--text-body);">
+  </label>
+
+  <label class="block">
+    <span class="text-xs font-medium" style="color: var(--text-muted);">team</span>
+    <input name="team" value="{{ tpl.team or 'auto' }}"
+           class="w-full rounded p-2 text-sm mt-1"
+           style="background: var(--bg-elevated); border:1px solid var(--border-subtle); color: var(--text-body);">
+  </label>
+
+  <label class="block">
+    <span class="text-xs font-medium" style="color: var(--text-muted);">{{ "loops_tpl.field.body" | t(locale=locale) }}</span>
+    <textarea name="body" rows="14"
+              class="w-full rounded p-2 text-sm font-mono mt-1"
+              style="background: var(--bg-elevated); border:1px solid var(--border-subtle); color: var(--text-body);">{{ tpl.body }}</textarea>
+  </label>
+
+  <div class="flex gap-2 pt-2">
+    <button type="submit" class="rounded px-4 py-2 text-sm font-semibold"
+            style="background: var(--brand); color: #fff;">{{ "common.save" | t(locale=locale) }}</button>
+    {% if not is_new %}
+    <form method="post" action="/p/{{ project.slug }}/loops/templates/{{ tpl.slug }}/delete" class="inline"
+          data-confirm="{{ 'loops_tpl.confirm_delete' | t(locale=locale, slug=tpl.slug) }}" data-confirm-variant="danger">
+      <button class="rounded px-4 py-2 text-sm" style="color: var(--status-failed); border:1px solid var(--border-subtle);">{{ "loops_tpl.delete" | t(locale=locale) }}</button>
+    </form>
+    {% endif %}
+  </div>
+</form>
+{% endblock %}
