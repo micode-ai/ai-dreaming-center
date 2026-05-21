@@ -422,6 +422,7 @@
   "orchestration.view_log": "View log",
   "orchestration.delete_run": "Delete run",
   "orchestration.messages": "Messages",
+  "orchestration.filter_node": "Filter by node",
   "tech_debt.parse_error": "Parse error",
   "tech_debt.empty.title": "No markdown files in {dir}",
   "tech_debt.empty.desc": "Tech-debt items are written by the {code} slash-command — it spawns claude, which scans the repo for TODO/FIXME/legacy/smells and writes each finding as a markdown file here. Runs weekly on schedule (if cron is enabled) or can be triggered now.",
