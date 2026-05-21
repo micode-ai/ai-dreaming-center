@@ -1,5 +1,6 @@
 {% extends "_project_layout.html" %}
-{% from "_autoconfig_banner.html" import autoconfig_banner %}
+{% from "_autoconfig_banner.html" import autoconfig_banner with context %}
+{% from "_scan_action_bar.html" import scan_action_bar %}
 {% set active='findings' %}
 {% block project_content %}
 {% if not td_dir_set %}
@@ -8,36 +9,57 @@
 {{ autoconfig_banner(project, "tech_debt_dir", td_dir, "Tech-debt") }}
 {% elif error %}
 <div class="bg-red-50 border border-red-200 rounded p-4 mb-4">
-  <p class="text-sm text-red-700">Ошибка парсинга: <code>{{ error }}</code></p>
+  <p class="text-sm text-red-700">{{ "common.parse_error" | t(locale=locale) }}: <code>{{ error }}</code></p>
 </div>
 {% else %}
+{{ scan_action_bar(
+     "/p/" ~ project.slug ~ "/tech-debt/scan",
+     scan_running,
+     "findings.scan.button" | t(locale=locale),
+     "findings.scan.running" | t(locale=locale),
+) }}
 {% if selected_status or selected_module %}
 <div class="mb-3 flex items-center gap-2 text-sm">
-  <span class="muted">Фильтр:</span>
+  <span class="muted">{{ "common.filter" | t(locale=locale) }}:</span>
   {% if selected_status %}
   <span class="bg-slate-200 rounded px-2 py-1 font-mono text-xs">status: {{ selected_status }}</span>
   {% endif %}
   {% if selected_module %}
   <span class="bg-slate-200 rounded px-2 py-1 font-mono text-xs">module: {{ selected_module }}</span>
   {% endif %}
-  <a class="text-xs text-blue-600 underline ml-1" href="/p/{{ project.slug }}/findings">очистить</a>
+  <a class="text-xs text-blue-600 underline ml-1" href="/p/{{ project.slug }}/findings">{{ "common.clear" | t(locale=locale) }}</a>
 </div>
 {% endif %}
 {% if items %}
 <p class="text-xs muted mb-3">{{ items|length }} items in <code>{{ td_dir }}</code></p>
-<table class="w-full bg-white rounded shadow text-sm">
-  <thead class="text-left border-b"><tr>
-    <th class="p-2">id</th>
-    <th class="p-2">title</th>
-    <th class="p-2">status</th>
-    <th class="p-2">priority</th>
-    <th class="p-2">module</th>
-    <th class="p-2">refs</th>
-    <th class="p-2"></th>
-  </tr></thead>
+<table id="td-table" class="w-full bg-white rounded shadow text-sm">
+  <thead class="text-left border-b">
+    <tr>
+      <th class="p-2 td-th-sort" data-col="id" data-type="text">id <span class="sort-ind">↕</span></th>
+      <th class="p-2 td-th-sort" data-col="title" data-type="text">{{ "findings.col.title" | t(locale=locale) }} <span class="sort-ind">↕</span></th>
+      <th class="p-2 td-th-sort" data-col="status" data-type="text">status <span class="sort-ind">↕</span></th>
+      <th class="p-2 td-th-sort" data-col="priority" data-type="prio">priority <span class="sort-ind">↕</span></th>
+      <th class="p-2 td-th-sort" data-col="module" data-type="text">{{ "findings.col.module" | t(locale=locale) }} <span class="sort-ind">↕</span></th>
+      <th class="p-2 td-th-sort" data-col="complexity" data-type="text">{{ "findings.col.complexity" | t(locale=locale) }} <span class="sort-ind">↕</span></th>
+      <th class="p-2 td-th-sort" data-col="autonomy" data-type="text">{{ "findings.col.autonomy" | t(locale=locale) }} <span class="sort-ind">↕</span></th>
+      <th class="p-2 td-th-sort" data-col="confidence" data-type="text">{{ "findings.col.confidence" | t(locale=locale) }} <span class="sort-ind">↕</span></th>
+      <th class="p-2 td-th-sort" data-col="created" data-type="text">{{ "findings.col.created" | t(locale=locale) }} <span class="sort-ind">↕</span></th>
+      <th class="p-2">refs</th>
+      <th class="p-2"></th>
+    </tr>
+  </thead>
   <tbody>
   {% for it in items %}
-  <tr class="border-b align-top">
+  <tr class="border-b align-top"
+      data-id="{{ it.id or it.slug or '' }}"
+      data-title="{{ (it.title or '')|lower }}"
+      data-status="{{ it.status or '' }}"
+      data-priority="{{ it.priority or '' }}"
+      data-module="{{ it.module or '' }}"
+      data-complexity="{{ it.complexity or '' }}"
+      data-autonomy="{{ it.autonomy or '' }}"
+      data-confidence="{{ it.confidence or '' }}"
+      data-created="{{ (it.created or '')[:10] }}">
     <td class="p-2 font-mono text-xs"><a class="text-blue-600 underline" href="/p/{{ project.slug }}/findings/{{ it.id }}">{{ it.id or it.slug or '—' }}</a></td>
     <td class="p-2">{{ it.title or '—' }}</td>
     <td class="p-2 text-xs">
@@ -52,24 +74,28 @@
     </td>
     <td class="p-2 text-xs">{{ it.priority or '—' }}</td>
     <td class="p-2 text-xs muted">{{ it.module or '' }}</td>
+    <td class="p-2 text-xs muted">{{ it.complexity or '' }}</td>
+    <td class="p-2 text-xs muted">{{ it.autonomy or '' }}</td>
+    <td class="p-2 text-xs muted">{{ it.confidence or '' }}</td>
+    <td class="p-2 text-xs muted font-mono">{{ (it.created or '')[:10] }}</td>
     <td class="p-2 text-xs font-mono">
       {% if it.github_issue %}<a class="text-blue-600 underline" target="_blank" href="{{ it.github_issue }}">GH</a>{% endif %}
-      {% if it.orchestration_run %}<a class="text-purple-600 underline ml-1" href="/p/{{ project.slug }}/orchestration/{{ it.orchestration_run }}">run</a>{% endif %}
+      {% if it.orchestration_run %}<a class="text-purple-600 underline ml-1" href="/p/{{ project.slug }}/orchestration?run_id={{ it.orchestration_run }}">run</a>{% endif %}
       {% if it.jira %}<span class="ml-1 muted">{{ it.jira }}</span>{% endif %}
     </td>
     <td class="p-2 text-xs whitespace-nowrap">
       <form method="post" action="/p/{{ project.slug }}/findings/{{ it.id }}/orchestrate" class="inline"
-            data-confirm="Запустить Orchestrator с этим finding как целью?">
-        <button class="text-xs px-2 py-1 border border-purple-500 text-purple-700 rounded">Orchestrate</button>
+            data-confirm="{{ 'findings.confirm_orch' | t(locale=locale) }}">
+        <button class="text-xs px-2 py-1 border border-purple-500 text-purple-700 rounded">{{ "ideas.btn.orchestrate" | t(locale=locale) }}</button>
       </form>
       {% if not it.github_issue %}
       <form method="post" action="/p/{{ project.slug }}/findings/{{ it.id }}/github" class="inline ml-1"
-            data-confirm="Создать GitHub issue?">
-        <button class="text-xs px-2 py-1 border border-slate-500 text-slate-700 rounded">→ GH</button>
+            data-confirm="{{ 'findings.confirm_gh' | t(locale=locale) }}">
+        <button class="text-xs px-2 py-1 border border-slate-500 text-slate-700 rounded">{{ "ideas.btn.gh" | t(locale=locale) }}</button>
       </form>
       {% endif %}
       <form method="post" action="/p/{{ project.slug }}/findings/{{ it.id }}/delete" class="inline ml-1"
-            data-confirm="Удалить {{ it.id }}?" data-confirm-variant="danger">
+            data-confirm="{{ 'findings.confirm_delete' | t(locale=locale, id=it.id) }}" data-confirm-variant="danger">
         <button class="text-xs px-2 py-1 border rounded text-red-600">del</button>
       </form>
     </td>
@@ -77,16 +103,63 @@
   {% endfor %}
   </tbody>
 </table>
+
+<style>
+  .td-th-sort { cursor: pointer; user-select: none; }
+  .td-th-sort:hover { color: #4f46e5; }
+  .td-th-sort .sort-ind { display: inline-block; opacity: 0.4; font-size: 0.7em; }
+  .td-th-sort.sort-asc .sort-ind, .td-th-sort.sort-desc .sort-ind { opacity: 1; color: #4f46e5; }
+  .td-th-sort.sort-asc .sort-ind::before { content: "↑"; }
+  .td-th-sort.sort-desc .sort-ind::before { content: "↓"; }
+</style>
+
+<script>
+(function() {
+  const table = document.getElementById("td-table");
+  if (!table) return;
+  const tbody = table.querySelector("tbody");
+  const headers = table.querySelectorAll(".td-th-sort");
+  // Priority ordering: critical > high > medium > low > (empty)
+  const PRIO_ORDER = { critical: 4, high: 3, medium: 2, low: 1, "": 0 };
+
+  function compareVals(a, b, type) {
+    if (type === "prio") {
+      const ar = PRIO_ORDER[a.toLowerCase()] || 0;
+      const br = PRIO_ORDER[b.toLowerCase()] || 0;
+      return ar - br;
+    }
+    return a.localeCompare(b);
+  }
+
+  headers.forEach(h => {
+    h.addEventListener("click", () => {
+      const col = h.dataset.col;
+      const type = h.dataset.type || "text";
+      const current = h.classList.contains("sort-asc") ? "asc"
+                     : h.classList.contains("sort-desc") ? "desc" : "none";
+      const next = current === "asc" ? "desc" : "asc";
+      headers.forEach(other => other.classList.remove("sort-asc", "sort-desc"));
+      h.classList.add(next === "asc" ? "sort-asc" : "sort-desc");
+      const rows = Array.from(tbody.querySelectorAll("tr"));
+      rows.sort((ra, rb) => {
+        const va = ra.dataset[col] || "";
+        const vb = rb.dataset[col] || "";
+        const cmp = compareVals(va, vb, type);
+        return next === "asc" ? cmp : -cmp;
+      });
+      rows.forEach(r => tbody.appendChild(r));
+    });
+  });
+})();
+</script>
 {% else %}
 {% if selected_status or selected_module %}
-<p class="muted">По текущему фильтру ничего не нашлось.</p>
+<p class="muted">{{ "findings.empty_filter" | t(locale=locale) }}</p>
 {% else %}
 <div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
-  <p class="font-semibold text-sky-900 mb-1">В <code>{{ td_dir }}</code> нет markdown файлов</p>
+  <p class="font-semibold text-sky-900 mb-1">{{ "findings.empty.title" | t(locale=locale, dir=td_dir) }}</p>
   <p class="text-sm text-sky-900 mb-2">
-    Findings (они же tech-debt items) пишутся slash-командой <code>/tech-debt-scan</code> —
-    claude сканит репо на TODO/FIXME/legacy/смелли и кладёт каждую находку
-    отдельным markdown'ом сюда. Запустить можно прямо сейчас:
+    {{ "findings.empty.desc" | t(locale=locale, code='/tech-debt-scan') }}
   </p>
   <form method="post" action="/p/{{ project.slug }}/tech-debt/scan">
     <button class="text-sm bg-blue-600 text-white rounded px-3 py-1">Run /tech-debt-scan</button>
