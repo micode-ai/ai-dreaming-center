@@ -63,7 +63,7 @@ async def smoke_list_events_since():
     after_b = await hub.list_events_since(run_id, after_ts=all_events[1]["ts"], after_id=all_events[1]["id"])
     types = [e["event_type"] for e in after_b]
     assert "c" in types and "tie1" in types and "tie2" in types, f"missed events: {types}"
-    print("  ✓ list_events_since (composite cursor)")
+    print("  [OK] list_events_since (composite cursor)")
 
 
 async def main():
