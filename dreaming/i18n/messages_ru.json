@@ -432,5 +432,15 @@
   "autoconfig.title_not_ready": "{what} ещё не настроен",
   "autoconfig.create_desc": "Создам каталог и пропишу настройку {setting}:",
   "autoconfig.change_later": "Если нужен другой путь — поменяй после установки в",
-  "autoconfig.btn_create": "Создать каталог и сохранить настройку"
+  "autoconfig.btn_create": "Создать каталог и сохранить настройку",
+  "tile.orchestration.title": "Оркестрация",
+  "tile.orchestration.running": "в работе",
+  "tile.orchestration.no_runs": "Запусков пока не было",
+  "tile.evolutions.title": "Эволюция",
+  "tile.evolutions.proposals": "предложений",
+  "tile.evolutions.no_dir": "Каталог эволюций не настроен",
+  "tile.loops.title": "Loops",
+  "tile.loops.running": "активных",
+  "tile.loops.no_runs": "Loop-запусков не было",
+  "tile.loops.no_runs_table": "Таблица loop_runs ещё не создана"
 }

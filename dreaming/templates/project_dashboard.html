@@ -4,24 +4,23 @@
 
 {% if bootstrap_needed %}
 <div class="mb-4 p-4 border border-amber-400 bg-amber-50 rounded">
-  <p class="font-semibold text-amber-900 mb-1">Проект ещё не настроен «из коробки»</p>
+  <p class="font-semibold text-amber-900 mb-1">{{ "project_dashboard.not_setup_title" | t(locale=locale) }}</p>
   <p class="text-sm text-amber-900 mb-2">
-    Одна кнопка ниже сделает всё разом:
+    {{ "project_dashboard.one_click" | t(locale=locale) }}
   </p>
   <ul class="text-xs text-amber-900 list-disc ml-5 mb-3 space-y-1">
     {% if kit_status and not kit_status.all_present %}
-    <li>скопирует {{ kit_status.missing|length }} файл(а) starter-kit
+    <li>{{ "project_dashboard.copy_files" | t(locale=locale, n=kit_status.missing|length) }}
       ({% for f in kit_status.missing %}<code>{{ f }}</code>{{ ", " if not loop.last }}{% endfor %})
-      в <code>.claude/</code></li>
+      {{ "project_dashboard.into" | t(locale=locale, dir='.claude/') }}</li>
     {% endif %}
     {% if missing_dirs %}
-    <li>создаст {{ missing_dirs|length }} каталог(а) и пропишет в Settings:
+    <li>{{ "project_dashboard.create_dirs" | t(locale=locale, n=missing_dirs|length) }}
       {% for k in missing_dirs %}<code>{{ k }}</code>{{ ", " if not loop.last }}{% endfor %}</li>
     {% endif %}
   </ul>
   <p class="text-xs text-amber-900 mb-3">
-    Существующие файлы и уже выставленные настройки не трогаются. Если хочешь
-    другие пути — поменяй потом в
+    {{ "project_dashboard.dont_touch" | t(locale=locale) }}
     <a class="text-blue-600 underline" href="/p/{{ project.slug }}/settings">Settings</a>.
   </p>
   <form method="post" action="/p/{{ project.slug }}/bootstrap-all">
@@ -54,6 +53,13 @@
     <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "p.metrics.timeout" | t(locale=locale) }}</div>
     <div class="text-3xl font-semibold mt-1" style="color: var(--status-timeout);">{{ stats.timeout or 0 }}</div>
   </div>
+</div>
+
+{# Wave E MVP: bento-tile section #}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+  {% include "partials/dashboard/_tile_orchestration.html" %}
+  {% include "partials/dashboard/_tile_evolutions.html" %}
+  {% include "partials/dashboard/_tile_loops.html" %}
 </div>
 
 {% set ns = namespace(stale_orphans=0) %}

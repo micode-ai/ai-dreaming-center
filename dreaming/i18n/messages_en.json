@@ -432,5 +432,15 @@
   "autoconfig.title_not_ready": "{what} not configured yet",
   "autoconfig.create_desc": "I'll create the folder and write the setting {setting}:",
   "autoconfig.change_later": "If you want a different path — change it after install in",
-  "autoconfig.btn_create": "Create folder and save setting"
+  "autoconfig.btn_create": "Create folder and save setting",
+  "tile.orchestration.title": "Orchestration",
+  "tile.orchestration.running": "running",
+  "tile.orchestration.no_runs": "No runs yet",
+  "tile.evolutions.title": "Evolutions",
+  "tile.evolutions.proposals": "proposals",
+  "tile.evolutions.no_dir": "Evolutions dir not configured",
+  "tile.loops.title": "Loops",
+  "tile.loops.running": "running",
+  "tile.loops.no_runs": "No loop runs yet",
+  "tile.loops.no_runs_table": "loop_runs table not yet created"
 }
