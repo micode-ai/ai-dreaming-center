@@ -71,13 +71,28 @@ class OrchestrationHub:
         return row["id"] if row else None
 
     async def finish_run(self, run_id: str, status: str = "completed", error_message: str | None = None) -> bool:
+        # Finalize any still-running stages/nodes so the swimlane reflects reality.
+        # This covers ALL finish paths: Orchestrator's curl to /api/orchestration/{id}/finish,
+        # the form-based "Mark completed" button, cascade finish, and any future caller.
+        node_terminal = "completed" if status == "completed" else (
+            "cancelled" if status == "cancelled" else "failed"
+        )
+        stage_terminal = "completed" if status == "completed" else (
+            "cancelled" if status == "cancelled" else "failed"
+        )
+        for s in await self.list_stages(run_id):
+            if s["status"] == "running":
+                await self.finish_stage(s["id"], stage_terminal)
+        for n in await self.list_nodes(run_id):
+            if n["status"] == "running":
+                await self.update_node_status(n["id"], node_terminal)
         async with self.db._conn.execute(
             "UPDATE orchestrator_runs SET status=?, finished_at=?, error_message=? WHERE id=?",
             (status, _now(), error_message, run_id),
         ) as cur:
-            n = cur.rowcount
+            n_rows = cur.rowcount
         await self.db._conn.commit()
-        return n > 0
+        return n_rows > 0
 
     # -- Nodes ----------------------------------------
 
