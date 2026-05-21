@@ -1,9 +1,11 @@
 """GET /p/{slug}/orchestration — list runs + per-run detail."""
 from __future__ import annotations
+import json as _json
 import logging
 
 from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.responses import RedirectResponse, JSONResponse
+from sse_starlette.sse import EventSourceResponse
 
 
 router = APIRouter()
@@ -151,6 +153,33 @@ async def orchestration_refresh(request: Request, slug: str, run_id: str):
             for m in messages[-100:]
         ],
     })
+
+
+@router.get("/p/{slug}/orchestration/{run_id}/stream")
+async def orchestration_stream(request: Request, slug: str, run_id: str):
+    """SSE live-tail of orchestration events. Yields:
+      - one `snapshot` event with full {stages, nodes, messages}
+      - one event per `orchestrator_events` row as it appears
+      - a final `done` event when the run terminates
+    Client should fall back to polling `/refresh` on EventSource error.
+    """
+    project = request.state.project
+    hub = request.app.state.orchestration_hub
+    run = await hub.get_run(run_id)
+    if run is None or run["project_id"] != project.id:
+        raise HTTPException(status_code=404, detail="run not found in this project")
+
+    async def event_generator():
+        async for ev in hub.stream_run_events(run_id):
+            # sse_starlette expects {"event", "data"} with `data` already a string.
+            yield {
+                "event": ev["event"],
+                "data": _json.dumps(ev["data"], ensure_ascii=False, default=str),
+            }
+            if await request.is_disconnected():
+                break
+
+    return EventSourceResponse(event_generator())
 
 
 @router.post("/p/{slug}/orchestration/{run_id}/resume")
