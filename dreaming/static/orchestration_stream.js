@@ -71,7 +71,7 @@
           kind: data.kind || "",
           ts: data.ts || "",
           node_id: data.node_id || "",
-          text: "(new message — reload to see full content)",
+          text: data.text || "",
         });
         return;
       case "node_created":
