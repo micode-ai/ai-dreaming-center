@@ -20,6 +20,7 @@ DEFAULTS: dict[str, str] = {
     "sidecar_findings_dir":  ".claude/agents/sidecar-findings",
     "learning_notes_dir":    ".claude/agents/learning-notes",
     "findings_dir":          "docs/findings",
+    "loops_templates_dir":   ".claude/loops/templates",
 }
 
 
@@ -55,3 +56,17 @@ async def apply_all_defaults(projects_svc, project, *, skip_existing: bool = Tru
         path = await apply(projects_svc, project, key)
         applied.append({"key": key, "path": path})
     return {"applied": applied, "skipped": skipped}
+
+
+async def seed_loop_templates_for_project(projects_svc, project) -> int:
+    """Seed the 16 built-in loop templates into the project's loops_templates_dir.
+
+    Idempotent — `seed_if_empty` skips entries whose slug already exists on disk.
+    Returns the number of templates newly written.
+    """
+    from dreaming.services.loop_templates_seed import seed_if_empty
+    overrides = await projects_svc.all_settings(project.id)
+    abs_dir = overrides.get("loops_templates_dir") or default_abs(project, "loops_templates_dir")
+    if not abs_dir:
+        return 0
+    return seed_if_empty(abs_dir)
