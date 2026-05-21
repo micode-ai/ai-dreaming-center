@@ -88,15 +88,26 @@ async def orchestration_detail(request: Request, slug: str, run_id: str):
     run = await hub.get_run(run_id)
     if run is None or run["project_id"] != project.id:
         raise HTTPException(status_code=404, detail="run not found in this project")
-    nodes = await hub.list_nodes(run_id)
-    messages = await hub.list_messages(run_id)
+    nodes = [dict(n) for n in await hub.list_nodes(run_id)]
+    messages = [dict(m) for m in await hub.list_messages(run_id)]
+    stages = [dict(s) for s in await hub.list_stages(run_id)]
+
+    # Group nodes by their stage_id (column added via migration; nodes with no stage_id
+    # land in the "_unassigned" bucket).
+    nodes_by_stage: dict[str, list] = {}
+    for n in nodes:
+        key = n.get("stage_id") or "_unassigned"
+        nodes_by_stage.setdefault(key, []).append(n)
+
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
     projects = await request.app.state.projects.list_all(only_enabled=True)
     return request.app.state.templates.TemplateResponse(
         request, "project_orchestration_detail.html",
         {"project": project, "run": dict(run),
-         "nodes": [dict(n) for n in nodes],
-         "messages": [dict(m) for m in messages],
+         "nodes": nodes,
+         "messages": messages,
+         "stages": stages,
+         "nodes_by_stage": nodes_by_stage,
          "projects": projects, "locale": locale},
     )
 

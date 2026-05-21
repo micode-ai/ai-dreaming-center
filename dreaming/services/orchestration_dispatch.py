@@ -86,6 +86,19 @@ async def start_orchestration_run(
         run_id, project.id, agent_name="orchestrator", role="orchestrator",
         external_id=claude_session_id,
     )
+    # Seed a single "orchestrator" stage so the swimlane in the UI has
+    # something to render. Future waves can split a run into multiple stages
+    # by calling ensure_stage(...) again with different stage_keys (e.g.
+    # "plan", "implement", "review"). For now, all activity lives in stage 0.
+    stage_id = await hub.ensure_stage(
+        run_id, stage_index=0, stage_key="orchestrator", label="Orchestrator",
+    )
+    await hub.start_stage(stage_id)
+    # Tag the root node with this stage so it appears in the swimlane.
+    await db.execute(
+        "UPDATE orchestrator_nodes SET stage_id=? WHERE id=?",
+        (stage_id, root_node),
+    )
     await hub.append_event(
         run_id, "run_started",
         {"project_slug": project.slug, "goal": goal.strip()},
