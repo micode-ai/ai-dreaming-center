@@ -1,66 +1,119 @@
 {% extends "_project_layout.html" %}
 {% set active='orchestration' %}
 {% block project_content %}
-<a href="/p/{{ project.slug }}/orchestration" class="text-sm text-blue-600 underline">← к списку runs</a>
+<link rel="stylesheet" href="/static/orchestration_swimlane.css">
 
-<header class="mt-3 mb-4">
-  <h1 class="text-xl font-bold">{{ run.goal }}</h1>
-  <div class="text-xs muted mt-1">
-    <span class="font-mono">{{ run.id }}</span> ·
-    <span id="run-status" class="font-mono {% if run.status=='running' %}text-amber-700{% elif run.status=='completed' %}text-green-700{% elif run.status=='failed' %}text-red-700{% endif %}">{{ run.status }}</span> ·
-    started {{ run.started_at }}
-    {% if run.finished_at %} · finished {{ run.finished_at }}{% endif %}
-    {% if run.external_id %} · session <span class="font-mono">{{ run.external_id[:8] }}…</span>{% endif %}
+<a href="/p/{{ project.slug }}/orchestration" class="text-sm text-blue-600 underline">{{ "common.back_to_runs_list" | t(locale=locale) }}</a>
+
+<header class="mt-3 mb-4" id="orch-detail"
+        data-slug="{{ project.slug }}"
+        data-run-id="{{ run.id }}"
+        data-run-status="{{ run.status }}"
+        data-msg-count="{{ messages|length }}"
+        data-node-count="{{ nodes|length }}">
+  <div class="flex items-start justify-between gap-3 flex-wrap">
+    <div>
+      <h1 class="text-xl font-bold">{{ run.goal }}</h1>
+      <div class="text-xs muted mt-1">
+        <span class="font-mono">{{ run.id }}</span> ·
+        <span id="run-status" class="font-mono status-pill status-{{ run.status }}">{{ run.status }}</span> ·
+        started {{ run.started_at }}
+        {% if run.finished_at %} · finished {{ run.finished_at }}{% endif %}
+        {% if run.external_id %} · session <span class="font-mono">{{ run.external_id[:8] }}…</span>{% endif %}
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <span id="sse-indicator" class="sse-indicator polling" title="{{ 'orchestration.sse_status' | t(locale=locale) }}">…</span>
+    </div>
   </div>
   <div class="mt-2 flex gap-2 flex-wrap">
     {% if run.status == 'running' %}
     <form method="post" action="/p/{{ project.slug }}/orchestration/{{ run.id }}/finish" class="inline">
-      <button class="text-xs px-3 py-1 border rounded">Mark completed</button>
+      <button class="text-xs px-3 py-1 border rounded">{{ "orchestration.mark_completed" | t(locale=locale) }}</button>
     </form>
     {% else %}
       {% if run.external_id %}
       <form method="post" action="/p/{{ project.slug }}/orchestration/{{ run.id }}/resume" class="inline flex gap-2">
-        <input name="prompt" placeholder="Что дальше? (опц.)" class="border rounded p-1 text-xs w-64">
-        <button class="text-xs px-3 py-1 border rounded">Resume</button>
+        <input name="prompt" placeholder="{{ 'orchestration.prompt_placeholder' | t(locale=locale) }}" class="border rounded p-1 text-xs w-64">
+        <button class="text-xs px-3 py-1 border rounded">{{ "orchestration.resume" | t(locale=locale) }}</button>
       </form>
       {% endif %}
     {% endif %}
-    <a class="text-xs px-3 py-1 border rounded text-slate-700" href="/p/{{ project.slug }}/orchestration/{{ run.id }}/log">View log</a>
+    <a class="text-xs px-3 py-1 border rounded text-slate-700" href="/p/{{ project.slug }}/orchestration/{{ run.id }}/log">{{ "orchestration.view_log" | t(locale=locale) }}</a>
     <form method="post" action="/p/{{ project.slug }}/orchestration/{{ run.id }}/delete" class="inline"
-          data-confirm="Удалить run полностью (вместе с messages/nodes/events)?\nФайлы которые Orchestrator написал на диск НЕ удаляются." data-confirm-variant="danger">
-      <button class="text-xs px-3 py-1 border rounded text-red-600">Delete run</button>
+          data-confirm="{{ 'orchestration.confirm_delete' | t(locale=locale) }}" data-confirm-variant="danger">
+      <button class="text-xs px-3 py-1 border rounded text-red-600">{{ "orchestration.delete_run" | t(locale=locale) }}</button>
     </form>
   </div>
 </header>
 
-<h2 class="font-semibold mb-2">Nodes (<span id="node-count">{{ nodes|length }}</span>)</h2>
-{% if nodes %}
-<table id="nodes-table" class="w-full bg-white rounded shadow text-sm mb-6">
+{% if stages %}
+<h2 class="font-semibold mb-2">{{ "orchestration.stages" | t(locale=locale) }} ({{ stages|length }})</h2>
+<div class="stage-rail" id="stage-rail">
+  {% for s in stages %}
+  <div class="stage-tile {{ s.status }}" data-stage-id="{{ s.id }}" data-stage-key="{{ s.stage_key }}">
+    <div class="stage-icon">{{ loop.index }}</div>
+    <div class="stage-label">{{ s.label }}</div>
+    <div class="stage-meta">
+      <span class="status-pill status-{{ s.status }}">{{ s.status }}</span>
+      {% if s.iteration and s.iteration > 1 %}
+        · iter {{ s.iteration }}
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="swimlanes-wrap">
+  {% for s in stages %}
+    {% set stage_nodes = nodes_by_stage.get(s.id, []) %}
+    <div class="swim-row">
+      <div class="swim-agent">
+        <div class="swim-agent-name">{{ s.label }}</div>
+        <div class="swim-agent-role">{{ stage_nodes|length }} agent{{ '' if stage_nodes|length == 1 else 's' }}</div>
+      </div>
+      <div class="swim-cell" data-stage-id="{{ s.id }}">
+        {% for n in stage_nodes %}
+          <div class="activity-chip state-{% if n.status == 'running' %}active{% elif n.status == 'completed' %}done{% elif n.status in ('failed','cancelled') %}rejected{% else %}idle{% endif %}"
+               data-node-id="{{ n.id }}">
+            <span class="chip-action">{{ n.agent_name }}</span>
+            <span class="text-xs muted">{{ n.role }} · {{ n.status }}</span>
+          </div>
+        {% else %}
+          <span class="text-xs muted">{{ "orchestration.no_agents_yet" | t(locale=locale) }}</span>
+        {% endfor %}
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% set unassigned = nodes_by_stage.get('_unassigned', []) %}
+{% if unassigned %}
+<h2 class="font-semibold mb-2 mt-6">{{ "orchestration.nodes_unassigned" | t(locale=locale) }} (<span id="node-count">{{ nodes|length }}</span>)</h2>
+<table class="w-full bg-white rounded shadow text-sm mb-6">
   <thead class="text-left border-b"><tr>
-    <th class="p-2">agent</th>
-    <th class="p-2">role</th>
-    <th class="p-2">status</th>
-    <th class="p-2">started</th>
+    <th class="p-2">agent</th><th class="p-2">role</th><th class="p-2">status</th><th class="p-2">started</th>
   </tr></thead>
   <tbody>
-  {% for n in nodes %}
+  {% for n in unassigned %}
   <tr class="border-b">
     <td class="p-2 font-mono text-xs">{{ n.agent_name }}</td>
     <td class="p-2 text-xs">{{ n.role }}</td>
-    <td class="p-2 text-xs">{{ n.status }}</td>
+    <td class="p-2 text-xs"><span class="status-pill status-{{ n.status }}">{{ n.status }}</span></td>
     <td class="p-2 text-xs muted">{{ n.started_at }}</td>
   </tr>
   {% endfor %}
   </tbody>
 </table>
 {% else %}
-<p class="muted text-sm mb-6" id="no-nodes">Нет nodes пока.{% if run.status=='running' %} Watcher активен — подождём ещё пару секунд…{% endif %}</p>
+<span id="node-count" class="hidden">{{ nodes|length }}</span>
 {% endif %}
 
-<h2 class="font-semibold mb-2">Messages (<span id="msg-count">{{ messages|length }}</span>)</h2>
+<h2 class="font-semibold mb-2 mt-6">{{ "orchestration.messages" | t(locale=locale) }} (<span id="msg-count">{{ messages|length }}</span>)</h2>
 <div id="messages">
 {% if messages %}
-<div class="space-y-2">
+<div id="messages-list" class="space-y-2">
 {% for m in messages %}
   <div class="bg-white rounded shadow p-3">
     <div class="text-xs muted mb-1">
@@ -73,56 +126,10 @@
 {% endfor %}
 </div>
 {% else %}
-<p class="muted text-sm">Нет messages пока.</p>
+<div id="messages-list" class="space-y-2"></div>
+<p class="muted text-sm">{{ "orchestration.no_messages" | t(locale=locale) }}</p>
 {% endif %}
 </div>
 
-<script>
-(() => {
-  // Poll every 2s while running. Stop when status leaves 'running'.
-  const runId = "{{ run.id }}";
-  const slug = "{{ project.slug }}";
-  let lastNodeCount = {{ nodes|length }};
-  let lastMsgCount = {{ messages|length }};
-  let lastStatus = "{{ run.status }}";
-
-  async function poll() {
-    try {
-      const r = await fetch(`/p/${slug}/orchestration/${runId}/refresh`);
-      if (!r.ok) return;
-      const data = await r.json();
-      const statusEl = document.getElementById('run-status');
-      if (statusEl) statusEl.textContent = data.status;
-      const nc = document.getElementById('node-count');
-      if (nc) nc.textContent = data.node_count;
-      const mc = document.getElementById('msg-count');
-      if (mc) mc.textContent = data.message_count;
-      // If counts changed, reload to render new rows.
-      if (data.node_count !== lastNodeCount || data.message_count !== lastMsgCount) {
-        location.reload();
-        return;
-      }
-      lastNodeCount = data.node_count;
-      lastMsgCount = data.message_count;
-      // If status flipped from running, reload to update buttons.
-      if (data.status !== 'running' && lastStatus === 'running') {
-        location.reload();
-        return;
-      }
-      lastStatus = data.status;
-      if (data.status === 'running') {
-        setTimeout(poll, 2000);
-      }
-    } catch (e) {
-      console.warn('poll error', e);
-      setTimeout(poll, 5000);
-    }
-  }
-
-  if (lastStatus === 'running') {
-    setTimeout(poll, 2000);
-  }
-})();
-</script>
-
+<script src="/static/orchestration_stream.js" defer></script>
 {% endblock %}
