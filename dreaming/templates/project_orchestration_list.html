@@ -93,6 +93,9 @@
           {% endif %}
         {% endif %}
         <a class="text-xs px-3 py-1 rounded" style="color: var(--text-muted); border:1px solid var(--border-subtle);" href="/p/{{ project.slug }}/orchestration/{{ selected_run.id }}/log">{{ "orchestration.view_log" | t(locale=locale) }}</a>
+        <form method="post" action="/p/{{ project.slug }}/orchestration/{{ selected_run.id }}/backfill" class="inline">
+          <button class="text-xs px-3 py-1 rounded" style="color: var(--text-muted); border:1px solid var(--border-subtle);">{{ "orchestration.backfill" | t(locale=locale) }}</button>
+        </form>
         <form method="post" action="/p/{{ project.slug }}/orchestration/{{ selected_run.id }}/delete" class="inline"
               data-confirm="{{ 'orchestration.confirm_delete' | t(locale=locale) }}" data-confirm-variant="danger">
           <button class="text-xs px-3 py-1 rounded" style="color: var(--status-failed); border:1px solid var(--border-subtle);">{{ "orchestration.delete_run" | t(locale=locale) }}</button>
@@ -100,6 +103,11 @@
       </div>
 
       {% if selected_stages %}
+      {# Stage rail (top): pipeline sequence — meaningful only when ≥ 2 stages.
+         For single-stage runs the rail duplicates the swimlane row's label
+         below, so hide it. When multi-stage cascade lands in a future wave,
+         the rail returns automatically. #}
+      {% if selected_stages|length > 1 %}
       <h3 class="font-semibold mb-2 text-sm">{{ "orchestration.stages" | t(locale=locale) }} ({{ selected_stages|length }})</h3>
       <div class="stage-rail">
         {% for s in selected_stages %}
@@ -113,6 +121,9 @@
         </div>
         {% endfor %}
       </div>
+      {% endif %}
+      {# Swimlane (bottom): agents within each stage. Always shown when stages
+         exist, regardless of stage count. #}
       <div class="swimlanes-wrap">
         {% for s in selected_stages %}
           {% set stage_nodes = nodes_by_stage.get(s.id, []) %}
