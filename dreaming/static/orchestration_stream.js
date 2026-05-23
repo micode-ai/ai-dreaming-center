@@ -40,9 +40,34 @@
     if (el) el.textContent = String(value);
   }
 
+  function getScrollContainer(el) {
+    // Find the nearest scrollable ancestor (overflow-y: auto|scroll). The
+    // chat lives inside the center <section> which has overflow-y:auto.
+    for (let p = el && el.parentElement; p; p = p.parentElement) {
+      const s = getComputedStyle(p);
+      if (s.overflowY === "auto" || s.overflowY === "scroll") return p;
+    }
+    return null;
+  }
+
+  function nearBottom(container) {
+    if (!container) return true;
+    return container.scrollHeight - container.scrollTop - container.clientHeight < 80;
+  }
+
+  function scrollToBottom(container, behavior) {
+    if (!container) return;
+    try { container.scrollTo({ top: container.scrollHeight, behavior: behavior || "auto" }); }
+    catch { container.scrollTop = container.scrollHeight; }
+  }
+
   function appendMessage(msg) {
     const list = document.getElementById("messages-list");
     if (!list) return;
+    // Capture "was user reading the tail?" BEFORE appending — once the new
+    // card lands, scrollHeight grows and the math no longer reflects user intent.
+    const container = getScrollContainer(list);
+    const stick = nearBottom(container);
     const card = document.createElement("div");
     card.className = "rounded p-3 msg-card";
     card.style.background = "var(--bg-elevated)";
@@ -59,6 +84,7 @@
     list.appendChild(card);
     lastMsgCount += 1;
     bumpCounter("msg-count", lastMsgCount);
+    if (stick) scrollToBottom(container, "smooth");
   }
 
   function chipStateClass(status) {
@@ -258,6 +284,16 @@
       pollHandle = null;
     }
   }
+
+  // On open, drop the user at the tail of the chat — usually what they came
+  // here for. Run after layout settles (rAF + microtask) so scrollHeight is final.
+  function initialScrollToBottom() {
+    const list = document.getElementById("messages-list");
+    if (!list) return;
+    const container = getScrollContainer(list);
+    requestAnimationFrame(() => scrollToBottom(container, "auto"));
+  }
+  initialScrollToBottom();
 
   // create_run always inserts status='running'; non-running means terminal.
   if (initialStatus === "running") {

@@ -46,6 +46,7 @@ async def dashboard(request: Request, slug: str):
         request.app.state.db,
         request.app.state.orchestration_hub,
         project,
+        app_state=request.app.state,
     )
     tile_evolutions = await build_evolutions_tile(
         request.app.state.db, request.app.state.projects, project,
