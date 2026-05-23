@@ -12,6 +12,8 @@
 - [Mark completed (manual)](#mark-completed-manual)
 - [Resume](#resume)
 - [One-Roman-per-project](#one-roman-per-project)
+- [Bulk queue — sequential dispatch of many items](#bulk-queue--sequential-dispatch-of-many-items)
+- [Chat auto-scroll and sidebar positioning](#chat-auto-scroll-and-sidebar-positioning)
 
 ## What is Roman
 
@@ -146,6 +148,64 @@ If you want parallel work:
 - Then a new one will start.
 
 Or use another project — its Roman is independent.
+
+## Bulk queue — sequential dispatch of many items
+
+When you need to push a whole batch of tech-debt items, product ideas, or evolutions through the Orchestrator, every `/findings`, `/ideas`, and `/evolutions` table has a checkbox column and a **Run (N)** button.
+
+### How to use
+
+1. The header checkbox toggles all currently **visible** rows (filtered-out rows stay untouched; partial selection shows the indeterminate state).
+2. Click **Run (N)** under the row counter. Disabled while N=0; click opens a confirm modal: "Queue N items? They'll run sequentially — Orchestrator takes one run at a time."
+3. After confirming — flash message "N items queued for orchestration", redirect back to the source page. The background dispatcher starts feeding them through.
+
+### Queue on `/p/{slug}/orchestration`
+
+Top-of-page banner labelled **Queue**:
+- **N pending** (amber, pulse) — how many items haven't been dispatched yet.
+- **queue is empty** — every item reached dispatch.
+- Per-item chips: kind icon (🐛 finding, 💡 idea, 🧬 evolution) + truncated identifier + status (`pending` / `dispatched` / `failed`). Already-dispatched items link to their run.
+- For failed items the error message is shown inline (not just in the tooltip).
+
+### Dispatcher diagnostics
+
+A second badge next to the pending counter explains what the dispatcher is doing right now:
+
+| Badge | Meaning |
+|---|---|
+| ⚡ **processing** | Slot is free, dispatcher is working through the queue |
+| ⏳ **waiting for run abc12345…** | Slot held by a live Orchestrator run; queue resumes when it finishes |
+| ⏸ **dispatcher stopped** | Pending items exist but the background task crashed — click "wake dispatcher" |
+| ⚠ **slot check error** | Internal error in the slot probe; tooltip shows the exception. Dispatcher keeps going — slot-check is fail-open |
+
+### Queue control buttons
+
+- **wake dispatcher** — restarts the background task. Safe: no-op if already running.
+- **retry failed (N)** — flips all failed items back to pending. For evolution conflict-gate failures this won't help (they'll fail again) — use the next button instead.
+- **retry with force (N)** (red, with confirm) — same as retry, plus sets `force=1` on the items. Evolution items with a conflict will now pass the gate. The OK button in the modal reads "Retry (force)", not "Delete" (even though the variant is danger).
+- **dismiss completed** — removes `dispatched`/`failed` cards, leaves pending alone.
+- **clear queue** (with confirm) — wipes the panel entirely. Already-dispatched runs continue running in the DB — this is purely cosmetic.
+- **dismiss** — shown when nothing is pending and you just want the completed list gone.
+
+### Caveats
+
+- The queue is **in-memory** and lost on server restart. Already-dispatched runs survive in the DB; only pending items vanish. The dispatcher is restartable from scratch — usually fine.
+- **Zombie auto-cancel**: if the slot check finds a DB row with `status='running'` but no live PM process, the dispatcher itself marks the run as `cancelled` (`error_message="auto-cancelled by bulk dispatcher (no live process)"`) — so the queue doesn't wedge on stale "running" rows left over from a kill.
+- **Idempotency**: if an item already has a linked live run, re-dispatch reuses it (no duplicates).
+- **Evolution conflict-gate**: if ≥2 open evolution proposals target the same agent, dispatch without `force` raises a clear `ValueError`. Solutions — archive the conflicting ones, or use "retry with force".
+
+### On the dashboard
+
+The Orchestration tile shows a blue **+N queued** badge next to the running count (tooltip: "Items queued for sequential Orchestrator dispatch"). Only visible when `pending > 0`.
+
+## Chat auto-scroll and sidebar positioning
+
+**Messages in the chat** — sticky scroll behaviour:
+- On every new `message_added` SSE event, if you were near the bottom (last 80px) the page smoothly scrolls down.
+- If you've scrolled up to read older messages, the page does NOT yank you back — new messages stack at the bottom, you scroll back manually when ready.
+- **On first open of a run** the page automatically scrolls to the last message (after `requestAnimationFrame` so layout has settled). Open a run — you immediately see the latest activity, not the goal header.
+
+**Left sidebar with the run list**: on page load the selected card (`?run_id=...`) is automatically scrolled to the middle of the sidebar — no more losing it below the fold when you have many runs. The scroll happens inside the sidebar; the page itself doesn't move.
 
 ---
 

@@ -80,7 +80,9 @@ Streamer logic:
 
 Technically `/live/stream/{agent}` is an SSE endpoint (Server-Sent Events) via `sse-starlette`. Each stdout line of one process is fanned out to all subscribers of one agent: you can open `/live` in multiple tabs — all will see the same.
 
-After `[stream ended]` the page won't reload itself. Refresh to make the block disappear from the list.
+After `[stream ended]` the card shows the **"Stream ended"** status for ~3 seconds (so you can catch the final lines), then smoothly fades out (500ms) and is removed from the DOM. When the last card retires — the "Nothing running" placeholder appears. No refresh needed.
+
+Server-side, on every GET `/live`, "zombie" sessions are filtered out: if a process's `returncode is not None` (claude.exe died but `_cleanup` hasn't caught up yet) — the card is not rendered, and the entry will be reaped in the background. This avoids forever-"pulsing" cards with no incoming data.
 
 ---
 

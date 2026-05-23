@@ -23,7 +23,8 @@
 - [`features/ideas.md`](features/ideas.md) — board продуктовых идей и кнопка `→ Jira`.
 - [`features/wiki.md`](features/wiki.md) — статус wiki проекта и `Run /wiki-bootstrap`.
 - [`features/ai-usage.md`](features/ai-usage.md) — аналитика токенов и стоимости (per-project + global).
-- [`features/orchestration.md`](features/orchestration.md) — запуск Романа, наблюдение live, resume.
+- [`features/orchestration.md`](features/orchestration.md) — запуск Романа, наблюдение live, resume, **Bulk queue** для массового запуска findings/ideas/evolutions.
+- [`features/evolutions.md`](features/evolutions.md) — предложения правок для агентов: Apply / force-apply / conflict-gate / фильтры.
 - [`features/cascade.md`](features/cascade.md) — каскадный конвейер: contract → design → … → qa.
 - [`features/analytics-extras.md`](features/analytics-extras.md) — Evolutions, Loops, Plans, Cascade Costs, Sidecar findings, Contracts.
 - [`features/settings.md`](features/settings.md) — глобальные vs per-project настройки.

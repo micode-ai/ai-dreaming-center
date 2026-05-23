@@ -109,6 +109,27 @@ Create the directory manually (DC will not create it). Then:
 - Either wait for the next weekly scan — the agent will write files itself.
 - Or manually drop a few md files with the correct frontmatter — the UI picks them up.
 
+## Column filters
+
+A filter row sits under the table headers:
+
+| Column | Filter type |
+|---|---|
+| id | substring search |
+| title | substring search |
+| status | dropdown (all / idea / exploring / approved / building / shipped / dropped) |
+| priority | substring search |
+| refs | dropdown (all / has GH / has run / has Jira / no refs) |
+| | "reset" button |
+
+State is **persisted in `localStorage`** under `ideas.filters.{slug}` — survives reload and project switches. When a filter is active a "showing N of M" counter appears next to the row count; if nothing matches — "No rows match the filter".
+
+The server-side `?status=...` query param is still honoured for old bookmarks: it pre-filters server-side and the client filters narrow further (intersection).
+
+## Bulk run
+
+Each row has a checkbox on the left. The header checkbox toggles all **visible** rows (filtered-out rows stay alone). The **Run (N)** button under the row counter pushes the selection into the Orchestrator queue, where they run sequentially. See [orchestration.md → Bulk queue](orchestration.md#bulk-queue--sequential-dispatch-of-many-items) for details.
+
 ---
 
 See also:
