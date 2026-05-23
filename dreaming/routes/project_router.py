@@ -26,6 +26,7 @@ from dreaming.routes.project_sidecar_findings import router as sidecar_router
 from dreaming.routes.project_wiki_health import router as wiki_health_router
 from dreaming.routes.project_loops_templates import router as loops_templates_router
 from dreaming.routes.project_help import router as help_router
+from dreaming.routes.project_ai_radar import router as project_ai_radar_router
 
 
 router = APIRouter()
@@ -52,4 +53,5 @@ router.include_router(sidecar_router)
 router.include_router(wiki_health_router)
 router.include_router(loops_templates_router)
 router.include_router(help_router)
+router.include_router(project_ai_radar_router)
 router.include_router(project_settings_router)
