@@ -1,5 +1,5 @@
 {% extends "_project_layout.html" %}
-{% from "_autoconfig_banner.html" import autoconfig_banner %}
+{% from "_autoconfig_banner.html" import autoconfig_banner with context %}
 {% set active='tech_debt' %}
 {% block project_content %}
 {% if not td_dir_set %}
@@ -7,15 +7,12 @@
 {% elif not td_dir_exists %}
 {{ autoconfig_banner(project, "tech_debt_dir", td_dir, "Tech-debt") }}
 {% elif error %}
-<p class="text-sm text-red-700">Ошибка парсинга: <code>{{ error }}</code></p>
+<p class="text-sm text-red-700">{{ "tech_debt.parse_error" | t(locale=locale) }}: <code>{{ error }}</code></p>
 {% elif total == 0 %}
 <div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
-  <p class="font-semibold text-sky-900 mb-1">В <code>{{ td_dir }}</code> нет markdown файлов</p>
+  <p class="font-semibold text-sky-900 mb-1">{{ "tech_debt.empty.title" | t(locale=locale, dir=td_dir) }}</p>
   <p class="text-sm text-sky-900 mb-2">
-    Tech-debt items пишет slash-команда <code>/tech-debt-scan</code> — спавнит claude,
-    который сканит репо на TODO/FIXME/legacy/смелли и пишет каждую находку
-    отдельным markdown'ом сюда. По расписанию запускается weekly (если включён cron),
-    или можно дёрнуть прямо сейчас.
+    {{ "tech_debt.empty.desc" | t(locale=locale, code='/tech-debt-scan') }}
   </p>
   <form method="post" action="/p/{{ project.slug }}/tech-debt/scan">
     <button class="text-sm bg-blue-600 text-white rounded px-3 py-1">Run /tech-debt-scan</button>
@@ -24,12 +21,12 @@
 {% else %}
 <div class="grid grid-cols-2 gap-6">
   <div class="bg-white p-4 rounded shadow">
-    <div class="text-xs muted mb-1">Всего</div>
+    <div class="text-xs muted mb-1">{{ "tech_debt.total" | t(locale=locale) }}</div>
     <a class="text-3xl font-bold text-blue-700 hover:underline" href="/p/{{ project.slug }}/findings">{{ total }}</a>
-    <div class="text-xs muted mt-1">→ открыть полный список</div>
+    <div class="text-xs muted mt-1">{{ "tech_debt.open_full" | t(locale=locale) }}</div>
   </div>
   <div class="bg-white p-4 rounded shadow">
-    <div class="text-xs muted mb-2">По статусу</div>
+    <div class="text-xs muted mb-2">{{ "tech_debt.by_status" | t(locale=locale) }}</div>
     {% for status, n in by_status %}
       <div class="text-sm flex justify-between">
         <a class="font-mono text-xs text-blue-600 hover:underline" href="/p/{{ project.slug }}/findings?status={{ status }}">{{ status }}</a>
@@ -56,6 +53,6 @@
   </tbody>
 </table>
 
-<p class="text-xs muted mt-4">Источник: <code>{{ td_dir }}</code> · клик по статусу или модулю → отфильтрованный <a class="text-blue-600 underline" href="/p/{{ project.slug }}/findings">findings</a> с конкретными items.</p>
+<p class="text-xs muted mt-4">{% set _link %}<a class="text-blue-600 underline" href="/p/{{ project.slug }}/findings">findings</a>{% endset %}{{ "tech_debt.source_hint" | t(locale=locale, dir=td_dir, link=_link) | safe }}</p>
 {% endif %}
 {% endblock %}

@@ -2,27 +2,101 @@
 {% set active='dashboard' %}
 {% block project_content %}
 {% if run_id %}
-<a href="/p/{{ project.slug }}/orchestration/{{ run_id }}" class="text-sm text-blue-600 underline">← к run</a>
+<a href="/p/{{ project.slug }}/orchestration/{{ run_id }}" class="text-sm text-blue-600 underline">{{ "session_log.back_to_run" | t(locale=locale) }}</a>
 {% else %}
-<a href="/p/{{ project.slug }}/" class="text-sm text-blue-600 underline">← к dashboard</a>
+<a href="/p/{{ project.slug }}/" class="text-sm text-blue-600 underline">{{ "session_log.back_to_dashboard" | t(locale=locale) }}</a>
 {% endif %}
 
 <h1 class="text-xl font-bold mt-3">Log — {{ label }}</h1>
-<p class="text-xs muted mt-1">
-  session_id: <code>{{ session_id }}</code>
-  {% if log_path %} · file: <code>{{ log_path }}</code>{% endif %}
+<p class="text-xs muted mt-1 flex items-center gap-3 flex-wrap">
+  <span>session_id: <code>{{ session_id }}</code></span>
+  {% if log_path %}<span>file: <code>{{ log_path }}</code></span>{% endif %}
+  {% if tail_url and is_live %}
+  <span id="log-stream-status" class="inline-flex items-center gap-1 px-2 py-0.5 rounded font-mono text-[10px]"
+        style="background: rgba(34, 197, 94, 0.15); color: #16a34a; border:1px solid rgba(34, 197, 94, 0.35);">
+    <span class="inline-block w-1.5 h-1.5 rounded-full" style="background:#16a34a; animation: pulse 1.5s infinite;"></span>
+    live
+  </span>
+  <label class="inline-flex items-center gap-1 text-[10px] cursor-pointer">
+    <input id="log-autoscroll" type="checkbox" checked> autoscroll
+  </label>
+  {% elif tail_url %}
+  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded font-mono text-[10px]"
+        style="background: rgba(148, 163, 184, 0.15); color: #64748b; border:1px solid rgba(148, 163, 184, 0.35);">
+    finished
+  </span>
+  {% endif %}
 </p>
 
 {% if not log_path %}
 <div class="mt-4 bg-amber-50 border border-amber-300 rounded p-3 text-sm">
-  Лог-файл не найден. Возможные причины:
+  {{ "session_log.not_found" | t(locale=locale) }}
   <ul class="list-disc ml-5 mt-2 text-xs">
-    <li>Сессия запускалась до того, как DC начал писать stdout-логи (PR с этой фичей).</li>
-    <li>Лог-каталог <code>{{ session_id }}</code> был удалён вручную или ротирован.</li>
-    <li>Setting <code>session_logs_dir</code> поменялся.</li>
+    <li>{{ "session_log.reason_old" | t(locale=locale) }}</li>
+    <li>{{ "session_log.reason_rotated" | t(locale=locale, id=session_id) }}</li>
+    <li>{{ "session_log.reason_setting" | t(locale=locale, setting='session_logs_dir') }}</li>
   </ul>
 </div>
 {% else %}
-<pre class="mt-4 bg-slate-900 text-slate-100 rounded p-3 overflow-auto text-xs whitespace-pre-wrap" style="max-height: 80vh;">{{ body or "(empty)" }}</pre>
+<pre id="log-body" class="mt-4 bg-slate-900 text-slate-100 rounded p-3 overflow-auto text-xs whitespace-pre-wrap" style="max-height: 80vh;">{{ body or "(empty)" }}</pre>
+{% if tail_url and is_live %}
+<style>
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+</style>
+<script>
+(() => {
+  const tailUrl = "{{ tail_url }}";
+  const body = document.getElementById('log-body');
+  const statusEl = document.getElementById('log-stream-status');
+  const autoscrollEl = document.getElementById('log-autoscroll');
+  let offset = {{ initial_size }};
+  let stopped = false;
+  // Initial body might be the literal "(empty)" placeholder; clear it so
+  // the first delta lands cleanly.
+  if (body.textContent === "(empty)") body.textContent = "";
+  // Start at the bottom by default.
+  body.scrollTop = body.scrollHeight;
+
+  async function tick() {
+    if (stopped) return;
+    try {
+      const r = await fetch(`${tailUrl}?offset=${offset}`);
+      if (r.status === 404) { markFinished("finished — log gone"); return; }
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      if (data.missing) { markFinished("file missing"); return; }
+      if (data.size < offset) {
+        // Log truncated/rotated mid-flight — re-read full content.
+        body.textContent = "";
+        offset = 0;
+      }
+      if (data.delta) {
+        body.appendChild(document.createTextNode(data.delta));
+        offset = data.size;
+        if (autoscrollEl && autoscrollEl.checked) {
+          body.scrollTop = body.scrollHeight;
+        }
+      }
+    } catch (e) {
+      console.warn('log tail error', e);
+    }
+    setTimeout(tick, 1500);
+  }
+
+  function markFinished(label) {
+    stopped = true;
+    if (statusEl) {
+      statusEl.innerHTML = label;
+      statusEl.style.background = "rgba(148, 163, 184, 0.15)";
+      statusEl.style.color = "#64748b";
+      statusEl.style.borderColor = "rgba(148, 163, 184, 0.35)";
+    }
+  }
+
+  // First tick after 750ms so initial render settles before we poll.
+  setTimeout(tick, 750);
+})();
+</script>
+{% endif %}
 {% endif %}
 {% endblock %}

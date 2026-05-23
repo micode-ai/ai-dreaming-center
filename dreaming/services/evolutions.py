@@ -1,7 +1,9 @@
 """Project-aware evolutions parser: list markdown files in _context/ overrides dir.
 
-Lean Wave 4 implementation — surfaces frontmatter only. Conflict-gate / reapply
-logic is deferred to a later wave.
+Surfaces frontmatter + auto-detects implicit conflicts (≥2 open evolutions
+targeting the same agent). The `has_conflict` flag is enforced server-side
+by the /evolutions/apply route, which refuses to dispatch unless callers
+opt into a force-apply.
 """
 from __future__ import annotations
 from dataclasses import dataclass, field

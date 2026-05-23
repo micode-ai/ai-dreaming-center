@@ -1,5 +1,5 @@
 {% extends "_project_layout.html" %}
-{% from "_autoconfig_banner.html" import autoconfig_banner %}
+{% from "_autoconfig_banner.html" import autoconfig_banner with context %}
 {% set active='plans' %}
 {% block project_content %}
 {% if not plans_dir_set %}
@@ -7,7 +7,7 @@
 {% elif not exists %}
 {{ autoconfig_banner(project, "plans_dir", plans_dir, "Plans") }}
 {% elif error %}
-<p class="text-sm text-red-700">Ошибка: <code>{{ error }}</code></p>
+<p class="text-sm text-red-700">{{ "common.error" | t(locale=locale) }}: <code>{{ error }}</code></p>
 {% elif items %}
 <p class="text-xs muted mb-3">{{ items|length }} plans in <code>{{ plans_dir }}</code></p>
 <table class="w-full bg-white rounded shadow text-sm">
@@ -50,17 +50,17 @@
     </td>
     <td class="p-2 text-xs whitespace-nowrap">
       <form method="post" action="/p/{{ project.slug }}/plans/{{ it.name }}/orchestrate" class="inline"
-            data-confirm="Запустить Orchestrator продолжать выполнение «{{ it.title or it.name }}»?">
+            data-confirm="{{ 'plans.confirm_continue' | t(locale=locale, title=(it.title or it.name)) }}">
         <button class="text-xs px-2 py-1 border border-purple-500 text-purple-700 rounded">Run</button>
       </form>
       {% if not it.github_issue %}
       <form method="post" action="/p/{{ project.slug }}/plans/{{ it.name }}/github" class="inline ml-1"
-            data-confirm="Создать GitHub issue из этого плана?">
+            data-confirm="{{ 'plans.confirm_gh' | t(locale=locale) }}">
         <button class="text-xs px-2 py-1 border border-slate-500 text-slate-700 rounded">→ GH</button>
       </form>
       {% endif %}
       <form method="post" action="/p/{{ project.slug }}/plans/{{ it.name }}/delete" class="inline ml-1"
-            data-confirm="Удалить файл плана {{ it.name }}.md?" data-confirm-variant="danger">
+            data-confirm="{{ 'plans.confirm_delete' | t(locale=locale, name=it.name) }}" data-confirm-variant="danger">
         <button class="text-xs px-2 py-1 border rounded text-red-600">del</button>
       </form>
     </td>
@@ -70,12 +70,10 @@
 </table>
 {% else %}
 <div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
-  <p class="font-semibold text-sky-900 mb-1">В <code>{{ plans_dir }}</code> нет plan-файлов</p>
+  <p class="font-semibold text-sky-900 mb-1">{{ "plans.empty.title" | t(locale=locale, dir=plans_dir) }}</p>
   <p class="text-sm text-sky-900 mb-2">
-    Планы пишет либо Orchestrator из <a class="text-blue-600 underline" href="/p/{{ project.slug }}/orchestration">orchestration</a>
-    при декомпозиции фичи, либо slash-команда <code>/plans-extract</code> —
-    она проходит по recent commits / TODO-комментариям / spec-файлам и
-    surfaces активные in-flight плана с чек-листом tasks.
+    {% set _link %}<a class="text-blue-600 underline" href="/p/{{ project.slug }}/orchestration">orchestration</a>{% endset %}
+    {{ "plans.empty.desc" | t(locale=locale, link=_link, code='/plans-extract') | safe }}
   </p>
   <form method="post" action="/p/{{ project.slug }}/plans/extract">
     <button class="text-sm bg-blue-600 text-white rounded px-3 py-1">Run /plans-extract</button>

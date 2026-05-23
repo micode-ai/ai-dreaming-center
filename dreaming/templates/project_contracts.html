@@ -1,5 +1,5 @@
 {% extends "_project_layout.html" %}
-{% from "_autoconfig_banner.html" import autoconfig_banner %}
+{% from "_autoconfig_banner.html" import autoconfig_banner with context %}
 {% set active='contracts' %}
 {% block project_content %}
 {% if not contracts_dir_set %}
@@ -7,7 +7,7 @@
 {% elif not exists %}
 {{ autoconfig_banner(project, "contracts_dir", contracts_dir, "Contracts") }}
 {% elif error %}
-<p class="text-sm text-red-700">Ошибка: <code>{{ error }}</code></p>
+<p class="text-sm text-red-700">{{ "common.error" | t(locale=locale) }}: <code>{{ error }}</code></p>
 {% elif items %}
 <p class="text-xs muted mb-3">{{ items|length }} contracts</p>
 <table class="w-full bg-white rounded shadow text-sm">
@@ -46,19 +46,19 @@
     </td>
     <td class="p-2 text-xs whitespace-nowrap">
       <form method="post" action="/p/{{ project.slug }}/contracts/orchestrate" class="inline"
-            data-confirm="Запустить Orchestrator: аудит контракта «{{ it.name }}» против реального кода?">
+            data-confirm="{{ 'contracts.confirm_audit' | t(locale=locale, name=it.name) }}">
         <input type="hidden" name="path" value="{{ it.relative_path }}">
         <button class="text-xs px-2 py-1 border border-purple-500 text-purple-700 rounded">Audit</button>
       </form>
       {% if not it.github_issue %}
       <form method="post" action="/p/{{ project.slug }}/contracts/github" class="inline ml-1"
-            data-confirm="Создать GitHub issue из этого контракта?">
+            data-confirm="{{ 'contracts.confirm_gh' | t(locale=locale) }}">
         <input type="hidden" name="path" value="{{ it.relative_path }}">
         <button class="text-xs px-2 py-1 border border-slate-500 text-slate-700 rounded">→ GH</button>
       </form>
       {% endif %}
       <form method="post" action="/p/{{ project.slug }}/contracts/delete" class="inline ml-1"
-            data-confirm="Удалить файл {{ it.relative_path }}?" data-confirm-variant="danger">
+            data-confirm="{{ 'contracts.confirm_delete' | t(locale=locale, path=it.relative_path) }}" data-confirm-variant="danger">
         <input type="hidden" name="path" value="{{ it.relative_path }}">
         <button class="text-xs px-2 py-1 border rounded text-red-600">del</button>
       </form>
@@ -69,12 +69,9 @@
 </table>
 {% else %}
 <div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
-  <p class="font-semibold text-sky-900 mb-1">В <code>{{ contracts_dir }}</code> нет contract-файлов</p>
+  <p class="font-semibold text-sky-900 mb-1">{{ "contracts.empty.title" | t(locale=locale, dir=contracts_dir) }}</p>
   <p class="text-sm text-sky-900 mb-2">
-    Контракты пишутся slash-командой <code>/contracts-scan</code> — claude
-    проходится по коду, выделяет модули и страницы, описывает их public API,
-    зависимости, инварианты в виде markdown'ов с frontmatter. Также пишутся
-    оркестратором во время orchestration при декомпозиции фичи.
+    {{ "contracts.empty.desc" | t(locale=locale, code='/contracts-scan') }}
   </p>
   <form method="post" action="/p/{{ project.slug }}/contracts/scan">
     <button class="text-sm bg-blue-600 text-white rounded px-3 py-1">Run /contracts-scan</button>

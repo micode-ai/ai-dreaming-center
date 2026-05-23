@@ -5,7 +5,7 @@
 {% endblock %}
 {% block project_content %}
 {% if summary.error %}
-<p style="color: var(--status-failed);" class="text-sm">Ошибка: <code>{{ summary.error }}</code></p>
+<p style="color: var(--status-failed);" class="text-sm">{{ "common.error" | t(locale=locale) }}: <code>{{ summary.error }}</code></p>
 {% else %}
 
 {# Compact-number formatter used everywhere on this page. #}
@@ -24,20 +24,20 @@
 <div class="rounded-lg p-3 mb-5 flex flex-wrap items-center gap-3"
      style="background: var(--bg-card); border:1px solid var(--border-subtle);">
   <div class="flex items-center gap-1">
-    {% for p_, label in [('today','Сегодня'), ('7d','7 дней'), ('30d','30 дней'), ('all','Всё')] %}
+    {% for p_, lbl_key in [('today','ai_usage.preset.today'), ('7d','ai_usage.preset.7d'), ('30d','ai_usage.preset.30d'), ('all','ai_usage.preset.all')] %}
     <a href="?preset={{ p_ }}{% if f.model %}&model={{ f.model }}{% endif %}"
        class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
        style="{% if f.preset == p_ %}background: var(--brand); color:#fff; border:1px solid var(--brand);{% else %}background: var(--bg-card); color: var(--text-muted); border:1px solid var(--border-subtle);{% endif %}">
-      {{ label }}
+      {{ lbl_key | t(locale=locale) }}
     </a>
     {% endfor %}
   </div>
 
   <form method="get" class="flex items-center gap-2 ml-2" onchange="this.submit()">
     <input type="hidden" name="preset" value="{{ f.preset }}">
-    <label class="text-xs" style="color: var(--text-muted);">Модель</label>
+    <label class="text-xs" style="color: var(--text-muted);">{{ "ai_usage.model_label" | t(locale=locale) }}</label>
     <select name="model" class="rounded-lg px-2 py-1.5 text-xs" style="min-width: 220px;">
-      <option value="">Все модели</option>
+      <option value="">{{ "ai_usage.all_models" | t(locale=locale) }}</option>
       {% for m in summary.models_catalog %}
       <option value="{{ m }}" {% if f.model == m %}selected{% endif %}>{{ m }}</option>
       {% endfor %}
@@ -52,53 +52,53 @@
 {# 1. KPI cards (same shape as original) #}
 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
   <div class="rounded-xl p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-    <p class="text-xs uppercase tracking-wider mb-1" style="color: var(--text-faint);">Всего токенов</p>
+    <p class="text-xs uppercase tracking-wider mb-1" style="color: var(--text-faint);">{{ "ai_usage.kpi.total" | t(locale=locale) }}</p>
     <p class="text-2xl font-bold" style="color: var(--text-strong);">{{ num(k.grand_total) }}</p>
-    <p class="text-xs mt-1" style="color: var(--text-faint);">{{ k.events }} событий · {{ k.sessions }} сессий</p>
+    <p class="text-xs mt-1" style="color: var(--text-faint);">{{ "ai_usage.kpi.events_sessions" | t(locale=locale, e=k.events, s=k.sessions) }}</p>
   </div>
   <div class="rounded-xl p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-    <p class="text-xs uppercase tracking-wider mb-1" style="color: var(--text-faint);">Input / Output</p>
+    <p class="text-xs uppercase tracking-wider mb-1" style="color: var(--text-faint);">{{ "ai_usage.kpi.input_output" | t(locale=locale) }}</p>
     <p class="text-sm" style="color: var(--text-body);">
       <span style="color: var(--status-success);">↑</span> {{ num(k.input) }}
       <span style="color: var(--text-faint);" class="mx-1">·</span>
       <span style="color: var(--status-running);">↓</span> {{ num(k.output) }}
     </p>
-    <p class="text-xs mt-2" style="color: var(--text-faint);">avg/сессия: {{ num(k.avg_per_session) }}</p>
+    <p class="text-xs mt-2" style="color: var(--text-faint);">{{ "ai_usage.kpi.avg_per_session" | t(locale=locale, n=num(k.avg_per_session)) }}</p>
   </div>
   <div class="rounded-xl p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-    <p class="text-xs uppercase tracking-wider mb-1" style="color: var(--text-faint);">Cache read / create</p>
+    <p class="text-xs uppercase tracking-wider mb-1" style="color: var(--text-faint);">{{ "ai_usage.kpi.cache" | t(locale=locale) }}</p>
     <p class="text-sm" style="color: var(--text-body);">
       <span style="color: #a78bfa;">⇣</span> {{ num(k.cache_read) }}
       <span style="color: var(--text-faint);" class="mx-1">·</span>
       <span style="color: var(--status-timeout);">⇡</span> {{ num(k.cache_creation) }}
     </p>
-    <p class="text-xs mt-2" style="color: var(--text-faint);">cache hit: <span style="color: #c4b5fd;">{{ k.cache_hit_pct }}%</span></p>
+    <p class="text-xs mt-2" style="color: var(--text-faint);">{{ "ai_usage.kpi.cache_hit" | t(locale=locale) }}: <span style="color: #c4b5fd;">{{ k.cache_hit_pct }}%</span></p>
   </div>
   <div class="rounded-xl p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-    <p class="text-xs uppercase tracking-wider mb-1" style="color: var(--text-faint);">Subagents</p>
+    <p class="text-xs uppercase tracking-wider mb-1" style="color: var(--text-faint);">{{ "ai_usage.kpi.subagents" | t(locale=locale) }}</p>
     <p class="text-2xl font-bold" style="color: var(--text-strong);">{{ k.sidechain_share_pct }}%</p>
-    <p class="text-xs mt-1" style="color: var(--text-faint);">{{ num(k.sidechain_total) }} в sidechain</p>
+    <p class="text-xs mt-1" style="color: var(--text-faint);">{{ "ai_usage.kpi.in_sidechain" | t(locale=locale, n=num(k.sidechain_total)) }}</p>
   </div>
 </div>
 
 {# 2. Daily series #}
 <div class="rounded-xl p-5 mb-6" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-  <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">Расход по дням ({{ f.preset }})</h2>
+  <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">{{ "ai_usage.daily_title" | t(locale=locale, preset=f.preset) }}</h2>
   <div style="height: 18rem;"><canvas id="dailyChart"></canvas></div>
 </div>
 
 {# 3 + 6. Models / sidechain side-by-side #}
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
   <div class="rounded-xl p-5 lg:col-span-2" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-    <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">По моделям</h2>
+    <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">{{ "ai_usage.by_model" | t(locale=locale) }}</h2>
     {% if summary.by_model %}
     <div style="height: 16rem;"><canvas id="modelChart"></canvas></div>
     {% else %}
-    <p class="text-sm" style="color: var(--text-faint);">Нет данных</p>
+    <p class="text-sm" style="color: var(--text-faint);">{{ "common.no_data" | t(locale=locale) }}</p>
     {% endif %}
   </div>
   <div class="rounded-xl p-5" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-    <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">Main vs Subagents</h2>
+    <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">{{ "ai_usage.main_vs_sub" | t(locale=locale) }}</h2>
     <div style="height: 16rem;" class="flex items-center justify-center"><canvas id="sidechainChart"></canvas></div>
     <div class="flex items-center justify-between text-xs mt-3">
       <span style="color: var(--status-success);">Main · {{ num(summary.main_sub.main) }}</span>
@@ -109,16 +109,16 @@
 
 {# 5. Top sessions #}
 <div class="rounded-xl p-5 mb-6" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-  <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">Топ сессий</h2>
+  <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">{{ "ai_usage.top_sessions" | t(locale=locale) }}</h2>
   {% if summary.top_sessions %}
   <table class="w-full text-sm">
     <thead class="text-xs uppercase tracking-wider" style="color: var(--text-faint);">
       <tr>
         <th class="text-left pb-2">Session</th>
-        <th class="text-left pb-2">Модель</th>
-        <th class="text-right pb-2">Длительность</th>
-        <th class="text-right pb-2">События</th>
-        <th class="text-right pb-2">Токены</th>
+        <th class="text-left pb-2">{{ "ai_usage.col.model" | t(locale=locale) }}</th>
+        <th class="text-right pb-2">{{ "ai_usage.col.duration" | t(locale=locale) }}</th>
+        <th class="text-right pb-2">{{ "ai_usage.col.events" | t(locale=locale) }}</th>
+        <th class="text-right pb-2">{{ "ai_usage.col.tokens" | t(locale=locale) }}</th>
       </tr>
     </thead>
     <tbody>
@@ -126,7 +126,7 @@
       <tr style="border-top:1px solid var(--border-subtle);">
         <td class="py-2 font-mono text-xs" style="color: var(--text-faint);">{{ s.session_id[:8] }}…</td>
         <td class="py-2 text-xs" style="color: var(--text-faint);">{{ s.model or '(unknown)' }}</td>
-        <td class="py-2 text-right" style="color: var(--text-faint);">{{ s.duration_minutes }} мин</td>
+        <td class="py-2 text-right" style="color: var(--text-faint);">{{ s.duration_minutes }} {{ "ai_usage.minutes" | t(locale=locale) }}</td>
         <td class="py-2 text-right" style="color: var(--text-faint);">{{ s.events }}</td>
         <td class="py-2 text-right font-semibold" style="color: var(--text-strong);">{{ num(s.total_tokens) }}</td>
       </tr>
@@ -134,33 +134,33 @@
     </tbody>
   </table>
   {% else %}
-  <p class="text-sm" style="color: var(--text-faint);">Нет данных</p>
+  <p class="text-sm" style="color: var(--text-faint);">{{ "common.no_data" | t(locale=locale) }}</p>
   {% endif %}
 </div>
 
 {# 7. Learning sessions (week stats + recent) #}
 {% set wk = summary.learning.week %}
 <div class="rounded-xl p-5 mb-6" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-  <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">Обучающие сессии (за неделю)</h2>
+  <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">{{ "ai_usage.learning_title" | t(locale=locale) }}</h2>
   <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
     <div class="rounded-lg p-3" style="background: var(--bg-hover);">
-      <p class="text-xs" style="color: var(--text-faint);">Всего</p>
+      <p class="text-xs" style="color: var(--text-faint);">{{ "ai_usage.learning.total" | t(locale=locale) }}</p>
       <p class="text-xl font-bold" style="color: var(--text-strong);">{{ wk.total or 0 }}</p>
     </div>
     <div class="rounded-lg p-3" style="background: var(--bg-hover);">
-      <p class="text-xs" style="color: var(--text-faint);">Успешно</p>
+      <p class="text-xs" style="color: var(--text-faint);">{{ "ai_usage.learning.success" | t(locale=locale) }}</p>
       <p class="text-xl font-bold" style="color: var(--status-success);">{{ wk.success or 0 }}</p>
     </div>
     <div class="rounded-lg p-3" style="background: var(--bg-hover);">
-      <p class="text-xs" style="color: var(--text-faint);">Нет пробела</p>
+      <p class="text-xs" style="color: var(--text-faint);">{{ "ai_usage.learning.no_gap" | t(locale=locale) }}</p>
       <p class="text-xl font-bold" style="color: var(--status-running);">{{ wk.no_gap or 0 }}</p>
     </div>
     <div class="rounded-lg p-3" style="background: var(--bg-hover);">
-      <p class="text-xs" style="color: var(--text-faint);">Ошибки</p>
+      <p class="text-xs" style="color: var(--text-faint);">{{ "ai_usage.learning.failed" | t(locale=locale) }}</p>
       <p class="text-xl font-bold" style="color: var(--status-failed);">{{ wk.failed or 0 }}</p>
     </div>
     <div class="rounded-lg p-3" style="background: var(--bg-hover);">
-      <p class="text-xs" style="color: var(--text-faint);">Таймаут</p>
+      <p class="text-xs" style="color: var(--text-faint);">{{ "ai_usage.learning.timeout" | t(locale=locale) }}</p>
       <p class="text-xl font-bold" style="color: var(--status-timeout);">{{ wk.timeout or 0 }}</p>
     </div>
   </div>
@@ -168,11 +168,11 @@
   <table class="w-full text-sm">
     <thead class="text-xs uppercase tracking-wider" style="color: var(--text-faint);">
       <tr>
-        <th class="text-left pb-2">Агент</th>
-        <th class="text-left pb-2">Тема</th>
-        <th class="text-left pb-2">Статус</th>
-        <th class="text-right pb-2">Начало</th>
-        <th class="text-right pb-2">Длит-ть</th>
+        <th class="text-left pb-2">{{ "p.col.agent" | t(locale=locale) }}</th>
+        <th class="text-left pb-2">{{ "p.col.topic" | t(locale=locale) }}</th>
+        <th class="text-left pb-2">{{ "p.col.status" | t(locale=locale) }}</th>
+        <th class="text-right pb-2">{{ "ai_usage.col.started_at" | t(locale=locale) }}</th>
+        <th class="text-right pb-2">{{ "ai_usage.col.duration_short" | t(locale=locale) }}</th>
       </tr>
     </thead>
     <tbody>
@@ -189,7 +189,7 @@
           {% else %}<span style="color: var(--text-faint);">{{ s.status or '—' }}</span>{% endif %}
         </td>
         <td class="py-2 text-right text-xs font-mono" style="color: var(--text-faint);">{{ (s.started_at or '')[:19] }}</td>
-        <td class="py-2 text-right" style="color: var(--text-faint);">{% if s.duration_minutes %}{{ s.duration_minutes }} мин{% else %}—{% endif %}</td>
+        <td class="py-2 text-right" style="color: var(--text-faint);">{% if s.duration_minutes %}{{ s.duration_minutes }} {{ "ai_usage.minutes" | t(locale=locale) }}{% else %}—{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -199,7 +199,7 @@
 
 {# Reference unfiltered context #}
 <div class="flex items-center gap-4 mb-5 text-xs" style="color: var(--text-faint);">
-  <span>Для контекста (без фильтра модели):</span>
+  <span>{{ "ai_usage.context_for" | t(locale=locale) }}</span>
   <span><span class="font-mono">7d</span> · {{ "{:,}".format(summary.last_7d.total_tokens or 0) }}</span>
   <span><span class="font-mono">30d</span> · {{ "{:,}".format(summary.last_30d.total_tokens or 0) }}</span>
 </div>

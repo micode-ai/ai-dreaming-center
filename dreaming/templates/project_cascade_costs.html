@@ -11,13 +11,13 @@
 
 <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
   <div>
-    <h2 class="text-lg font-semibold" style="color: var(--text-strong);">Стоимость оркестраций</h2>
+    <h2 class="text-lg font-semibold" style="color: var(--text-strong);">{{ "cascade_costs.title" | t(locale=locale) }}</h2>
     <p class="text-xs mt-0.5" style="color: var(--text-faint);">
-      USD и токены по всем orchestration-запускам проекта · JOIN orchestrator_runs ⋈ ai_usage_events
+      {{ "cascade_costs.subtitle" | t(locale=locale) }}
     </p>
   </div>
   <div class="text-xs" style="color: var(--text-faint);">
-    Цены ориентировочные ($/1M): opus 15/75, sonnet 3/15, haiku 0.8/4
+    {{ "cascade_costs.prices" | t(locale=locale) }}
   </div>
 </div>
 
@@ -25,20 +25,20 @@
 <div class="rounded-lg p-3 mb-5 flex flex-wrap items-center gap-3"
      style="background: var(--bg-card); border:1px solid var(--border-subtle);">
   <div class="flex items-center gap-1">
-    {% for p_, label in [('today','Сегодня'), ('7d','7 дней'), ('30d','30 дней'), ('all','Всё')] %}
+    {% for p_, lbl_key in [('today','ai_usage.preset.today'), ('7d','ai_usage.preset.7d'), ('30d','ai_usage.preset.30d'), ('all','ai_usage.preset.all')] %}
     <a href="?preset={{ p_ }}{% if f.status %}&status={{ f.status }}{% endif %}"
        class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
        style="{% if f.preset == p_ %}background: var(--brand); color:#fff; border:1px solid var(--brand);{% else %}background: var(--bg-card); color: var(--text-muted); border:1px solid var(--border-subtle);{% endif %}">
-      {{ label }}
+      {{ lbl_key | t(locale=locale) }}
     </a>
     {% endfor %}
   </div>
 
   <form method="get" class="flex items-center gap-2 ml-2" onchange="this.submit()">
     <input type="hidden" name="preset" value="{{ f.preset }}">
-    <label class="text-xs" style="color: var(--text-muted);">Статус</label>
+    <label class="text-xs" style="color: var(--text-muted);">{{ "cascade_costs.status_label" | t(locale=locale) }}</label>
     <select name="status" class="rounded-lg px-2 py-1.5 text-xs" style="min-width: 160px;">
-      <option value="">Все</option>
+      <option value="">{{ "cascade_costs.all" | t(locale=locale) }}</option>
       {% for s in ['running','completed','failed','cancelled'] %}
       <option value="{{ s }}" {% if f.status == s %}selected{% endif %}>{{ s }}</option>
       {% endfor %}
@@ -76,7 +76,7 @@
 
 {% if kpi.status_counts %}
 <div class="flex items-center gap-2 mb-5 flex-wrap">
-  <span class="text-xs uppercase tracking-wider" style="color: var(--text-faint);">По статусам</span>
+  <span class="text-xs uppercase tracking-wider" style="color: var(--text-faint);">{{ "cascade_costs.by_status" | t(locale=locale) }}</span>
   {% for status, count in kpi.status_counts.items() %}
   <span class="badge badge-{{ {'running':'running','completed':'success','failed':'failed','cancelled':'neutral'}.get(status, 'neutral') }}">
     {{ status }} · {{ count }}
@@ -119,13 +119,10 @@
 </table>
 {% else %}
 <div class="rounded-lg p-4 text-sm" style="background: var(--bg-card); border:1px solid var(--border-subtle); color: var(--text-muted);">
-  <p class="mb-2">Пока нет orchestration runs за выбранный период.</p>
+  <p class="mb-2">{{ "cascade_costs.empty" | t(locale=locale) }}</p>
   <p class="text-xs" style="color: var(--text-faint);">
-    Costs появляются автоматически после первого запуска Orchestrator на странице
-    <a class="underline" style="color: var(--brand-hover);" href="/p/{{ project.slug }}/orchestration">Оркестрация</a>.
-    Каждый run копит usage-события (input/output токены, инструменты) — эта страница агрегирует
-    их в долларах и токенах. Cost_usd ищется в payload_json orchestrator_events;
-    tokens приходят через JOIN ai_usage_events по claude session_id.
+    {% set _link %}<a class="underline" style="color: var(--brand-hover);" href="/p/{{ project.slug }}/orchestration">{{ "p.orchestration" | t(locale=locale) }}</a>{% endset %}
+    {{ "cascade_costs.empty_hint" | t(locale=locale, link=_link) | safe }}
   </p>
 </div>
 {% endif %}

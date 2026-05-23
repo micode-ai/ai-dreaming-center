@@ -151,8 +151,9 @@ def parse_product_ideas(product_ideas_dir: str) -> list[ProductIdeaItem]:
 def read_product_idea(file_path: str) -> tuple[dict, str]:
     """Read a single PI-*.md file. Returns (frontmatter_dict, body_text).
 
-    Body is returned as raw markdown — callers can render to HTML if needed.
-    Wave 2.3 doesn't need HTML rendering so we avoid the markdown dep.
+    Body is returned as raw markdown — the detail template renders it
+    client-side via marked.js (`_markdown_partial.html`), so we don't pull
+    a server-side markdown dependency.
     """
     path = Path(file_path)
     if not path.exists():

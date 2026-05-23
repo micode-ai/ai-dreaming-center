@@ -2,7 +2,7 @@
 {% set active = 'g_settings' %}
 {% block content %}
 <h1 class="text-2xl font-bold mb-4" style="color: var(--text-strong);">{{ "settings.title" | t(locale=locale) }}</h1>
-<p class="muted mb-4">Глобальные дефолты. Per-project overrides — на /p/&lt;slug&gt;/settings.</p>
+<p class="muted mb-4">{{ "settings.global_hint" | t(locale=locale) }}</p>
 
 <form method="post" action="/settings" class="space-y-6 max-w-3xl">
 {% for group_name, keys in groups %}
