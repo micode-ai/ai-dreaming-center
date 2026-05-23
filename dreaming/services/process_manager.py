@@ -7,8 +7,15 @@ import json
 import logging
 import os
 import shutil
+import subprocess
+import sys
 import time
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 from pathlib import Path
 from typing import AsyncIterator, Callable, TYPE_CHECKING
 from uuid import uuid4
@@ -28,6 +35,23 @@ RING_BUFFER_SIZE = 5000
 # tool_result-вложения). Поднимаем лимит, чтобы readline() не бросал
 # LimitOverrunError и не обрывал чтение посреди сессии.
 STDOUT_BUFFER_LIMIT = 16 * 1024 * 1024  # 16 MB
+
+
+# Human-readable hints for the most common claude.exe exit codes. Appended
+# to the `[exit] code=N — <hint>` line so users can tell at a glance whether
+# the process died from inside (1/2) or was killed by something external
+# (130 = Ctrl+C, 137 = SIGKILL, 143 = SIGTERM, 3221225786 = STATUS_CONTROL_C_EXIT on Windows).
+_EXIT_CODE_HINTS: dict[int, str] = {
+    0:    "ok",
+    1:    "internal error in claude CLI",
+    2:    "claude CLI usage/argument error",
+    130:  "Ctrl+C (SIGINT)",
+    137:  "killed (SIGKILL or watchdog)",
+    143:  "terminated (SIGTERM)",
+    -1:   "process did not exit cleanly",
+    3221225786: "Ctrl+C on Windows (STATUS_CONTROL_C_EXIT)",
+    3221225794: "killed on Windows (STATUS_DLL_INIT_FAILED / other)",
+}
 
 
 def _resolve_claude_path(claude_path: str) -> str:
@@ -573,13 +597,28 @@ class ProcessManager:
         except Exception as e:
             log.error("stdout reader error for %s: %s", session.agent_name, e)
         finally:
+            # Wait briefly for the child to actually exit so we can record
+            # its exit code as the last line in the log — that's the single
+            # most useful diagnostic when claude dies mid-run (0=clean,
+            # 130=Ctrl+C, 137=SIGKILL, 1-2=internal error, etc).
+            exit_code: int | None = None
+            try:
+                exit_code = await asyncio.wait_for(
+                    session.process.wait(), timeout=2.0,
+                )
+            except (asyncio.TimeoutError, Exception):
+                exit_code = session.process.returncode
+            if exit_code is not None:
+                hint = _EXIT_CODE_HINTS.get(exit_code, "")
+                tag = f"[exit] code={exit_code}" + (f" — {hint}" if hint else "")
+                _emit(tag)
             # Process finished — notify subscribers with sentinel
             for q in session.subscribers:
                 try:
                     q.put_nowait(None)  # None = stream ended
                 except asyncio.QueueFull:
                     pass
-            await self._cleanup(session)
+            await self._cleanup(session, exit_code=exit_code)
 
     async def _watchdog(self, session: RunningSession, timeout_minutes: int) -> None:
         """Kill process after `timeout_minutes` of stdout silence.
@@ -631,10 +670,34 @@ class ProcessManager:
             return False
 
     async def _kill_process(self, session: RunningSession) -> None:
-        """Terminate then kill the process."""
+        """Terminate then kill the process tree.
+
+        Windows note: shutil.which("claude") resolves to claude.CMD, so Popen
+        wraps it in cmd.exe /c — Popen.pid is the cmd.exe wrapper, not the
+        actual claude.exe child. proc.terminate() kills only cmd.exe, leaving
+        claude.exe orphaned but still holding our stdout pipe → _read_stdout
+        hangs forever and pm.running never cleans up. taskkill /F /T descends
+        the tree and kills both, so the pipe closes and cleanup fires.
+        """
         proc = session.process
         if proc.returncode is not None:
-            return  # Already finished
+            return  # Already finished — and PID may be reused, so don't taskkill it
+        if sys.platform == "win32" and proc.pid:
+            try:
+                await asyncio.to_thread(
+                    subprocess.run,
+                    ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=10,
+                )
+            except (OSError, subprocess.TimeoutExpired) as e:
+                log.warning("taskkill failed for pid %s: %s", proc.pid, e)
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=3.0)
+            except asyncio.TimeoutError:
+                pass
+            return
         try:
             proc.terminate()
             try:
@@ -645,20 +708,44 @@ class ProcessManager:
         except ProcessLookupError:
             pass
 
-    async def _cleanup(self, session: RunningSession) -> None:
-        """Remove session from running dict, cancel watchdog, reconcile DB."""
+    async def _cleanup(self, session: RunningSession, exit_code: int | None = None) -> None:
+        """Remove session from running dict, cancel watchdog, sync DB.
+
+        When the child process exits we update the session row's status
+        immediately (mapped from `exit_code`), so the UI doesn't keep
+        showing «В эфире» until the 5-minute reconcile cron catches up.
+        """
         key = session.key or session.agent_name
         if session._watchdog_task and not session._watchdog_task.done():
             session._watchdog_task.cancel()
         was_running = self.running.pop(key, None) is not None
         if was_running:
             self.keep_awake.release()
-        log.info("Session %s for %s cleaned up", session.session_id, key)
-        # Skip DB reconcile for command-style entries (e.g. 'cmd:tech-debt-scanner')
-        if self.db is None or key.startswith("cmd:"):
+        log.info("Session %s for %s cleaned up (exit_code=%s)",
+                 session.session_id, key, exit_code)
+        if self.db is None:
+            return
+        # Map exit code → DB status. 0 = success; anything else = failed.
+        # Watchdog kills go through here too (exit code = negative signal
+        # on POSIX, large positive on Windows); those count as failed.
+        target_status = "success" if exit_code == 0 else "failed"
+        # Command-style entries ('cmd:...') don't have agent_learning_sessions
+        # rows of their own — the row's `agent_name` IS the composite key.
+        # Update by id (which is the claude session_id passed to start_session).
+        try:
+            await self.db.execute(
+                "UPDATE agent_learning_sessions "
+                "SET status=?, finished_at=COALESCE(finished_at, ?) "
+                "WHERE id=? AND status='running'",
+                (target_status, _now_iso(), session.session_id),
+            )
+        except Exception as e:
+            log.warning("update session %s status failed: %s", session.session_id, e)
+        # Skip the broader reconcile sweep for cmd:* — they don't live in
+        # agent_learning_sessions in the same way; reconcile handles them.
+        if key.startswith("cmd:"):
             return
         try:
-            # active_pairs: live (project_id, agent_name) tuples still running
             active_pairs = [
                 (s.project_id, s.agent_name)
                 for s in self.running.values()

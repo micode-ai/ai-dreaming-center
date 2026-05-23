@@ -1,10 +1,10 @@
 {% extends "_project_layout.html" %}
 {% set active='contracts' %}
 {% block project_content %}
-<a href="/p/{{ project.slug }}/contracts" class="text-sm text-blue-600 underline">← к списку</a>
+<a href="/p/{{ project.slug }}/contracts" class="text-sm text-blue-600 underline">{{ "common.back_to_list" | t(locale=locale) }}</a>
 
 {% if not item %}
-<p class="muted mt-4">Contract <code>{{ path }}</code> не найден в <code>{{ contracts_dir }}</code>.</p>
+<p class="muted mt-4">{{ "contracts.detail.not_found" | t(locale=locale, path=path, dir=contracts_dir) }}</p>
 {% else %}
 <h1 class="text-2xl font-bold mt-3">{{ item.module or item.page or item.name }}</h1>
 <div class="flex flex-wrap gap-3 text-xs mt-2 muted">
@@ -16,15 +16,15 @@
 
 <div class="mt-4 flex flex-wrap gap-2 items-center">
   <form method="post" action="/p/{{ project.slug }}/contracts/orchestrate" class="inline"
-        data-confirm="Запустить Orchestrator: аудит контракта против реального кода?">
+        data-confirm="{{ 'contracts.confirm_audit' | t(locale=locale, name=item.name) }}">
     <input type="hidden" name="path" value="{{ path }}">
-    <button class="text-sm px-3 py-1 rounded bg-purple-600 text-white font-semibold">Аудит через Orchestrator</button>
+    <button class="text-sm px-3 py-1 rounded bg-purple-600 text-white font-semibold">{{ "contracts.btn_audit" | t(locale=locale) }}</button>
   </form>
   {% if not item.github_issue %}
   <form method="post" action="/p/{{ project.slug }}/contracts/github" class="inline"
-        data-confirm="Создать GitHub issue из этого контракта?">
+        data-confirm="{{ 'contracts.confirm_gh' | t(locale=locale) }}">
     <input type="hidden" name="path" value="{{ path }}">
-    <button class="text-sm px-3 py-1 border border-slate-500 text-slate-700 rounded">→ Создать GitHub issue</button>
+    <button class="text-sm px-3 py-1 border border-slate-500 text-slate-700 rounded">{{ "contracts.btn_create_gh" | t(locale=locale) }}</button>
   </form>
   {% else %}
   <a target="_blank" href="{{ item.github_issue }}"
@@ -41,7 +41,7 @@
     </select>
   </form>
   <form method="post" action="/p/{{ project.slug }}/contracts/delete" class="inline"
-        data-confirm="Удалить {{ path }}?" data-confirm-variant="danger">
+        data-confirm="{{ 'contracts.confirm_delete' | t(locale=locale, path=path) }}" data-confirm-variant="danger">
     <input type="hidden" name="path" value="{{ path }}">
     <button class="text-sm px-3 py-1 border rounded text-red-600">delete file</button>
   </form>
@@ -52,7 +52,7 @@
 
 {% if item.orchestration_run %}
 <p class="mt-2 text-xs muted">
-  Уже запускался Orchestrator:
+  {{ "contracts.detail.already_ran" | t(locale=locale) }}
   <a class="text-blue-600 underline" href="/p/{{ project.slug }}/orchestration/{{ item.orchestration_run }}">run {{ item.orchestration_run[:8] }}…</a>
 </p>
 {% endif %}
@@ -68,7 +68,7 @@
   });
 </script>
 {% else %}
-<p class="mt-6 muted">(пустое тело)</p>
+<p class="mt-6 muted">{{ "common.empty_body" | t(locale=locale) }}</p>
 {% endif %}
 {% endif %}
 {% endblock %}

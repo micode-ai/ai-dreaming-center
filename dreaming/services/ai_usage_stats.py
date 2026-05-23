@@ -1,11 +1,13 @@
 """Aggregate AI usage events into dashboard payloads.
 
-Wave 4 lite surface:
-- `project_summary(db, project_id)` — totals (last 7d / 30d), by_model breakdown.
-- `global_summary(db)` — totals across all projects + by_project breakdown.
+Public surface:
+- `project_summary(db, project_id)` — per-project totals, by_model breakdown,
+  daily series, main vs sidechain split, top sessions, learning-week roll-up.
+- `global_summary(db)` — same shape across all projects.
 
-All other ALC aggregations (daily series, sidechain split, top sessions, ...)
-are intentionally not ported here — Wave 4 lite only needs the two above.
+Private helpers (`_by_model`, `_daily_series`, `_main_vs_sidechain`,
+`_top_sessions`) feed both summaries. They were ported from ALC's original
+layout in commit 8d11671.
 """
 from __future__ import annotations
 

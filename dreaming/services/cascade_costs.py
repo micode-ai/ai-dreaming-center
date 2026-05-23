@@ -5,14 +5,18 @@ Per-project roll-up of orchestrator runs:
     underlying pipeline used — cost_usd / total_cost_usd are both accepted)
   - tokens: joined from ai_usage_events on session_id == orchestrator_runs.external_id
 
-Roman/cascade pipelines aren't fully wired until Wave 3, so cost values are
-usually 0 in current builds; the page still renders the runs list and tokens
-attribution so people can spot heavy sessions.
+Roman/cascade pipelines aren't fully wired until Wave 3, so authoritative
+cost values from `orchestrator_events.payload_json` are usually absent in
+current builds. As a fallback we estimate cost from the token totals per
+model via `dreaming.services.pricing` — these are *estimates*, but they
+let the page show meaningful figures today.
 """
 from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+
+from dreaming.services.pricing import cost_for
 
 
 @dataclass
@@ -109,24 +113,33 @@ async def list_cascade_costs(
             except (TypeError, ValueError):
                 pass
 
-        # Token attribution via session_id match
+        # Token attribution via session_id match, grouped by model so we can
+        # apply per-model pricing. A single session may span multiple models
+        # (e.g. an orchestrator hop that escalates from sonnet to opus).
         in_tok = out_tok = cr_tok = cc_tok = 0
+        estimated_cost = 0.0
         ext = r["external_id"] or ""
         if ext:
-            tok = await db.fetch_one(
-                "SELECT "
-                "COALESCE(SUM(input_tokens),0) AS i, "
-                "COALESCE(SUM(output_tokens),0) AS o, "
-                "COALESCE(SUM(cache_read_tokens),0) AS cr, "
+            per_model = await db.fetch_all(
+                "SELECT model, "
+                "COALESCE(SUM(input_tokens),0)         AS i, "
+                "COALESCE(SUM(output_tokens),0)        AS o, "
+                "COALESCE(SUM(cache_read_tokens),0)    AS cr, "
                 "COALESCE(SUM(cache_creation_tokens),0) AS cc "
-                "FROM ai_usage_events WHERE session_id=?",
+                "FROM ai_usage_events WHERE session_id=? GROUP BY model",
                 (ext,),
             )
-            if tok:
-                in_tok = int(tok["i"] or 0)
-                out_tok = int(tok["o"] or 0)
-                cr_tok = int(tok["cr"] or 0)
-                cc_tok = int(tok["cc"] or 0)
+            for m in per_model:
+                i, o, cr, cc = int(m["i"] or 0), int(m["o"] or 0), int(m["cr"] or 0), int(m["cc"] or 0)
+                in_tok += i
+                out_tok += o
+                cr_tok += cr
+                cc_tok += cc
+                estimated_cost += cost_for(m["model"], i, o, cr, cc)
+
+        # Prefer authoritative cost from orchestrator_events when present
+        # (Wave 3+); fall back to the per-model estimate otherwise.
+        final_cost = cost_total if cost_total > 0 else estimated_cost
 
         out.append(CascadeRunCost(
             run_id=r["id"],
@@ -136,7 +149,7 @@ async def list_cascade_costs(
             started_at=r["started_at"] or "",
             finished_at=r["finished_at"],
             external_id=ext or None,
-            total_cost_usd=cost_total,
+            total_cost_usd=final_cost,
             event_count=len(events),
             total_tokens=in_tok + out_tok + cr_tok + cc_tok,
             input_tokens=in_tok,

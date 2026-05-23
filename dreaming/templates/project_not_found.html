@@ -1,13 +1,13 @@
 <!DOCTYPE html>
-<html lang="ru">
-<head><meta charset="utf-8"><title>Проект не найден</title></head>
+<html lang="{{ locale|default('ru') }}">
+<head><meta charset="utf-8"><title>{{ "project_not_found.title" | t(locale=locale) }}</title></head>
 <body style="font-family:sans-serif;max-width:600px;margin:80px auto;">
-<h1>Проект «{{ slug }}» не найден</h1>
+<h1>{{ "project_not_found.h1" | t(locale=locale, slug=slug) }}</h1>
 {% if is_disabled %}
-<p>Этот проект отключён в реестре.</p>
+<p>{{ "project_not_found.disabled" | t(locale=locale) }}</p>
 {% else %}
-<p>Проверьте slug или зарегистрируйте проект.</p>
+<p>{{ "project_not_found.check_slug" | t(locale=locale) }}</p>
 {% endif %}
-<p><a href="/projects">→ к списку проектов</a></p>
+<p><a href="/projects">{{ "project_not_found.go_list" | t(locale=locale) }}</a></p>
 </body>
 </html>

@@ -258,8 +258,9 @@ def find_td_file(tech_debt_dir: str, td_id: str) -> Path | None:
 def read_td(file_path: str) -> tuple[dict, str]:
     """Read a single TD-*.md file. Returns (frontmatter_dict, body_text).
 
-    Body is returned as raw markdown — callers can render to HTML if needed.
-    Wave 2.2 doesn't need HTML rendering so we avoid the markdown dep.
+    Body is returned as raw markdown — the detail template renders it
+    client-side via marked.js (`_markdown_partial.html`), so we don't pull
+    a server-side markdown dependency.
     """
     path = Path(file_path)
     if not path.exists():

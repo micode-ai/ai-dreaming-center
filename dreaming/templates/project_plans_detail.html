@@ -1,10 +1,10 @@
 {% extends "_project_layout.html" %}
 {% set active='plans' %}
 {% block project_content %}
-<a href="/p/{{ project.slug }}/plans" class="text-sm text-blue-600 underline">← к списку</a>
+<a href="/p/{{ project.slug }}/plans" class="text-sm text-blue-600 underline">{{ "common.back_to_list" | t(locale=locale) }}</a>
 
 {% if not item %}
-<p class="muted mt-4">Plan <code>{{ name }}</code> не найден в <code>{{ plans_dir }}</code>.</p>
+<p class="muted mt-4">{{ "plans.detail.not_found" | t(locale=locale, name=name, dir=plans_dir) }}</p>
 {% else %}
 <h1 class="text-2xl font-bold mt-3">{{ item.title or name }}</h1>
 <div class="flex flex-wrap gap-3 text-xs mt-2 muted">
@@ -15,13 +15,13 @@
 
 <div class="mt-4 flex flex-wrap gap-2 items-center">
   <form method="post" action="/p/{{ project.slug }}/plans/{{ name }}/orchestrate" class="inline"
-        data-confirm="Запустить Orchestrator продолжать этот план?">
-    <button class="text-sm px-3 py-1 rounded bg-purple-600 text-white font-semibold">Продолжить в Orchestrator</button>
+        data-confirm="{{ 'plans.detail.confirm_continue' | t(locale=locale) }}">
+    <button class="text-sm px-3 py-1 rounded bg-purple-600 text-white font-semibold">{{ "plans.detail.btn_continue" | t(locale=locale) }}</button>
   </form>
   {% if not item.github_issue %}
   <form method="post" action="/p/{{ project.slug }}/plans/{{ name }}/github" class="inline"
-        data-confirm="Создать GitHub issue из этого плана?">
-    <button class="text-sm px-3 py-1 border border-slate-500 text-slate-700 rounded">→ Создать GitHub issue</button>
+        data-confirm="{{ 'plans.detail.confirm_gh' | t(locale=locale) }}">
+    <button class="text-sm px-3 py-1 border border-slate-500 text-slate-700 rounded">{{ "plans.detail.btn_gh" | t(locale=locale) }}</button>
   </form>
   {% else %}
   <a target="_blank" href="{{ item.github_issue }}"
@@ -37,7 +37,7 @@
     </select>
   </form>
   <form method="post" action="/p/{{ project.slug }}/plans/{{ name }}/delete" class="inline"
-        data-confirm="Удалить {{ name }}.md?" data-confirm-variant="danger">
+        data-confirm="{{ 'plans.detail.confirm_delete' | t(locale=locale, name=name) }}" data-confirm-variant="danger">
     <button class="text-sm px-3 py-1 border rounded text-red-600">delete file</button>
   </form>
   <a class="text-sm muted underline"
@@ -47,7 +47,7 @@
 
 {% if item.orchestration_run %}
 <p class="mt-2 text-xs muted">
-  Уже запускался Orchestrator:
+  {{ "plans.detail.already_ran" | t(locale=locale) }}
   <a class="text-blue-600 underline" href="/p/{{ project.slug }}/orchestration/{{ item.orchestration_run }}">run {{ item.orchestration_run[:8] }}…</a>
 </p>
 {% endif %}
@@ -74,7 +74,7 @@
   });
 </script>
 {% else %}
-<p class="mt-6 muted">(пустое тело)</p>
+<p class="mt-6 muted">{{ "common.empty_body" | t(locale=locale) }}</p>
 {% endif %}
 {% endif %}
 {% endblock %}

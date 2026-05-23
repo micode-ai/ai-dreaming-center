@@ -11,9 +11,20 @@
 </div>
 {% endif %}
 
+<div class="flex items-center justify-end mb-4">
+  <form method="post" action="/p/{{ project.slug }}/wiki-health/generate">
+    <button type="submit"
+            class="text-xs rounded px-3 py-1.5 disabled:opacity-50"
+            style="background: var(--brand); color: white; border:1px solid var(--brand-hover);"
+            {% if wiki_health_running %}disabled title="{{ 'wiki_health.generate.running' | t(locale=locale) }}"{% endif %}>
+      {% if wiki_health_running %}{{ "wiki_health.generate.running" | t(locale=locale) }}{% else %}{{ "wiki_health.generate.button" | t(locale=locale) }}{% endif %}
+    </button>
+  </form>
+</div>
+
 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
   <div class="metric metric-success">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">Модули покрыты</div>
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "wiki_health.modules_covered" | t(locale=locale) }}</div>
     <div class="text-2xl font-semibold mt-1" style="color: var(--status-success);">{{ snapshot.covered or 0 }}</div>
   </div>
   <div class="metric metric-info">
@@ -21,26 +32,26 @@
     <div class="text-2xl font-semibold mt-1" style="color: var(--text-strong);">{{ snapshot.learning_notes or 0 }}</div>
   </div>
   <div class="metric metric-running">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">Точек в trends</div>
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "wiki_health.trends_points" | t(locale=locale) }}</div>
     <div class="text-2xl font-semibold mt-1" style="color: var(--text-strong);">{{ series|length }}</div>
   </div>
   <div class="metric metric-timeout">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">Последний срез</div>
+    <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "wiki_health.last_snapshot" | t(locale=locale) }}</div>
     <div class="text-sm font-mono mt-2" style="color: var(--text-body);">{{ latest.date if latest else '—' }}</div>
   </div>
 </div>
 
 {% if series %}
 <div class="rounded-lg p-4 mb-4" style="background: var(--bg-card); border:1px solid var(--border-subtle); box-shadow: var(--shadow-card);">
-  <div class="text-sm font-semibold mb-2" style="color: var(--text-strong);">Тренды</div>
+  <div class="text-sm font-semibold mb-2" style="color: var(--text-strong);">{{ "wiki_health.trends_title" | t(locale=locale) }}</div>
   <div style="height: 320px;"><canvas id="wh-chart"></canvas></div>
 </div>
 
-<h2 class="text-sm font-semibold mb-2" style="color: var(--text-strong);">Срезы</h2>
+<h2 class="text-sm font-semibold mb-2" style="color: var(--text-strong);">{{ "wiki_health.snapshots" | t(locale=locale) }}</h2>
 <table class="data-table">
   <thead><tr>
-    <th>дата</th>
-    <th>метка</th>
+    <th>{{ "wiki_health.col.date" | t(locale=locale) }}</th>
+    <th>{{ "wiki_health.col.label" | t(locale=locale) }}</th>
     <th class="text-right">covered_pct</th>
     <th class="text-right">covered</th>
     <th class="text-right">learning_notes</th>
@@ -100,6 +111,7 @@
 {% endif %}
 
 <div class="text-xs muted mt-4">
-  Источник трендов: <code class="font-mono">{{ trends_path }}</code> (формат — секции <code>## label (YYYY-MM-DD)</code> с метриками <code>- `key`: value</code>).
+  {% set _path %}<code class="font-mono">{{ trends_path }}</code>{% endset %}
+  {{ "wiki_health.source" | t(locale=locale, path=_path, h='<code>## label (YYYY-MM-DD)</code>', m='<code>- `key`: value</code>') | safe }}
 </div>
 {% endblock %}
