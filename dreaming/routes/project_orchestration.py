@@ -57,6 +57,12 @@ async def orchestration_list(request: Request, slug: str, run_id: str | None = N
                 key = n.get("stage_id") or "_unassigned"
                 nodes_by_stage.setdefault(key, []).append(n)
 
+    from dreaming.services.bulk_orchestration import get_queue
+    _bq = get_queue(request.app.state, project.id)
+    bulk_queue_snap = _bq.snapshot()
+    bulk_diag = _bq.diag()
+    bulk_pending = sum(1 for it in bulk_queue_snap if it["status"] == "pending")
+    bulk_failed = sum(1 for it in bulk_queue_snap if it["status"] == "failed")
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
     projects = await request.app.state.projects.list_all(only_enabled=True)
     return request.app.state.templates.TemplateResponse(
@@ -70,6 +76,10 @@ async def orchestration_list(request: Request, slug: str, run_id: str | None = N
             "selected_messages": selected_messages,
             "selected_stages": selected_stages,
             "nodes_by_stage": nodes_by_stage,
+            "bulk_queue": bulk_queue_snap,
+            "bulk_diag": bulk_diag,
+            "bulk_pending": bulk_pending,
+            "bulk_failed": bulk_failed,
             "projects": projects, "locale": locale,
         },
     )
@@ -142,8 +152,6 @@ async def orchestration_finish_form(request: Request, slug: str, run_id: str):
         raise HTTPException(status_code=404)
     # Finalize any still-running stages and nodes so the swimlane reflects
     # reality. Done BEFORE finish_run so events are written in sensible order.
-    # NOTE: auto-reconcile / cancel_stale_orchestration_runs_for_project still
-    # has the same gap — TODO follow-up wave.
     for s in await hub.list_stages(run_id):
         if s["status"] == "running":
             await hub.finish_stage(s["id"], "completed")
@@ -152,6 +160,49 @@ async def orchestration_finish_form(request: Request, slug: str, run_id: str):
             await hub.update_node_status(n["id"], "completed")
     await hub.finish_run(run_id, status="completed")
     await hub.append_event(run_id, "run_finished", {"status": "completed"})
+    from dreaming.services.orchestration_dispatch import kill_run_processes
+    await kill_run_processes(request.app.state, run_id)
+    # Backfill any messages/subagents the live tail missed (race on jsonl
+    # creation, mid-run reload, etc.). Idempotent via client_message_id dedup.
+    try:
+        from dreaming.services.subagent_backfill import backfill_run
+        added = await backfill_run(
+            run_id,
+            request.app.state.db,
+            hub,
+            claude_projects_dir=getattr(
+                request.app.state.settings, "claude_projects_dir", None,
+            ) or None,
+        )
+        if added:
+            log.info("orchestration_finish_form: backfilled %s messages", added)
+    except Exception as e:
+        log.warning("orchestration_finish_form: backfill failed: %s", e)
+    return RedirectResponse(f"/p/{project.slug}/orchestration?run_id={run_id}", status_code=303)
+
+
+@router.post("/p/{slug}/orchestration/{run_id}/backfill")
+async def orchestration_backfill(request: Request, slug: str, run_id: str):
+    """Replay the claude jsonl for this run into orchestrator_messages /
+    orchestrator_nodes. Recovers runs whose live tail missed events (e.g.,
+    the dispatcher hit the jsonl-creation race before the fix landed, or the
+    server was reloaded mid-run). Idempotent — repeat calls dedup via
+    client_message_id."""
+    project = request.state.project
+    hub = request.app.state.orchestration_hub
+    run = await hub.get_run(run_id)
+    if run is None or run["project_id"] != project.id:
+        raise HTTPException(status_code=404)
+    from dreaming.services.subagent_backfill import backfill_run
+    added = await backfill_run(
+        run_id,
+        request.app.state.db,
+        hub,
+        claude_projects_dir=getattr(
+            request.app.state.settings, "claude_projects_dir", None,
+        ) or None,
+    )
+    log.info("orchestration_backfill: run=%s added=%s", run_id, added)
     return RedirectResponse(f"/p/{project.slug}/orchestration?run_id={run_id}", status_code=303)
 
 

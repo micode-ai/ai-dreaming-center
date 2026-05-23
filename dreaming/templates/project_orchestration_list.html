@@ -2,6 +2,91 @@
 {% set active='orchestration' %}
 {% block project_content %}
 <link rel="stylesheet" href="/static/orchestration_swimlane.css?v=wave-a6">
+{% if bulk_queue %}
+<div class="mb-3 p-3 rounded-lg text-sm"
+     style="background: rgba(99,102,241,0.08); border:1px solid rgba(99,102,241,0.35);">
+  <div class="flex items-center justify-between gap-3 mb-2">
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="text-xs font-semibold uppercase tracking-wider" style="color: var(--brand-hover);">{{ "bulk.queue.title" | t(locale=locale) }}</span>
+      {% if bulk_pending > 0 %}
+      <span class="badge badge-running"><span class="dot dot-pulse"></span>{{ "bulk.queue.pending" | t(locale=locale, n=bulk_pending) }}</span>
+      {% else %}
+      <span class="badge badge-neutral">{{ "bulk.queue.empty" | t(locale=locale) }}</span>
+      {% endif %}
+      {% if bulk_diag %}
+        {% if bulk_diag.dispatching %}
+          {% if bulk_diag.last_slot_status.startswith('blocked:') %}
+            <span class="badge badge-timeout" title="{{ 'bulk.queue.diag.blocked_hint' | t(locale=locale) }}">
+              ⏳ {{ "bulk.queue.diag.blocked" | t(locale=locale, run_id=bulk_diag.last_slot_status[8:][:8]) }}
+            </span>
+          {% elif bulk_diag.last_slot_status == 'free' %}
+            <span class="badge badge-success" title="{{ 'bulk.queue.diag.free_hint' | t(locale=locale) }}">⚡ {{ "bulk.queue.diag.dispatching" | t(locale=locale) }}</span>
+          {% elif bulk_diag.last_slot_status.startswith('error:') %}
+            <span class="badge badge-failed" title="{{ bulk_diag.last_slot_status[6:] }}">⚠ {{ "bulk.queue.diag.error" | t(locale=locale) }}</span>
+          {% endif %}
+        {% elif bulk_pending > 0 %}
+          <span class="badge badge-failed" title="{{ 'bulk.queue.diag.stopped_hint' | t(locale=locale) }}">⏸ {{ "bulk.queue.diag.stopped" | t(locale=locale) }}</span>
+        {% endif %}
+      {% endif %}
+    </div>
+    <div class="flex items-center gap-2">
+      {% if bulk_pending > 0 and not bulk_diag.dispatching %}
+      <form method="post" action="/p/{{ project.slug }}/bulk/kick" class="inline">
+        <button class="text-xs px-2 py-1 border border-amber-400 rounded text-amber-700 hover:bg-amber-50">{{ "bulk.queue.kick" | t(locale=locale) }}</button>
+      </form>
+      {% endif %}
+      {% if bulk_failed > 0 %}
+      <form method="post" action="/p/{{ project.slug }}/bulk/retry-failed" class="inline">
+        <button class="text-xs px-2 py-1 border border-blue-400 rounded text-blue-700 hover:bg-blue-50">{{ "bulk.queue.retry" | t(locale=locale, n=bulk_failed) }}</button>
+      </form>
+      <form method="post" action="/p/{{ project.slug }}/bulk/retry-failed" class="inline"
+            data-confirm="{{ 'bulk.queue.retry_force_confirm' | t(locale=locale) }}"
+            data-confirm-variant="danger"
+            data-confirm-ok-label="{{ 'bulk.queue.retry_force_ok' | t(locale=locale) }}">
+        <input type="hidden" name="force" value="1">
+        <button class="text-xs px-2 py-1 border border-red-400 rounded text-red-700 hover:bg-red-50">{{ "bulk.queue.retry_force" | t(locale=locale, n=bulk_failed) }}</button>
+      </form>
+      {% endif %}
+      {% if bulk_queue and bulk_pending == 0 and bulk_failed == 0 %}
+      <form method="post" action="/p/{{ project.slug }}/bulk/clear" class="inline">
+        <button class="text-xs px-2 py-1 border border-slate-400 rounded text-slate-600 hover:bg-slate-100">{{ "bulk.queue.dismiss" | t(locale=locale) }}</button>
+      </form>
+      {% elif bulk_queue %}
+      {% set has_done = bulk_diag.dispatched > 0 or bulk_failed > 0 %}
+      {% if has_done %}
+      <form method="post" action="/p/{{ project.slug }}/bulk/clear" class="inline">
+        <input type="hidden" name="only" value="done">
+        <button class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">{{ "bulk.queue.dismiss_done" | t(locale=locale) }}</button>
+      </form>
+      {% endif %}
+      <form method="post" action="/p/{{ project.slug }}/bulk/clear"
+            data-confirm="{{ 'bulk.queue.clear_confirm' | t(locale=locale) }}"
+            data-confirm-variant="danger"
+            data-confirm-ok-label="{{ 'bulk.queue.clear_ok' | t(locale=locale) }}">
+        <button class="text-xs px-2 py-1 border border-slate-400 rounded text-slate-600 hover:bg-slate-100">{{ "bulk.queue.clear" | t(locale=locale) }}</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  <div class="flex flex-col gap-1.5">
+    {% for it in bulk_queue %}
+    <div class="text-xs font-mono px-2 py-1 rounded flex items-baseline gap-2"
+          {% if it.status == 'pending' %}style="background: rgba(245,158,11,0.10); color: var(--status-timeout); border:1px solid rgba(245,158,11,0.35);"
+          {% elif it.status == 'dispatched' %}style="background: rgba(52,211,153,0.10); color: #059669; border:1px solid rgba(52,211,153,0.35);"
+          {% elif it.status == 'failed' %}style="background: rgba(248,113,113,0.10); color: #b91c1c; border:1px solid rgba(248,113,113,0.35);"
+          {% else %}style="background: var(--bg-elevated); color: var(--text-muted); border:1px solid var(--border-subtle);"
+          {% endif %}>
+      <span>{% if it.kind == 'finding' %}🐛{% elif it.kind == 'idea' %}💡{% elif it.kind == 'evolution' %}🧬{% endif %}</span>
+      <span class="truncate" style="max-width: 22rem;" title="{{ it.identifier }}">
+        {% if it.run_id %}<a class="underline" href="/p/{{ project.slug }}/orchestration?run_id={{ it.run_id }}">{{ it.identifier }}</a>{% else %}{{ it.identifier }}{% endif %}
+      </span>
+      <span style="opacity:.6;">· {{ it.status }}</span>
+      {% if it.error %}<span class="truncate flex-1" style="opacity:.85;" title="{{ it.error }}">— {{ it.error }}</span>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
 {% if stale_running %}
 <div class="mb-3 p-3 rounded-lg flex items-center justify-between text-sm"
      style="background: rgba(245, 158, 11, 0.10); border:1px solid rgba(245, 158, 11, 0.35); color: var(--status-timeout);">
@@ -25,9 +110,10 @@
       <button type="button" onclick="document.getElementById('orch-goal').focus(); document.getElementById('start-form').scrollIntoView({behavior:'smooth', block:'nearest'});"
               class="text-xs rounded px-2.5 py-1" style="background: var(--brand); color:#fff;">{{ "orchestration.new_chat" | t(locale=locale) }}</button>
     </div>
-    <div class="flex-1 overflow-y-auto">
+    <div class="flex-1 overflow-y-auto" id="runs-list">
       {% for r in runs %}
       <a href="/p/{{ project.slug }}/orchestration?run_id={{ r.id }}"
+         {% if r.id == selected_run_id %}id="run-link-selected"{% endif %}
          class="block px-3 py-2.5 transition-colors{% if r.id == selected_run_id %} is-selected{% endif %}"
          style="border-bottom:1px solid var(--border-subtle);{% if r.id == selected_run_id %} background: rgba(99,102,241,0.10);{% endif %}">
         <div class="flex items-center justify-between gap-2 mb-1">
@@ -52,6 +138,26 @@
       {% endfor %}
     </div>
   </aside>
+  {% if selected_run_id %}
+  <script>
+  // Scroll the selected run into view inside the sidebar — otherwise long
+  // run lists hide the highlighted item below the fold on page load.
+  (() => {
+    const link = document.getElementById('run-link-selected');
+    const container = document.getElementById('runs-list');
+    if (!link || !container) return;
+    // Use scrollTop math (not scrollIntoView) so we only move the sidebar's
+    // own scroll container — not the whole page.
+    const linkTop = link.offsetTop;
+    const linkBottom = linkTop + link.offsetHeight;
+    const viewTop = container.scrollTop;
+    const viewBottom = viewTop + container.clientHeight;
+    if (linkTop < viewTop || linkBottom > viewBottom) {
+      container.scrollTop = Math.max(0, linkTop - (container.clientHeight / 2) + (link.offsetHeight / 2));
+    }
+  })();
+  </script>
+  {% endif %}
 
   <!-- CENTER: runs canvas -->
   <section class="rounded-lg flex flex-col"
@@ -245,7 +351,7 @@
       <p class="text-sm" style="color: var(--text-faint);">{{ "orchestration.no_messages" | t(locale=locale) }}</p>
       {% endif %}
     </div>
-    <script src="/static/orchestration_stream.js?v=wave-a6" defer></script>
+    <script src="/static/orchestration_stream.js?v=autoscroll-1" defer></script>
     {% elif runs %}
     <div class="flex-1 flex flex-col items-center justify-center text-center px-6">
       <div class="text-sm" style="color: var(--text-muted);">{{ "orchestration.pick_run" | t(locale=locale) }}</div>

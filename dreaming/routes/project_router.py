@@ -27,6 +27,7 @@ from dreaming.routes.project_wiki_health import router as wiki_health_router
 from dreaming.routes.project_loops_templates import router as loops_templates_router
 from dreaming.routes.project_help import router as help_router
 from dreaming.routes.project_review import router as review_router
+from dreaming.routes.project_bulk import router as bulk_router
 
 
 router = APIRouter()
@@ -54,4 +55,5 @@ router.include_router(wiki_health_router)
 router.include_router(loops_templates_router)
 router.include_router(help_router)
 router.include_router(review_router)
+router.include_router(bulk_router)
 router.include_router(project_settings_router)

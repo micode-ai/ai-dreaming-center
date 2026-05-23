@@ -70,7 +70,10 @@
       const variant = opts.variant === 'danger' ? 'danger' : 'default';
       const expected = (typeof opts.input === 'string' && opts.input !== '') ? opts.input : null;
 
-      confirmOk.textContent = variant === 'danger' ? I18N.delete : I18N.confirm;
+      const okLabel = (typeof opts.okLabel === 'string' && opts.okLabel !== '')
+        ? opts.okLabel
+        : (variant === 'danger' ? I18N.delete : I18N.confirm);
+      confirmOk.textContent = okLabel;
       confirmOk.className = 'text-sm px-3 py-1.5 rounded text-white ' +
         (variant === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700');
 
@@ -148,6 +151,7 @@
       input:   el.getAttribute('data-confirm-input'),
       action:  el.getAttribute('data-confirm-action'),
       method:  (el.getAttribute('data-confirm-method') || 'post').toLowerCase(),
+      okLabel: el.getAttribute('data-confirm-ok-label'),
     };
   }
 
@@ -164,7 +168,7 @@
     }
     e.preventDefault();
     e.stopPropagation();
-    showConfirm(d.message, { variant: d.variant, input: d.input }).then((ok) => {
+    showConfirm(d.message, { variant: d.variant, input: d.input, okLabel: d.okLabel }).then((ok) => {
       if (!ok) return;
       form.removeAttribute('data-confirm');
       (typeof form.requestSubmit === 'function' ? form.requestSubmit() : form.submit());
@@ -186,7 +190,7 @@
     }
     e.preventDefault();
     e.stopPropagation();
-    showConfirm(d.message, { variant: d.variant, input: d.input }).then((ok) => {
+    showConfirm(d.message, { variant: d.variant, input: d.input, okLabel: d.okLabel }).then((ok) => {
       if (!ok) return;
       if (d.action) {
         const tmp = document.createElement('form');

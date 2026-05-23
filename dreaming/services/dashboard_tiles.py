@@ -13,8 +13,8 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 
-async def build_orchestration_tile(db, hub, project) -> dict[str, Any]:
-    """Active orchestration runs + last completed run."""
+async def build_orchestration_tile(db, hub, project, app_state=None) -> dict[str, Any]:
+    """Active orchestration runs + last completed run + bulk queue snapshot."""
     try:
         runs = await hub.list_runs(project.id, limit=10)
         running = [r for r in runs if r["status"] == "running"]
@@ -22,9 +22,17 @@ async def build_orchestration_tile(db, hub, project) -> dict[str, Any]:
             (r for r in runs if r["status"] in ("completed", "failed", "cancelled")),
             None,
         )
+        pending_count = 0
+        if app_state is not None:
+            try:
+                from dreaming.services.bulk_orchestration import get_queue
+                pending_count = get_queue(app_state, project.id).pending_count()
+            except Exception:
+                pending_count = 0
         return {
             "running_count": len(running),
             "running_ids": [r["id"][:8] for r in running[:3]],
+            "pending_count": pending_count,
             "last_completed": {
                 "id": last_completed["id"][:8] if last_completed else None,
                 "status": last_completed["status"] if last_completed else None,
