@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% set active = 'g_ai_radar' %}
+{% block content %}
+<header class="mb-5 flex items-baseline gap-3 flex-wrap">
+  <h1 class="text-2xl font-semibold tracking-tight" style="color: var(--text-strong);">
+    {{ "radar.title" | t(locale=locale) }}
+  </h1>
+  <span class="text-xs" style="color: var(--text-faint);">
+    {{ findings|length }} {{ "radar.findings_total" | t(locale=locale) }}
+  </span>
+</header>
+
+{% if not watchlist.sources %}
+<div class="mb-4 p-4 rounded-lg"
+     style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+  <p class="font-semibold mb-2" style="color: var(--text-strong);">
+    {{ "radar.onboarding.title" | t(locale=locale) }}
+  </p>
+  <p class="text-sm mb-2" style="color: var(--text-body);">
+    {{ "radar.onboarding.body" | t(locale=locale) }}
+  </p>
+  <p class="text-xs font-mono" style="color: var(--text-faint);">{{ sources_path }}</p>
+</div>
+{% endif %}
+
+<div class="flex gap-4 flex-wrap">
+  <section class="flex-1 min-w-0">
+    <form method="get" class="mb-4 flex items-center gap-2 text-xs flex-wrap">
+      <select name="status" onchange="this.form.submit()"
+              class="rounded px-2 py-1"
+              style="background: var(--bg-elevated); border:1px solid var(--border-subtle); color: var(--text-body);">
+        <option value="" {% if not filter_status %}selected{% endif %}>
+          {{ "radar.filter.any_status" | t(locale=locale) }}
+        </option>
+        {% for s in ['new', 'seen', 'applied', 'dismissed'] %}
+          <option value="{{ s }}" {% if filter_status==s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+      <select name="since_days" onchange="this.form.submit()"
+              class="rounded px-2 py-1"
+              style="background: var(--bg-elevated); border:1px solid var(--border-subtle); color: var(--text-body);">
+        <option value="" {% if not filter_since_days %}selected{% endif %}>
+          {{ "radar.filter.any_time" | t(locale=locale) }}
+        </option>
+        {% for d in [1, 7, 30, 90] %}
+          <option value="{{ d }}" {% if filter_since_days==d %}selected{% endif %}>
+            {{ "radar.filter.last_n_days" | t(locale=locale, n=d) }}
+          </option>
+        {% endfor %}
+      </select>
+      {% if filter_source %}
+        <span class="px-2 py-1 rounded font-mono"
+              style="background: var(--brand-soft); color:#c7d2fe;">
+          source: {{ filter_source }}
+        </span>
+        <a href="/ai-radar" class="underline" style="color: var(--text-muted);">×</a>
+      {% endif %}
+    </form>
+
+    {% if findings %}
+      {% for f in findings %}
+        {% include "_ai_radar_card.html" %}
+      {% endfor %}
+    {% else %}
+      <p class="muted text-sm">{{ "radar.empty" | t(locale=locale) }}</p>
+    {% endif %}
+  </section>
+
+  <aside class="w-64 shrink-0">
+    <h2 class="text-xs uppercase tracking-wide mb-2"
+        style="color: var(--text-faint);">
+      {{ "radar.sidebar.top_sources" | t(locale=locale) }}
+    </h2>
+    {% if source_counts %}
+      <ul class="text-sm space-y-1">
+        {% for sc in source_counts %}
+          <li class="flex items-baseline justify-between">
+            <a href="/ai-radar?source={{ sc.source_key }}"
+               class="font-mono text-xs"
+               style="color: var(--text-body);">{{ sc.source_key }}</a>
+            <span class="text-xs" style="color: var(--text-faint);">{{ sc.n }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted text-xs">{{ "radar.sidebar.no_data" | t(locale=locale) }}</p>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}
