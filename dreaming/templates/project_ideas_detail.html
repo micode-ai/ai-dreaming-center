@@ -1,29 +1,29 @@
 {% extends "_project_layout.html" %}
 {% set active='ideas' %}
 {% block project_content %}
-<a href="/p/{{ project.slug }}/ideas" class="text-sm text-blue-600 underline">← к списку</a>
+<a href="/p/{{ project.slug }}/ideas" class="text-sm text-blue-600 underline">{{ "common.back_to_list" | t(locale=locale) }}</a>
 
 {% if not item %}
-<p class="muted mt-4">Idea <code>{{ item_id }}</code> не найдена в <code>{{ ideas_dir }}</code>.</p>
+<p class="muted mt-4">{{ "ideas.detail.not_found" | t(locale=locale, id=item_id, dir=ideas_dir) }}</p>
 {% else %}
 <h1 class="text-2xl font-bold mt-3">{{ item.title or item_id }}</h1>
 <div class="flex flex-wrap gap-3 text-xs mt-2 muted">
   <span class="font-mono">id: {{ item.id or item_id }}</span>
-  <span>status: <span class="font-mono">{{ item.status or '—' }}</span></span>
-  {% if item.priority %}<span>priority: {{ item.priority }}</span>{% endif %}
+  <span>{{ "ideas.col.status" | t(locale=locale) }}: <span class="font-mono">{% if item.status %}{{ ("ideas.status." ~ item.status) | t(locale=locale) }}{% else %}—{% endif %}</span></span>
+  {% if item.priority %}<span>{{ "ideas.col.priority" | t(locale=locale) }}: {{ item.priority }}</span>{% endif %}
   {% if item.module %}<span>module: {{ item.module }}</span>{% endif %}
   {% if item.target_release %}<span>release: {{ item.target_release }}</span>{% endif %}
 </div>
 
 <div class="mt-4 flex flex-wrap gap-2 items-center">
   <form method="post" action="/p/{{ project.slug }}/ideas/{{ item_id }}/orchestrate" class="inline"
-        data-confirm="Запустить Orchestrator с этой идеей как целью?">
-    <button class="text-sm px-3 py-1 rounded bg-purple-600 text-white font-semibold">Отправить в Orchestrator</button>
+        data-confirm="{{ 'ideas.detail.confirm_orch' | t(locale=locale) }}">
+    <button class="text-sm px-3 py-1 rounded bg-purple-600 text-white font-semibold">{{ "ideas.detail.send_orch" | t(locale=locale) }}</button>
   </form>
   {% if not item.github_issue %}
   <form method="post" action="/p/{{ project.slug }}/ideas/{{ item_id }}/github" class="inline"
-        data-confirm="Создать GitHub issue из этой идеи?">
-    <button class="text-sm px-3 py-1 border border-slate-500 text-slate-700 rounded">→ Создать GitHub issue</button>
+        data-confirm="{{ 'ideas.detail.confirm_gh' | t(locale=locale) }}">
+    <button class="text-sm px-3 py-1 border border-slate-500 text-slate-700 rounded">{{ "ideas.detail.gh_btn" | t(locale=locale) }}</button>
   </form>
   {% else %}
   <a target="_blank" href="{{ item.github_issue }}"
@@ -31,7 +31,7 @@
   {% endif %}
   {% if not item.jira_ticket %}
   <form method="post" action="/p/{{ project.slug }}/ideas/{{ item_id }}/jira" class="inline">
-    <button class="text-sm px-3 py-1 border rounded text-blue-600">→ Jira</button>
+    <button class="text-sm px-3 py-1 border rounded text-blue-600">{{ "ideas.btn.jira" | t(locale=locale) }}</button>
   </form>
   {% else %}
   <span class="text-sm px-3 py-1 border border-slate-300 text-slate-700 rounded font-mono">Jira: {{ item.jira_ticket }}</span>
@@ -40,7 +40,7 @@
 
 {% if item.orchestration_run %}
 <p class="mt-2 text-xs muted">
-  Уже запускался Orchestrator:
+  {{ "ideas.detail.already_ran" | t(locale=locale) }}
   <a class="text-blue-600 underline" href="/p/{{ project.slug }}/orchestration/{{ item.orchestration_run }}">run {{ item.orchestration_run[:8] }}…</a>
 </p>
 {% endif %}
@@ -56,7 +56,7 @@
   });
 </script>
 {% else %}
-<p class="mt-6 muted">(пустое тело)</p>
+<p class="mt-6 muted">{{ "common.empty_body" | t(locale=locale) }}</p>
 {% endif %}
 {% endif %}
 {% endblock %}

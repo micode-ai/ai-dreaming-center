@@ -82,9 +82,17 @@ async def start_orchestration_run(
 
     claude_session_id = str(uuid.uuid4())
     run_id = await hub.create_run(project.id, goal.strip(), external_id=claude_session_id)
+    # Seed the orchestrator stage BEFORE the root node so create_node can
+    # carry stage_id from the start (the node_created SSE event will then
+    # include the correct stage_id for the live swimlane render). Multi-stage
+    # cascade lives in a future wave; for now there's just one stage.
+    stage_id = await hub.ensure_stage(
+        run_id, stage_index=0, stage_key="orchestrator", label="Orchestrator",
+    )
+    await hub.start_stage(stage_id)
     root_node = await hub.create_node(
         run_id, project.id, agent_name="orchestrator", role="orchestrator",
-        external_id=claude_session_id,
+        external_id=claude_session_id, stage_id=stage_id,
     )
     await hub.append_event(
         run_id, "run_started",
@@ -130,32 +138,38 @@ async def start_orchestration_run(
         getattr(settings, "claude_projects_dir", "")
         or str(Path.home() / ".claude" / "projects")
     )
+    # Compute the expected jsonl path directly — don't wait for claude to create
+    # it before attaching the tail. There's a 1-2s window between Popen returning
+    # and claude writing the first jsonl line, and we used to lose that race
+    # silently (jsonl not found → tail never attached → DB stays empty). The
+    # tail's poll loop tolerates non-existent paths and picks the file up the
+    # moment claude creates it.
     try:
         from dreaming.services.claude_session_tail import (
-            ClaudeSessionTail, find_session_file_by_id,
+            ClaudeSessionTail, encode_workdir,
         )
-        jsonl_path = find_session_file_by_id(claude_session_id, claude_projects_dir)
-        if jsonl_path:
-            tail = ClaudeSessionTail(run_id, str(jsonl_path), hub, db)
-            tasks = getattr(app_state, "orchestration_tails", None)
-            if tasks is None:
-                tasks = {}
-                app_state.orchestration_tails = tasks
-            tasks[run_id] = asyncio.create_task(
-                tail.start(), name=f"orch-tail-{run_id[:8]}",
-            )
-        else:
-            log.info(
-                "start_orchestration_run: jsonl not yet visible for %s; "
-                "backfill will recover", claude_session_id,
-            )
+        jsonl_path = (
+            Path(claude_projects_dir)
+            / encode_workdir(project.working_dir)
+            / f"{claude_session_id}.jsonl"
+        )
+        tail = ClaudeSessionTail(run_id, str(jsonl_path), hub, db)
+        tasks = getattr(app_state, "orchestration_tails", None)
+        if tasks is None:
+            tasks = {}
+            app_state.orchestration_tails = tasks
+        tasks[run_id] = asyncio.create_task(
+            tail.start(), name=f"orch-tail-{run_id[:8]}",
+        )
     except Exception as e:
         log.warning("tail spawn failed: %s", e)
 
     try:
         from dreaming.services.subagent_watcher import SubagentWatcher
         watcher = SubagentWatcher(
-            run_id, root_node, hub, db, claude_projects_dir=claude_projects_dir,
+            run_id, root_node, hub, db,
+            claude_projects_dir=claude_projects_dir,
+            working_dir=project.working_dir,
         )
         watchers = getattr(app_state, "orchestration_watchers", None)
         if watchers is None:
@@ -170,3 +184,45 @@ async def start_orchestration_run(
     return OrchestrationDispatchResult({
         "run_id": run_id, "started": True, "reason": None,
     })
+
+
+# Suffixes used as the agent_name component of `cmd:{slug}:<suffix>-<run_id[:8]>`
+# keys produced by start_orchestration_run / orchestration_resume / legacy ALC
+# fork. We match by these so /live and PM cleanup find every variant.
+_ORCH_KEY_PREFIXES = ("orchestrator-", "roman-", "resume-")
+
+
+async def kill_run_processes(app_state, run_id: str) -> int:
+    """Kill any claude CLI sessions still running for `run_id`.
+
+    The orchestrator is spawned with `interactive_stdin=True`, so stdin stays
+    open after the agent calls `/api/orchestration/{id}/finish`. The CLI then
+    sits idle waiting for more user-message frames and never exits — the PM
+    entry leaks and /live keeps the card on screen. Every finish path
+    (orchestrator curl, "Mark completed" button, cascade finish) should call
+    this to actually terminate the process tree.
+
+    Returns the number of sessions killed.
+    """
+    pm = getattr(app_state, "process_manager", None)
+    if pm is None:
+        return 0
+    suffix = f"-{run_id[:8]}"
+    killed = 0
+    for key in list(pm.list_running().keys()):
+        if not key.startswith("cmd:"):
+            continue
+        # cmd:{slug}:{suffix-prefix}{run_id[:8]}
+        tail = key.rsplit(":", 1)[-1]
+        if not any(tail.startswith(p) for p in _ORCH_KEY_PREFIXES):
+            continue
+        if not tail.endswith(suffix):
+            continue
+        try:
+            if await pm.kill(key):
+                killed += 1
+        except Exception as e:
+            log.warning("kill_run_processes: kill(%s) failed: %s", key, e)
+    if killed:
+        log.info("kill_run_processes: terminated %d session(s) for run=%s", killed, run_id)
+    return killed

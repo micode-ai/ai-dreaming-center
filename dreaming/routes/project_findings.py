@@ -54,6 +54,8 @@ async def findings_page(
         items = [it for it in items if (it.get("module") or "") == module]
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
     projects = await request.app.state.projects.list_all(only_enabled=True)
+    pm = request.app.state.process_manager
+    scan_running = f"cmd:{project.slug}:tech-debt-scan" in pm.list_running()
     return request.app.state.templates.TemplateResponse(
         request, "project_findings.html",
         {"project": project, "items": items, "td_dir": td_dir,
@@ -61,7 +63,7 @@ async def findings_page(
          "autoconfig_default": autoconfig.default_abs(project, "tech_debt_dir"),
          "statuses": statuses, "modules": modules,
          "selected_status": status or "", "selected_module": module or "",
-         "error": error,
+         "error": error, "scan_running": scan_running,
          "projects": projects, "locale": locale},
     )
 
@@ -205,6 +207,19 @@ async def findings_send_to_orchestration(request: Request, slug: str, item_id: s
     item_dict = dict(item.__dict__) if hasattr(item, "__dict__") else {}
     title = item_dict.get("title") or item_id
     fp = item_dict.get("file_path")
+
+    # Idempotency: reuse the previously linked run instead of starting a duplicate
+    # (handles double-click and re-click on the same finding).
+    existing_run_id = (item_dict.get("orchestration_run") or "").strip()
+    if existing_run_id:
+        hub = request.app.state.orchestration_hub
+        existing_row = await hub.get_run(existing_run_id)
+        if existing_row is not None and existing_row["project_id"] == project.id:
+            return RedirectResponse(
+                f"/p/{project.slug}/orchestration?run_id={existing_run_id}",
+                status_code=303,
+            )
+
     body_md = ""
     if fp:
         try:
@@ -225,5 +240,5 @@ async def findings_send_to_orchestration(request: Request, slug: str, item_id: s
     if path is not None:
         set_frontmatter_field(path, "orchestration_run", result["run_id"])
     return RedirectResponse(
-        f"/p/{project.slug}/orchestration/{result['run_id']}", status_code=303,
+        f"/p/{project.slug}/orchestration?run_id={result['run_id']}", status_code=303,
     )

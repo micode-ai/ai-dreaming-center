@@ -314,6 +314,7 @@ async def _ingest_line(
             author=author,
             kind=kind,
             text=text,
+            client_message_id=uuid_,
         )
     except Exception as e:
         log.warning("append_message failed: %s", e)
@@ -327,6 +328,11 @@ async def _ingest_line(
         "author": author,
         "kind": kind,
         "ts": datetime.now(timezone.utc).isoformat(),
+        # Include the body so SSE clients can render the new message in place
+        # without a page reload. Capped to avoid bloating the event row for
+        # multi-MB tool_result blocks; the full text is still in
+        # orchestrator_messages and a reload shows it fully.
+        "text": text if len(text) <= 8192 else text[:8189] + "…",
     }
     try:
         await hub.append_event(run_id, "message_added", payload)

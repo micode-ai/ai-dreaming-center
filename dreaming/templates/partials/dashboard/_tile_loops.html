@@ -1,0 +1,24 @@
+<div class="rounded-lg p-4 flex flex-col" style="background: var(--bg-card); border:1px solid var(--border-subtle); min-height: 9rem;">
+  <div class="flex items-center justify-between mb-2">
+    <div class="text-xs uppercase tracking-wide font-semibold" style="color: var(--text-faint);">{{ "tile.loops.title" | t(locale=locale) }}</div>
+    <a href="/p/{{ project.slug }}/loops" class="text-xs" style="color: var(--brand-hover);">→</a>
+  </div>
+  {% if tile_loops.error %}
+    <div class="text-xs" style="color: var(--status-failed);">{{ tile_loops.error }}</div>
+  {% elif tile_loops.missing_table %}
+    <div class="text-xs" style="color: var(--text-faint);">{{ "tile.loops.no_runs_table" | t(locale=locale) }}</div>
+  {% else %}
+    <div class="flex items-baseline gap-2">
+      <div class="text-3xl font-bold" style="color: var(--text-strong);">{{ tile_loops.running_count or 0 }}</div>
+      <div class="text-xs" style="color: var(--text-muted);">{{ "tile.loops.running" | t(locale=locale) }}</div>
+    </div>
+    {% if tile_loops.last %}
+    <div class="text-xs mt-2 pt-2" style="color: var(--text-muted); border-top:1px solid var(--border-subtle);">
+      <div class="font-mono truncate">{{ tile_loops.last.slug }}</div>
+      <div class="mt-0.5" style="color: var(--text-faint);">{{ tile_loops.last.status }} · {{ tile_loops.last.started_at }}</div>
+    </div>
+    {% else %}
+    <div class="text-xs mt-auto pt-2" style="color: var(--text-faint);">{{ "tile.loops.no_runs" | t(locale=locale) }}</div>
+    {% endif %}
+  {% endif %}
+</div>

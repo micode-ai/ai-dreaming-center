@@ -1,7 +1,7 @@
 {% extends "_project_layout.html" %}
 {% set active='settings' %}
 {% block project_content %}
-<p class="muted mb-3">Per-project overrides. Inherit = используется global; Override = индивидуальное значение.</p>
+<p class="muted mb-3">{{ "settings.project_hint" | t(locale=locale) }}</p>
 <form method="post" action="/p/{{ project.slug }}/settings" class="space-y-6 max-w-3xl">
 {% for group_name, rows in groups %}
   <fieldset class="bg-white p-4 rounded shadow">

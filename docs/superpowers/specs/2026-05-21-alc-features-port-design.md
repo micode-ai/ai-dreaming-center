@@ -110,6 +110,15 @@ EventSource client ◄── EventSourceResponse ◄── orchestration_hub.str
 
 ---
 
+### Carried over from Wave A (deferred follow-ups)
+
+The Wave A implementation acknowledged two race windows in code TODOs; both are tolerable for a single-user local dashboard but should be closed before any multi-client deployment. Track them in the first Wave B/C plan that touches the relevant files:
+
+- **Stage-id null-window race** (`orchestration_dispatch.start_orchestration_run`): the root node is INSERTed with `stage_id=NULL` before the subsequent UPDATE sets the stage_id. Fix by extending `hub.create_node` to accept an optional `stage_id` and inlining it, OR by moving the stage seed to BEFORE `create_node` and passing the new id.
+- **Snapshot-vs-cursor priming race** (`OrchestrationHub.stream_run_events`): events appended between snapshot reads (`list_stages`/`list_nodes`/`list_messages`) and the cursor priming `list_events_since(after_ts=None)` are silently dropped. Fix by priming the cursor FIRST, then reading the snapshot; tolerate one possible duplicate event on first tail iteration (clients already mutate-by-id, duplicates are harmless).
+
+Plus minor follow-ups: per-agent chip click → message slide-over panel, `appendMessage` placeholder backfill via fetch, stage-marker parsing in `claude_session_tail.py` to auto-tag events.
+
 ### Wave B — Loop templates: 16 seeds + CRUD UI
 
 **Goal:** Replace the stub `/p/{slug}/loops/templates` (read-only catalog) with a full CRUD UI, and seed 16 loop templates into each project's `<working_dir>/.claude/loops/templates/` automatically on project enable.

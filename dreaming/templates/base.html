@@ -21,9 +21,31 @@
   </script>
   <link rel="stylesheet" href="/static/app.css">
   <script src="https://unpkg.com/htmx.org@2"></script>
+  <style>
+    #nav-progress {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 3px; z-index: 9999; pointer-events: none;
+      overflow: hidden; background: transparent;
+      opacity: 0; transition: opacity .15s ease-out;
+    }
+    #nav-progress.nav-progress-active { opacity: 1; }
+    #nav-progress::after {
+      content: ''; display: block; height: 100%; width: 40%;
+      background: linear-gradient(90deg, transparent, #6366f1 50%, transparent);
+      transform: translateX(-100%);
+    }
+    #nav-progress.nav-progress-active::after {
+      animation: nav-progress-slide 1.1s ease-in-out infinite;
+    }
+    @keyframes nav-progress-slide {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(350%); }
+    }
+  </style>
   {% block head %}{% endblock %}
 </head>
 <body class="min-h-screen">
+  <div id="nav-progress" aria-hidden="true"></div>
   <div class="app-shell">
     {% include "_sidebar.html" %}
     <div class="app-content">
@@ -40,5 +62,54 @@
     </div>
   </div>
   {% include "_app_modal.html" %}
+  <script>
+  (() => {
+    const bar = document.getElementById('nav-progress');
+    if (!bar) return;
+    let showTimer = null;
+    const show = () => {
+      // Tiny delay so instant intra-page navigations (cached pages, hash jumps
+      // that snuck through) don't flicker the bar.
+      if (showTimer) return;
+      showTimer = setTimeout(() => { bar.classList.add('nav-progress-active'); }, 80);
+    };
+    const hide = () => {
+      if (showTimer) { clearTimeout(showTimer); showTimer = null; }
+      bar.classList.remove('nav-progress-active');
+    };
+    // bfcache restore — kill any stale bar so it doesn't stay shown
+    window.addEventListener('pageshow', (e) => { if (e.persisted) hide(); });
+    // Link clicks
+    document.addEventListener('click', (e) => {
+      const a = e.target.closest('a[href]');
+      if (!a || e.defaultPrevented) return;
+      if (e.button !== 0) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      if (a.target && a.target !== '_self') return;
+      if (a.hasAttribute('download')) return;
+      const href = a.getAttribute('href') || '';
+      if (!href || href.startsWith('#') || href.startsWith('javascript:') ||
+          href.startsWith('mailto:') || href.startsWith('tel:')) return;
+      try {
+        const url = new URL(a.href, location.href);
+        // Same-page hash jump — no navigation.
+        if (url.origin === location.origin &&
+            url.pathname === location.pathname &&
+            url.search === location.search && url.hash) return;
+      } catch { /* malformed URL — let browser handle it */ }
+      show();
+    }, true);
+    // Form submits — fires AFTER any data-confirm modal has approved (the
+    // modal calls form.requestSubmit()), so we never flash the bar for a
+    // submission the user cancelled.
+    document.addEventListener('submit', (e) => {
+      if (!(e.target instanceof HTMLFormElement)) return;
+      // Skip forms still gated by an unconfirmed modal — they'll re-submit
+      // later, and our handler will catch that pass.
+      if (e.target.hasAttribute('data-confirm')) return;
+      show();
+    }, true);
+  })();
+  </script>
 </body>
 </html>

@@ -23,7 +23,8 @@ Each menu item in the project header = a separate file here:
 - [`features/ideas.md`](features/ideas.md) — product ideas board and the `→ Jira` button.
 - [`features/wiki.md`](features/wiki.md) — project wiki status and `Run /wiki-bootstrap`.
 - [`features/ai-usage.md`](features/ai-usage.md) — token and cost analytics (per-project + global).
-- [`features/orchestration.md`](features/orchestration.md) — running Roman, watching live, resume.
+- [`features/orchestration.md`](features/orchestration.md) — running Roman, watching live, resume, **Bulk queue** for mass-dispatching findings/ideas/evolutions.
+- [`features/evolutions.md`](features/evolutions.md) — proposed edits for agents: Apply / force-apply / conflict-gate / filters.
 - [`features/cascade.md`](features/cascade.md) — cascade pipeline: contract → design → … → qa.
 - [`features/analytics-extras.md`](features/analytics-extras.md) — Evolutions, Loops, Plans, Cascade Costs, Sidecar findings, Contracts.
 - [`features/settings.md`](features/settings.md) — global vs per-project settings.

@@ -48,6 +48,8 @@ async def ideas_page(request: Request, slug: str, status: str | None = None):
         items = [it for it in items if (it.get("status") if isinstance(it, dict) else None) == status]
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
     projects = await request.app.state.projects.list_all(only_enabled=True)
+    pm = request.app.state.process_manager
+    scan_running = f"cmd:{project.slug}:product-idea-scan" in pm.list_running()
     return request.app.state.templates.TemplateResponse(
         request, "project_ideas.html",
         {"project": project, "items": items, "ideas_dir": ideas_dir,
@@ -55,6 +57,7 @@ async def ideas_page(request: Request, slug: str, status: str | None = None):
          "ideas_dir_exists": bool(ideas_dir) and Path(ideas_dir).exists(),
          "autoconfig_default": autoconfig.default_abs(project, "product_ideas_dir"),
          "error": error, "statuses": statuses, "selected_status": status or "",
+         "scan_running": scan_running,
          "projects": projects, "locale": locale},
     )
 
@@ -263,6 +266,21 @@ async def ideas_send_to_orchestration(request: Request, slug: str, item_id: str)
             _, body_md = read_product_idea(str(path))
         except Exception:
             body_md = ""
+    # Idempotency: if this idea already has an orchestration_run pointing at a
+    # still-existing run, redirect to it instead of starting a duplicate. This
+    # covers (a) the double-click case (user clicks button twice before redirect)
+    # and (b) re-opening the idea later and re-clicking. To start a genuinely
+    # fresh run, delete the old one first or clear the frontmatter field.
+    existing_run_id = (target.get("orchestration_run") or "").strip()
+    if existing_run_id:
+        hub = request.app.state.orchestration_hub
+        existing_row = await hub.get_run(existing_run_id)
+        if existing_row is not None and existing_row["project_id"] == project.id:
+            return RedirectResponse(
+                f"/p/{project.slug}/orchestration?run_id={existing_run_id}",
+                status_code=303,
+            )
+
     title = target.get("title") or item_id
     goal = (
         f"Спроектируй и реализуй продуктовую идею: «{title}» (id `{item_id}`).\n\n"
@@ -277,5 +295,5 @@ async def ideas_send_to_orchestration(request: Request, slug: str, item_id: str)
     if path is not None:
         set_frontmatter_field(path, "orchestration_run", result["run_id"])
     return RedirectResponse(
-        f"/p/{project.slug}/orchestration/{result['run_id']}", status_code=303,
+        f"/p/{project.slug}/orchestration?run_id={result['run_id']}", status_code=303,
     )

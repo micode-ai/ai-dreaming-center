@@ -15,14 +15,15 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import RedirectResponse
 
 router = APIRouter()
 
 
 _SECTION_RE = re.compile(r"^##\s+(.+?)\s*\((\d{4}-\d{2}-\d{2})\)\s*$", re.MULTILINE)
 _METRIC_RE = re.compile(
-    r"^- `(?P<key>[a-z_]+)`:\s*(?P<value>[^\n—]+?)(?:\s+—|$)",
+    r"^- `(?P<key>[a-z0-9_]+)`:\s*(?P<value>[^\n—]+?)(?:\s+—|$)",
     re.MULTILINE,
 )
 
@@ -113,6 +114,34 @@ def _coverage_snapshot(wiki_root: Path | None) -> dict[str, int]:
     return out
 
 
+@router.post("/p/{slug}/wiki-health/generate")
+async def wiki_health_generate(request: Request, slug: str):
+    """Trigger /wiki-health-scan inside the project to append a fresh snapshot
+    to wiki-health-trends.md."""
+    project = request.state.project
+    pm = request.app.state.process_manager
+    settings = request.app.state.settings
+    resolver = request.app.state.resolver_factory(request)
+    try:
+        await pm.start_command(
+            project,
+            command_name="wiki-health-scan",
+            prompt="/wiki-health-scan",
+            claude_path=await resolver.get(project, "claude_path", "claude"),
+            working_dir=project.working_dir,
+            model=await resolver.get(project, "model", "sonnet"),
+            max_turns=int(await resolver.get(project, "max_turns", 50)),
+            timeout_minutes=int(await resolver.get(project, "timeout_minutes", 30)),
+            env_overrides={
+                "DREAMING_PROJECT_SLUG": project.slug,
+                "DREAMING_API_URL": f"http://localhost:{settings.port}",
+            },
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return RedirectResponse(f"/p/{project.slug}/live", status_code=303)
+
+
 @router.get("/p/{slug}/wiki-health")
 async def project_wiki_health(request: Request, slug: str):
     project = request.state.project
@@ -148,6 +177,8 @@ async def project_wiki_health(request: Request, slug: str):
     latest = series[-1] if series else None
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
     projects = await request.app.state.projects.list_all(only_enabled=True)
+    pm = request.app.state.process_manager
+    running = f"cmd:{project.slug}:wiki-health-scan" in pm.list_running()
     return request.app.state.templates.TemplateResponse(
         request,
         "project_wiki_health.html",
@@ -164,5 +195,6 @@ async def project_wiki_health(request: Request, slug: str):
             "today": date.today().isoformat(),
             "projects": projects,
             "locale": locale,
+            "wiki_health_running": running,
         },
     )

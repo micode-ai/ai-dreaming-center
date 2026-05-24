@@ -1,5 +1,5 @@
 {% extends "_project_layout.html" %}
-{% from "_autoconfig_banner.html" import autoconfig_banner %}
+{% from "_autoconfig_banner.html" import autoconfig_banner with context %}
 {% set active='sidecar_findings' %}
 {% block project_content %}
 {% if not sidecar_dir_set %}
@@ -7,14 +7,14 @@
 {% elif not exists %}
 {{ autoconfig_banner(project, "sidecar_findings_dir", sidecar_dir, "Sidecar findings") }}
 {% elif error %}
-<p class="text-sm text-red-700">Ошибка: <code>{{ error }}</code></p>
+<p class="text-sm text-red-700">{{ "common.error" | t(locale=locale) }}: <code>{{ error }}</code></p>
 {% elif items %}
 <div class="mb-3 flex items-center gap-3">
   <p class="text-xs muted">{{ items|length }} findings in <code>{{ sidecar_dir }}</code></p>
   {% if severities %}
   <form method="get" class="ml-auto">
     <select name="severity" onchange="this.form.submit()" class="border rounded p-1 text-xs">
-      <option value="">все severities</option>
+      <option value="">{{ "sidecar.all_severities" | t(locale=locale) }}</option>
       {% for s in severities %}<option value="{{ s }}" {% if s==selected_severity %}selected{% endif %}>{{ s }}</option>{% endfor %}
     </select>
   </form>
@@ -45,6 +45,6 @@
   </tbody>
 </table>
 {% else %}
-<p class="muted">Нет findings.</p>
+<p class="muted">{{ "sidecar.empty" | t(locale=locale) }}</p>
 {% endif %}
 {% endblock %}

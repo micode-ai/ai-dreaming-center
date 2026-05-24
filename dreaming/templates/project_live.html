@@ -1,10 +1,11 @@
 {% extends "_project_layout.html" %}
 {% set active='live' %}
 {% block project_content %}
+<p id="live-empty" class="muted{% if active_runs %} hidden{% endif %}">{{ "p.no_active_runs" | t(locale=locale) }}</p>
 {% if active_runs %}
-<div class="flex flex-col gap-4 h-[calc(100vh-260px)]">
+<div id="live-cards" class="flex flex-col gap-4 h-[calc(100vh-260px)]">
 {% for key, agent, is_cmd in active_runs %}
-  <div class="bg-white rounded-lg border border-slate-200 shadow-sm p-3 flex flex-col flex-1 min-h-0">
+  <div id="card-{{ agent }}" data-live-card class="bg-white rounded-lg border border-slate-200 shadow-sm p-3 flex flex-col flex-1 min-h-0 transition-opacity duration-500">
     <div class="flex items-center gap-3 mb-2">
       <h2 class="font-semibold text-slate-900">{{ agent }}</h2>
       {% if is_cmd %}<span class="badge badge-neutral">command</span>{% endif %}
@@ -36,6 +37,7 @@
     </div>
     <script>
       (() => {
+        const card = document.getElementById('card-{{ agent }}');
         const target = document.getElementById('log-{{ agent }}');
         const empty = document.getElementById('log-empty-{{ agent }}');
         const statusEl = document.getElementById('status-{{ agent }}');
@@ -62,17 +64,33 @@
           if (stick) { target.scrollTop = target.scrollHeight; }
         };
 
+        const retireCard = () => {
+          card.classList.add('opacity-0');
+          setTimeout(() => {
+            card.remove();
+            const container = document.getElementById('live-cards');
+            const emptyMsg = document.getElementById('live-empty');
+            if (container && container.querySelectorAll('[data-live-card]').length === 0) {
+              container.remove();
+              if (emptyMsg) emptyMsg.classList.remove('hidden');
+            }
+          }, 500);
+        };
+
         const es = new EventSource('/p/{{ project.slug }}/live/stream/{{ agent }}');
         es.addEventListener('open', () => setStatus('live'));
         es.addEventListener('log', e => { setStatus('live'); append(e.data); });
-        es.addEventListener('end', () => { es.close(); setStatus('ended'); append('\n[stream ended]'); });
+        es.addEventListener('end', () => {
+          es.close();
+          setStatus('ended');
+          append('\n[stream ended]');
+          setTimeout(retireCard, 3000);
+        });
         es.addEventListener('error', () => { setStatus('error'); });
       })();
     </script>
   </div>
 {% endfor %}
 </div>
-{% else %}
-<p class="muted">{{ "p.no_active_runs" | t(locale=locale) }}</p>
 {% endif %}
 {% endblock %}

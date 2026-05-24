@@ -1,0 +1,29 @@
+{# Reusable action-bar for triggering a slash-command scan.
+
+   Used on /ideas, /findings, /wiki, /wiki-health pages — gives the user
+   a "Run /<command>" button at the top of the page, with a disabled
+   "running…" state while the command is already in-flight.
+
+   Required params:
+     action_url:    POST endpoint that starts the command
+     running:       bool — True if `cmd:{slug}:{cmd_name}` is in pm.list_running()
+     label:         button text when idle (already localized by caller)
+     running_label: button text while command runs (already localized)
+
+   Optional:
+     hint:          small caption shown next to the button #}
+{% macro scan_action_bar(action_url, running, label, running_label, hint='') %}
+<div class="flex items-center justify-end mb-4 gap-3 flex-wrap">
+  {% if hint %}
+  <span class="text-xs muted">{{ hint }}</span>
+  {% endif %}
+  <form method="post" action="{{ action_url }}">
+    <button type="submit"
+            class="text-xs rounded px-3 py-1.5 disabled:opacity-50"
+            style="background: var(--brand); color: white; border:1px solid var(--brand-hover);"
+            {% if running %}disabled title="{{ running_label }}"{% endif %}>
+      {% if running %}{{ running_label }}{% else %}{{ label }}{% endif %}
+    </button>
+  </form>
+</div>
+{% endmacro %}

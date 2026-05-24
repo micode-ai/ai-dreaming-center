@@ -1,34 +1,46 @@
 {% extends "_project_layout.html" %}
 {% set active='loops_templates' %}
 {% block project_content %}
-<div class="rounded-lg p-4 mb-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-  <div class="text-xs uppercase tracking-wide" style="color: var(--text-faint);">Каталог шаблонов</div>
-  <div class="text-sm mt-1 font-mono break-all" style="color: var(--text-body);">{{ templates_dir or '—' }}</div>
-  {% if not templates_dir_exists %}
-  <div class="text-xs mt-2" style="color: var(--status-timeout);">Папка не существует. Создайте её, чтобы класть туда .md-шаблоны.</div>
-  {% endif %}
+<div class="flex items-center justify-between mb-3">
+  <div>
+    <div class="text-xs uppercase tracking-wide" style="color: var(--text-faint);">{{ "loops_tpl.catalog" | t(locale=locale) }}</div>
+    <div class="text-sm mt-1 font-mono break-all" style="color: var(--text-body);">{{ templates_dir or '—' }}</div>
+    {% if not templates_dir_exists %}
+    <div class="text-xs mt-1" style="color: var(--status-timeout);">{{ "loops_tpl.dir_missing" | t(locale=locale) }}</div>
+    {% endif %}
+  </div>
+  <a href="/p/{{ project.slug }}/loops/templates/new" class="text-xs rounded px-3 py-1.5"
+     style="background: var(--brand); color: #fff;">{{ "loops_tpl.new" | t(locale=locale) }}</a>
 </div>
 
 {% if items %}
 <table class="data-table">
   <thead><tr>
     <th>slug</th>
-    <th>имя</th>
-    <th class="text-right">размер</th>
-    <th>путь</th>
+    <th>{{ "loops_tpl.col.name" | t(locale=locale) }}</th>
+    <th>{{ "loops_tpl.col.engine" | t(locale=locale) }}</th>
+    <th>{{ "loops_tpl.col.tags" | t(locale=locale) }}</th>
+    <th class="text-right">{{ "loops_tpl.col.actions" | t(locale=locale) }}</th>
   </tr></thead>
   <tbody>
   {% for it in items %}
   <tr>
-    <td class="font-mono text-xs">{{ it.slug }}</td>
+    <td class="font-mono text-xs"><a class="underline" style="color: var(--brand-hover);" href="/p/{{ project.slug }}/loops/templates/{{ it.slug }}">{{ it.slug }}</a></td>
     <td>{{ it.name }}</td>
-    <td class="text-right text-xs muted">{{ it.size_bytes }} б</td>
-    <td class="font-mono text-xs muted">{{ it.path }}</td>
+    <td class="text-xs muted">{{ it.engine }}{% if it.max_iterations %} ({{ it.max_iterations }}x){% endif %}</td>
+    <td class="text-xs muted">{{ (it.tags or [])|join(', ') }}</td>
+    <td class="text-right whitespace-nowrap">
+      <a class="text-xs px-2 py-1 rounded" style="color: var(--text-muted); border:1px solid var(--border-subtle);" href="/p/{{ project.slug }}/loops/templates/{{ it.slug }}">{{ "loops_tpl.edit" | t(locale=locale) }}</a>
+      <form method="post" action="/p/{{ project.slug }}/loops/templates/{{ it.slug }}/delete" class="inline ml-1"
+            data-confirm="{{ 'loops_tpl.confirm_delete' | t(locale=locale, slug=it.slug) }}" data-confirm-variant="danger">
+        <button class="text-xs px-2 py-1 rounded" style="color: var(--status-failed); border:1px solid var(--border-subtle);">{{ "loops_tpl.delete" | t(locale=locale) }}</button>
+      </form>
+    </td>
   </tr>
   {% endfor %}
   </tbody>
 </table>
 {% else %}
-<p class="muted">Шаблонов пока нет. Положи <code>.md</code>-файл в указанную папку — он появится здесь.</p>
+<p class="muted">{{ "loops_tpl.empty" | t(locale=locale, ext='.md') }}</p>
 {% endif %}
 {% endblock %}

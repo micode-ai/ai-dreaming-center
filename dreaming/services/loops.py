@@ -1,4 +1,7 @@
-"""Project-aware loops parser. Lean Wave 4: list reflex-loop markdown files."""
+"""Project-aware loops parser: list reflex-loop markdown files with their
+frontmatter (title, status, iterations). The /p/<slug>/loops page renders
+this list; loops themselves run inside the project via the
+`/reflex-loop` slash-command, not here."""
 from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path

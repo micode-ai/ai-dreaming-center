@@ -1,11 +1,28 @@
 """OrchestrationHub — DB-backed runs/nodes/messages tracking for Roman-style multi-agent flows.
 
-Wave 3 lean scope: create runs, append messages, list runs, simple status updates.
-SSE fan-out, sub-agent watching, cascade pipelines — Wave 3 full.
+What this module provides:
+- CRUD over `orchestrator_runs`, `_nodes`, `_messages`, `_events`,
+  `_stages`, `_gate_verdicts`, `_artifacts`.
+- Idempotent stage create + start/finish transitions.
+- Artifact dedup via `(run_id, dedup_hash)` unique constraint.
+
+Deliberately not provided (clients poll instead):
+- Real-time SSE/WebSocket fan-out of new messages/events. The UI polls
+  `/p/<slug>/orchestration/{run_id}` periodically; if you need push,
+  build a pub/sub layer (asyncio.Queue per run) around `append_message`
+  and `append_event` and expose `/events/{run_id}/stream`.
+- Sub-agent process supervision. `create_node` records the row, but the
+  actual sub-process lifecycle is managed elsewhere (process_manager) or
+  externally (harness_client when configured).
+- Multi-run cascading. Each run is independent; chained cascades would
+  need a `parent_run_id` column on `orchestrator_runs` plus a dispatcher
+  that fires the next run from the completion handler.
 """
 from __future__ import annotations
+import asyncio
 import json
 import logging
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -54,28 +71,51 @@ class OrchestrationHub:
         return row["id"] if row else None
 
     async def finish_run(self, run_id: str, status: str = "completed", error_message: str | None = None) -> bool:
+        # Finalize any still-running stages/nodes so the swimlane reflects reality.
+        # This covers ALL finish paths: Orchestrator's curl to /api/orchestration/{id}/finish,
+        # the form-based "Mark completed" button, cascade finish, and any future caller.
+        node_terminal = "completed" if status == "completed" else (
+            "cancelled" if status == "cancelled" else "failed"
+        )
+        stage_terminal = "completed" if status == "completed" else (
+            "cancelled" if status == "cancelled" else "failed"
+        )
+        for s in await self.list_stages(run_id):
+            if s["status"] == "running":
+                await self.finish_stage(s["id"], stage_terminal)
+        for n in await self.list_nodes(run_id):
+            if n["status"] == "running":
+                await self.update_node_status(n["id"], node_terminal)
         async with self.db._conn.execute(
             "UPDATE orchestrator_runs SET status=?, finished_at=?, error_message=? WHERE id=?",
             (status, _now(), error_message, run_id),
         ) as cur:
-            n = cur.rowcount
+            n_rows = cur.rowcount
         await self.db._conn.commit()
-        return n > 0
+        return n_rows > 0
 
     # -- Nodes ----------------------------------------
 
     async def create_node(
         self, run_id: str, project_id: int, agent_name: str, role: str = "executor",
         parent_node_id: str | None = None, external_id: str | None = None,
+        stage_id: str | None = None,
     ) -> str:
         node_id = str(uuid.uuid4())
         ts = _now()
         await self.db.execute(
             "INSERT INTO orchestrator_nodes "
-            "(id, project_id, run_id, external_id, parent_node_id, agent_name, role, status, started_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, 'running', ?)",
-            (node_id, project_id, run_id, external_id, parent_node_id, agent_name, role, ts),
+            "(id, project_id, run_id, external_id, parent_node_id, agent_name, role, status, started_at, stage_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, 'running', ?, ?)",
+            (node_id, project_id, run_id, external_id, parent_node_id,
+             agent_name, role, ts, stage_id),
         )
+        # Live-stream signal so SSE clients can add a chip without page reload.
+        await self.append_event(run_id, "node_created", {
+            "node_id": node_id, "agent_name": agent_name, "role": role,
+            "status": "running", "stage_id": stage_id,
+            "parent_node_id": parent_node_id, "started_at": ts,
+        })
         return node_id
 
     async def list_nodes(self, run_id: str) -> list:
@@ -91,6 +131,19 @@ class OrchestrationHub:
             "WHERE id=?",
             (status, finished, _now(), node_id),
         )
+        # Live-stream signal — find the run_id so we can emit the event.
+        row = await self.db.fetch_one(
+            "SELECT run_id FROM orchestrator_nodes WHERE id=?", (node_id,),
+        )
+        if row is not None:
+            try:
+                run_id = row["run_id"]
+            except (KeyError, TypeError, IndexError):
+                run_id = None
+            if run_id:
+                await self.append_event(run_id, "node_status_changed", {
+                    "node_id": node_id, "status": status,
+                })
 
     # -- Messages -------------------------------------
 
@@ -139,6 +192,123 @@ class OrchestrationHub:
             (run_id, limit),
         )
 
+    async def list_events_since(
+        self, run_id: str,
+        after_ts: str | None,
+        after_id: str | None = None,
+    ) -> list:
+        """Events strictly after a `(ts, id)` cursor. ISO8601 UTC for ts.
+
+        Composite cursor: `_now()` has microsecond resolution but Windows
+        wall-clock can produce duplicate ISO strings within the same tick.
+        Filtering only on `ts > ?` would silently drop tied events. The
+        SQL filters `ts > after_ts OR (ts = after_ts AND id > after_id)`.
+
+        Pass None for both args to return all events.
+        """
+        if after_ts is None:
+            return await self.db.fetch_all(
+                "SELECT * FROM orchestrator_events WHERE run_id=? "
+                "ORDER BY ts ASC, id ASC",
+                (run_id,),
+            )
+        if after_id is None:
+            return await self.db.fetch_all(
+                "SELECT * FROM orchestrator_events WHERE run_id=? AND ts > ? "
+                "ORDER BY ts ASC, id ASC",
+                (run_id, after_ts),
+            )
+        return await self.db.fetch_all(
+            "SELECT * FROM orchestrator_events WHERE run_id=? "
+            "AND (ts > ? OR (ts = ? AND id > ?)) "
+            "ORDER BY ts ASC, id ASC",
+            (run_id, after_ts, after_ts, after_id),
+        )
+
+    async def stream_run_events(
+        self, run_id: str, *,
+        poll_interval: float = 0.5,
+        idle_close_seconds: float = 3.0,
+    ):
+        """Async generator that yields dicts of shape `{"event": str, "data": dict}`.
+
+        First yield is always `{"event": "snapshot", "data": {run, stages, nodes, messages}}`
+        so a client connecting mid-run gets full state.
+
+        Subsequent yields are `{"event": <event_type>, "data": <payload>}` for each
+        new row in `orchestrator_events`. The generator terminates when the run is in
+        a terminal status AND no new events have arrived for `idle_close_seconds`.
+
+        Implementation note: tails the events table via repeated `list_events_since`
+        polls. This is fine for a local single-user dashboard; for multi-user fan-out
+        an asyncio.Queue pub/sub would be preferable.
+        """
+        # Initial snapshot.
+        run = await self.get_run(run_id)
+        if run is None:
+            yield {"event": "error", "data": {"message": f"run {run_id} not found"}}
+            return
+        stages = [dict(r) for r in await self.list_stages(run_id)]
+        nodes = [dict(r) for r in await self.list_nodes(run_id)]
+        messages = [dict(r) for r in await self.list_messages(run_id)]
+        yield {
+            "event": "snapshot",
+            "data": {
+                "run": dict(run),
+                "stages": stages,
+                "nodes": nodes,
+                "messages": messages,
+            },
+        }
+
+        # Tail events. Composite `(ts, id)` cursor — `_now()` is microsecond-
+        # resolution but Windows wall-clock can repeat within a tick, so a single
+        # `ts > ?` filter would silently skip tied events. See list_events_since.
+        cursor_ts: str | None = None
+        cursor_id: str | None = None
+        # TODO(wave-B): prime cursor BEFORE snapshot to close the T0..T5 race
+        # window where events appended between snapshot reads and cursor priming
+        # land in the cursor but not in the snapshot, so are silently dropped.
+        # Acceptable for Wave A (single-user, ~500ms poll, missed events only
+        # under-count the message counter and self-heal on page reload).
+        # Prime the cursor to the latest event we've already shown via snapshot,
+        # so we don't re-emit them.
+        existing = await self.list_events_since(run_id, after_ts=None)
+        if existing:
+            cursor_ts = existing[-1]["ts"]
+            cursor_id = existing[-1]["id"]
+
+        idle_started_at: float | None = None
+        while True:
+            new_events = await self.list_events_since(
+                run_id, after_ts=cursor_ts, after_id=cursor_id,
+            )
+            if new_events:
+                for ev in new_events:
+                    payload = {}
+                    try:
+                        payload = json.loads(ev["payload_json"]) if ev["payload_json"] else {}
+                    except (ValueError, TypeError):
+                        payload = {}
+                    yield {
+                        "event": ev["event_type"],
+                        "data": payload,
+                    }
+                    cursor_ts = ev["ts"]
+                    cursor_id = ev["id"]
+                idle_started_at = None
+            else:
+                # Check terminal state + idle window
+                run = await self.get_run(run_id)
+                status = run["status"] if run else "unknown"
+                if status not in ("running",):
+                    if idle_started_at is None:
+                        idle_started_at = time.monotonic()
+                    elif time.monotonic() - idle_started_at >= idle_close_seconds:
+                        yield {"event": "done", "data": {"status": status}}
+                        return
+            await asyncio.sleep(poll_interval)
+
     # ── Stages ───────────────────────────────────────
 
     async def ensure_stage(
@@ -159,17 +329,35 @@ class OrchestrationHub:
         )
         return stage_id
 
+    async def _emit_stage_status(self, stage_id: str, status: str) -> None:
+        """Emit `stage_status_changed` event for SSE clients."""
+        row = await self.db.fetch_one(
+            "SELECT run_id FROM orchestrator_stages WHERE id=?", (stage_id,),
+        )
+        if row is None:
+            return
+        try:
+            run_id = row["run_id"]
+        except (KeyError, TypeError, IndexError):
+            return
+        if run_id:
+            await self.append_event(run_id, "stage_status_changed", {
+                "stage_id": stage_id, "status": status,
+            })
+
     async def start_stage(self, stage_id: str) -> None:
         await self.db.execute(
             "UPDATE orchestrator_stages SET status='running', started_at=? WHERE id=?",
             (_now(), stage_id),
         )
+        await self._emit_stage_status(stage_id, "running")
 
     async def finish_stage(self, stage_id: str, status: str = "completed") -> None:
         await self.db.execute(
             "UPDATE orchestrator_stages SET status=?, finished_at=? WHERE id=?",
             (status, _now(), stage_id),
         )
+        await self._emit_stage_status(stage_id, status)
 
     async def list_stages(self, run_id: str) -> list:
         return await self.db.fetch_all(

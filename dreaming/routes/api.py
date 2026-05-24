@@ -199,6 +199,8 @@ async def orchestration_finish(request: Request, run_id: str, payload: OrchFinis
     ok = await hub.finish_run(run_id, status=payload.status, error_message=payload.error_message)
     if ok:
         await hub.append_event(run_id, "run_finished", {"status": payload.status})
+        from dreaming.services.orchestration_dispatch import kill_run_processes
+        await kill_run_processes(request.app.state, run_id)
     return JSONResponse({"ok": ok})
 
 
@@ -364,6 +366,8 @@ async def cascade_finish(request: Request, run_id: str):
     ok = await hub.finish_run(run_id, status="completed")
     if ok:
         await hub.append_event(run_id, "cascade_finished", {})
+        from dreaming.services.orchestration_dispatch import kill_run_processes
+        await kill_run_processes(request.app.state, run_id)
     return JSONResponse({"ok": ok})
 
 

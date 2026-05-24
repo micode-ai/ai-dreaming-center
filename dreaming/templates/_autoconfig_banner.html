@@ -12,19 +12,19 @@ Arguments:
 #}
 {% macro autoconfig_banner(project, key, default_path, what) %}
 <div class="mb-4 p-4 border border-amber-400 bg-amber-50 rounded">
-  <p class="font-semibold text-amber-900 mb-1">{{ what }} ещё не настроен</p>
+  <p class="font-semibold text-amber-900 mb-1">{{ "autoconfig.title_not_ready" | t(locale=locale, what=what) }}</p>
   <p class="text-sm text-amber-900 mb-2">
-    Создам каталог и пропишу настройку <code>{{ key }}</code>:
+    {{ "autoconfig.create_desc" | t(locale=locale, setting=key) }}
   </p>
   <p class="text-xs font-mono bg-white border rounded px-2 py-1 mb-3 break-all">{{ default_path }}</p>
   <p class="text-xs text-amber-900 mb-3">
-    Если нужен другой путь — поменяй после установки в
+    {{ "autoconfig.change_later" | t(locale=locale) }}
     <a class="text-blue-600 underline" href="/p/{{ project.slug }}/settings">Settings</a>.
   </p>
   <form method="post" action="/p/{{ project.slug }}/settings/autoconfig">
     <input type="hidden" name="key" value="{{ key }}">
     <button class="text-sm bg-amber-600 text-white rounded px-3 py-1">
-      Создать каталог и сохранить настройку
+      {{ "autoconfig.btn_create" | t(locale=locale) }}
     </button>
   </form>
 </div>

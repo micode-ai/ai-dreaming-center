@@ -1,12 +1,12 @@
 {% extends "_project_layout.html" %}
 {% set active='notes' %}
 {% block project_content %}
-<p class="text-xs muted mb-3">Источник: <code>{{ notes_dir }}</code> {% if not exists %}<span class="text-red-600">(каталог не существует)</span>{% endif %}</p>
+<p class="text-xs muted mb-3">{{ "notes.source" | t(locale=locale) }}: <code>{{ notes_dir }}</code> {% if not exists %}<span class="text-red-600">{{ "notes.dir_missing" | t(locale=locale) }}</span>{% endif %}</p>
 {% if files %}
 <table class="w-full bg-white rounded shadow text-sm">
   <thead class="text-left border-b"><tr>
-    <th class="p-2">путь</th>
-    <th class="p-2 text-right">размер</th>
+    <th class="p-2">{{ "notes.col.path" | t(locale=locale) }}</th>
+    <th class="p-2 text-right">{{ "notes.col.size" | t(locale=locale) }}</th>
     <th class="p-2"></th>
   </tr></thead>
   <tbody>
@@ -29,7 +29,7 @@
   </tbody>
 </table>
 {% else %}
-<p class="muted">Конспектов нет. Они появляются после успешных self-study сессий (записываются в этот каталог).</p>
+<p class="muted">{{ "notes.empty" | t(locale=locale) }}</p>
 {% endif %}
 
 {% include "_markdown_partial.html" %}
@@ -58,7 +58,7 @@
     const rawUrl = `/p/${slug}/notes/raw?path=${encodeURIComponent(path)}`;
     title.textContent = path;
     rawLink.href = rawUrl;
-    body.innerHTML = '<p class="muted">Загрузка…</p>';
+    body.innerHTML = '<p class="muted">{{ "notes.loading" | t(locale=locale) }}</p>';
     modal.showModal();
     try {
       const r = await fetch(rawUrl);
@@ -66,7 +66,7 @@
       const text = await r.text();
       window.dcRenderMarkdown(body, text);
     } catch (e) {
-      body.innerHTML = '<p class="text-red-700 font-mono text-xs">Ошибка: ' + (e.message || e) + '</p>';
+      body.innerHTML = '<p class="text-red-700 font-mono text-xs">{{ "notes.error_prefix" | t(locale=locale) }}: ' + (e.message || e) + '</p>';
     }
   };
 

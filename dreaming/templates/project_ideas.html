@@ -1,5 +1,6 @@
 {% extends "_project_layout.html" %}
-{% from "_autoconfig_banner.html" import autoconfig_banner %}
+{% from "_autoconfig_banner.html" import autoconfig_banner with context %}
+{% from "_scan_action_bar.html" import scan_action_bar %}
 {% set active='ideas' %}
 {% block project_content %}
 {% if not ideas_dir_set %}
@@ -7,34 +8,89 @@
 {% elif not ideas_dir_exists %}
 {{ autoconfig_banner(project, "product_ideas_dir", ideas_dir, "Product-ideas") }}
 {% elif error %}
-<p class="text-sm text-red-700">Ошибка парсинга: <code>{{ error }}</code></p>
+<p class="text-sm text-red-700">{{ "common.parse_error" | t(locale=locale) }}: <code>{{ error }}</code></p>
 {% elif items %}
-<div class="mb-3 flex items-center gap-3">
-  <p class="text-xs muted">{{ items|length }} ideas in <code>{{ ideas_dir }}</code></p>
-  {% if statuses %}
-  <form method="get" class="ml-auto">
-    <select name="status" onchange="this.form.submit()" class="border rounded p-1 text-xs">
-      <option value="">все статусы</option>
-      {% for s in statuses %}
-      <option value="{{ s }}" {% if s==selected_status %}selected{% endif %}>{{ s }}</option>
-      {% endfor %}
-    </select>
-  </form>
-  {% endif %}
-</div>
-<table class="w-full bg-white rounded shadow text-sm">
-  <thead class="text-left border-b"><tr>
-    <th class="p-2">id</th>
-    <th class="p-2">title</th>
-    <th class="p-2">status</th>
-    <th class="p-2">priority</th>
-    <th class="p-2">refs</th>
-    <th class="p-2"></th>
-  </tr></thead>
+{{ scan_action_bar(
+     "/p/" ~ project.slug ~ "/ideas/scan",
+     scan_running,
+     "ideas.scan.button" | t(locale=locale),
+     "ideas.scan.running" | t(locale=locale),
+) }}
+<p class="mb-3 text-xs muted">
+  <span id="ideas-count">{{ "ideas.count_in_dir" | t(locale=locale, n=items|length, dir=ideas_dir) }}</span>
+  <span id="ideas-shown" class="ml-2 hidden"></span>
+</p>
+<form id="ideas-bulk-form" method="post" action="/p/{{ project.slug }}/bulk/orchestrate" class="mb-2">
+  <input type="hidden" name="kind" value="idea">
+  <button type="submit" data-bulk-run disabled
+          data-bulk-confirm-tmpl="{{ 'bulk.confirm' | t(locale=locale, n='__N__') }}"
+          data-bulk-label-none="{{ 'bulk.run_none' | t(locale=locale) }}"
+          data-bulk-label-tmpl="{{ 'bulk.run_selected' | t(locale=locale, n='__N__') }}"
+          class="text-xs px-3 py-1.5 rounded border border-purple-500 text-purple-700 disabled:opacity-50 disabled:cursor-not-allowed">
+    {{ "bulk.run_none" | t(locale=locale) }}
+  </button>
+</form>
+<table id="ideas-table" class="w-full bg-white rounded shadow text-sm">
+  <thead class="text-left border-b">
+    <tr>
+      <th class="p-2 w-8"><input type="checkbox" id="ideas-select-all" aria-label="select all visible"></th>
+      <th class="p-2">{{ "ideas.col.id" | t(locale=locale) }}</th>
+      <th class="p-2">{{ "ideas.col.title" | t(locale=locale) }}</th>
+      <th class="p-2">{{ "ideas.col.status" | t(locale=locale) }}</th>
+      <th class="p-2">{{ "ideas.col.priority" | t(locale=locale) }}</th>
+      <th class="p-2">{{ "ideas.col.refs" | t(locale=locale) }}</th>
+      <th class="p-2"></th>
+    </tr>
+    <tr class="border-b bg-slate-50 text-xs" id="ideas-filters">
+      <th class="p-1"></th>
+      <th class="p-1"><input type="text" data-ideas-filter="id"
+            placeholder="{{ 'ideas.filter.search' | t(locale=locale) }}"
+            class="w-full border rounded p-1 text-xs font-mono"></th>
+      <th class="p-1"><input type="text" data-ideas-filter="title"
+            placeholder="{{ 'ideas.filter.search' | t(locale=locale) }}"
+            class="w-full border rounded p-1 text-xs font-mono"></th>
+      <th class="p-1">
+        <select data-ideas-filter="status" class="w-full border rounded p-1 text-xs font-mono">
+          <option value="">{{ "ideas.filter.opt.all" | t(locale=locale) }}</option>
+          {% for opt in ['idea', 'exploring', 'approved', 'building', 'shipped', 'dropped'] %}
+          <option value="{{ opt }}">{{ ('ideas.status.' ~ opt) | t(locale=locale) }}</option>
+          {% endfor %}
+        </select>
+      </th>
+      <th class="p-1"><input type="text" data-ideas-filter="priority"
+            placeholder="{{ 'ideas.filter.search' | t(locale=locale) }}"
+            class="w-full border rounded p-1 text-xs font-mono"></th>
+      <th class="p-1">
+        <select data-ideas-filter="refs" class="w-full border rounded p-1 text-xs font-mono">
+          <option value="">{{ "ideas.filter.opt.all" | t(locale=locale) }}</option>
+          <option value="gh">{{ "ideas.filter.opt.has_gh" | t(locale=locale) }}</option>
+          <option value="run">{{ "ideas.filter.opt.has_run" | t(locale=locale) }}</option>
+          <option value="jira">{{ "ideas.filter.opt.has_jira" | t(locale=locale) }}</option>
+          <option value="none">{{ "ideas.filter.opt.no_refs" | t(locale=locale) }}</option>
+        </select>
+      </th>
+      <th class="p-1 text-right">
+        <button type="button" id="ideas-filter-reset"
+                class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+          {{ "ideas.filter.reset" | t(locale=locale) }}
+        </button>
+      </th>
+    </tr>
+  </thead>
   <tbody>
   {% for it in items %}
   {% set iid = it.id or it.slug %}
-  <tr class="border-b align-top">
+  <tr class="border-b align-top"
+      data-ideas-row
+      data-id="{{ (iid or '')|lower }}"
+      data-title="{{ (it.title or '')|lower }}"
+      data-status="{{ it.status or 'idea' }}"
+      data-priority="{{ (it.priority or '')|lower }}"
+      data-has-gh="{{ '1' if it.github_issue else '0' }}"
+      data-has-run="{{ '1' if it.orchestration_run else '0' }}"
+      data-has-jira="{{ '1' if it.jira_ticket else '0' }}">
+    <td class="p-2"><input type="checkbox" form="ideas-bulk-form" name="selected"
+        value="{{ iid }}" data-bulk-cb aria-label="select {{ iid }}" {% if not iid %}disabled{% endif %}></td>
     <td class="p-2 font-mono text-xs">
       {% if iid %}
       <a class="text-blue-600 underline" href="/p/{{ project.slug }}/ideas/{{ iid }}">{{ iid }}</a>
@@ -46,7 +102,7 @@
         <select name="status" onchange="this.form.submit()" class="border rounded p-1 text-xs font-mono">
           {% set cur = it.status or 'idea' %}
           {% for opt in ['idea', 'exploring', 'approved', 'building', 'shipped', 'dropped'] %}
-          <option value="{{ opt }}" {% if cur==opt %}selected{% endif %}>{{ opt }}</option>
+          <option value="{{ opt }}" {% if cur==opt %}selected{% endif %}>{{ ("ideas.status." ~ opt) | t(locale=locale) }}</option>
           {% endfor %}
         </select>
       </form>
@@ -59,18 +115,18 @@
     </td>
     <td class="p-2 text-xs whitespace-nowrap">
       <form method="post" action="/p/{{ project.slug }}/ideas/{{ iid }}/orchestrate" class="inline"
-            data-confirm="Запустить Orchestrator с этой идеей как целью?">
-        <button class="text-xs px-2 py-1 border border-purple-500 text-purple-700 rounded">Orchestrate</button>
+            data-confirm="{{ 'ideas.confirm.orchestrate_list' | t(locale=locale) }}">
+        <button class="text-xs px-2 py-1 border border-purple-500 text-purple-700 rounded">{{ "ideas.btn.orchestrate" | t(locale=locale) }}</button>
       </form>
       {% if not it.github_issue %}
       <form method="post" action="/p/{{ project.slug }}/ideas/{{ iid }}/github" class="inline ml-1"
-            data-confirm="Создать GitHub issue?">
-        <button class="text-xs px-2 py-1 border border-slate-500 text-slate-700 rounded">→ GH</button>
+            data-confirm="{{ 'ideas.confirm.gh_list' | t(locale=locale) }}">
+        <button class="text-xs px-2 py-1 border border-slate-500 text-slate-700 rounded">{{ "ideas.btn.gh" | t(locale=locale) }}</button>
       </form>
       {% endif %}
       {% if not it.jira_ticket %}
       <form method="post" action="/p/{{ project.slug }}/ideas/{{ iid }}/jira" class="inline ml-1">
-        <button class="text-xs px-2 py-1 border rounded text-blue-600">→ Jira</button>
+        <button class="text-xs px-2 py-1 border rounded text-blue-600">{{ "ideas.btn.jira" | t(locale=locale) }}</button>
       </form>
       {% endif %}
     </td>
@@ -78,17 +134,123 @@
   {% endfor %}
   </tbody>
 </table>
+<p id="ideas-filter-empty" class="muted text-sm mt-3 hidden">{{ "ideas.filter.empty" | t(locale=locale) }}</p>
+
+<script>
+(() => {
+  const STORAGE_KEY = 'ideas.filters.{{ project.slug }}';
+  const FIELDS = ['id', 'title', 'status', 'priority', 'refs'];
+  const table = document.getElementById('ideas-table');
+  const rows = Array.from(table.querySelectorAll('[data-ideas-row]'));
+  const inputs = {};
+  FIELDS.forEach(f => { inputs[f] = table.querySelector(`[data-ideas-filter="${f}"]`); });
+  const shownEl = document.getElementById('ideas-shown');
+  const emptyEl = document.getElementById('ideas-filter-empty');
+  const resetBtn = document.getElementById('ideas-filter-reset');
+  const total = rows.length;
+  const SHOWN_TMPL = {{ ("ideas.filter.shown_count" | t(locale=locale)) | tojson }};
+
+  const loadState = () => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {}; }
+    catch { return {}; }
+  };
+  const saveState = () => {
+    const state = {};
+    FIELDS.forEach(f => { if (inputs[f] && inputs[f].value) state[f] = inputs[f].value; });
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+    catch { /* quota / privacy mode — silently ignore */ }
+  };
+
+  const matches = (row) => {
+    const v = (k) => (inputs[k] ? inputs[k].value : '').trim().toLowerCase();
+    const id = v('id'), title = v('title'), priority = v('priority');
+    if (id && !row.dataset.id.includes(id)) return false;
+    if (title && !row.dataset.title.includes(title)) return false;
+    if (priority && !row.dataset.priority.includes(priority)) return false;
+    const status = v('status');
+    if (status && row.dataset.status !== status) return false;
+    const refs = v('refs');
+    if (refs === 'gh' && row.dataset.hasGh !== '1') return false;
+    if (refs === 'run' && row.dataset.hasRun !== '1') return false;
+    if (refs === 'jira' && row.dataset.hasJira !== '1') return false;
+    if (refs === 'none' && (row.dataset.hasGh === '1' || row.dataset.hasRun === '1' || row.dataset.hasJira === '1')) return false;
+    return true;
+  };
+
+  const apply = () => {
+    let shown = 0;
+    rows.forEach(r => {
+      const ok = matches(r);
+      r.classList.toggle('hidden', !ok);
+      if (ok) shown++;
+    });
+    const hasFilter = FIELDS.some(f => inputs[f] && inputs[f].value);
+    if (hasFilter) {
+      shownEl.textContent = SHOWN_TMPL.replace('{shown}', shown).replace('{total}', total);
+      shownEl.classList.remove('hidden');
+    } else {
+      shownEl.classList.add('hidden');
+    }
+    emptyEl.classList.toggle('hidden', shown !== 0 || !hasFilter);
+    document.dispatchEvent(new CustomEvent('bulk:rows-changed', {detail: {table: 'ideas'}}));
+  };
+
+  const saved = loadState();
+  FIELDS.forEach(f => {
+    if (inputs[f] && saved[f] != null) inputs[f].value = saved[f];
+  });
+  FIELDS.forEach(f => {
+    if (!inputs[f]) return;
+    const evt = inputs[f].tagName === 'SELECT' ? 'change' : 'input';
+    inputs[f].addEventListener(evt, () => { saveState(); apply(); });
+  });
+  resetBtn.addEventListener('click', () => {
+    FIELDS.forEach(f => { if (inputs[f]) inputs[f].value = ''; });
+    saveState();
+    apply();
+  });
+  apply();
+})();
+
+(() => {
+  const form = document.getElementById('ideas-bulk-form');
+  if (!form) return;
+  const btn = form.querySelector('[data-bulk-run]');
+  const tmplActive = btn.dataset.bulkLabelTmpl;
+  const tmplNone = btn.dataset.bulkLabelNone;
+  const tmplConfirm = btn.dataset.bulkConfirmTmpl;
+  const checkboxes = Array.from(document.querySelectorAll('input[data-bulk-cb]'));
+  const selectAll = document.getElementById('ideas-select-all');
+  const visibleCbs = () => checkboxes.filter(c => !c.closest('tr').classList.contains('hidden') && !c.disabled);
+  const update = () => {
+    const n = checkboxes.filter(c => c.checked).length;
+    btn.disabled = (n === 0);
+    btn.textContent = n === 0 ? tmplNone : tmplActive.replace('__N__', n);
+    if (n > 0) form.setAttribute('data-confirm', tmplConfirm.replace('__N__', n));
+    else form.removeAttribute('data-confirm');
+    const vis = visibleCbs();
+    const allChecked = vis.length > 0 && vis.every(c => c.checked);
+    const someChecked = vis.some(c => c.checked);
+    selectAll.checked = allChecked;
+    selectAll.indeterminate = someChecked && !allChecked;
+  };
+  checkboxes.forEach(c => c.addEventListener('change', update));
+  selectAll.addEventListener('change', () => {
+    visibleCbs().forEach(c => { c.checked = selectAll.checked; });
+    update();
+  });
+  document.addEventListener('bulk:rows-changed', update);
+  update();
+})();
+</script>
 {% else %}
 <div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
-  <p class="font-semibold text-sky-900 mb-1">В <code>{{ ideas_dir }}</code> нет markdown файлов</p>
+  <p class="font-semibold text-sky-900 mb-1">{{ "ideas.empty.title" | t(locale=locale, dir=ideas_dir) }}</p>
   <p class="text-sm text-sky-900 mb-2">
-    Идеи продукта пишет slash-команда <code>/product-idea-scan</code> — claude
-    сканит репо на TODO-комментарии в UX, «coming soon»-заглушки, пропуски и
-    inconsistency, и кладёт каждую идею отдельным markdown'ом сюда. По расписанию
-    запускается weekly (если включён cron), или можно дёрнуть прямо сейчас.
+    {{ "ideas.empty.desc" | t(locale=locale, code='/product-idea-scan') }}
   </p>
   <form method="post" action="/p/{{ project.slug }}/ideas/scan">
-    <button class="text-sm bg-blue-600 text-white rounded px-3 py-1">Run /product-idea-scan</button>
+    <button class="text-sm bg-blue-600 text-white rounded px-3 py-1">{{ "ideas.empty.run_btn" | t(locale=locale) }}</button>
   </form>
 </div>
 {% endif %}
