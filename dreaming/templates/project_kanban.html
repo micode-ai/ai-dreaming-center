@@ -4,13 +4,13 @@
 
 <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
   <div>
-    <h2 class="text-lg font-semibold" style="color: var(--text-strong);">План обучения</h2>
-    <p class="text-xs mt-0.5" style="color: var(--text-faint);">Расписание на 5 дней вперёд — {{ per_night }} агентов за ночь</p>
+    <h2 class="text-lg font-semibold" style="color: var(--text-strong);">{{ "kanban.plan_title" | t(locale=locale) }}</h2>
+    <p class="text-xs mt-0.5" style="color: var(--text-faint);">{{ "kanban.schedule_subtitle" | t(locale=locale, n=per_night) }}</p>
   </div>
   <div class="flex items-center gap-3">
-    <span class="text-sm" style="color: var(--text-muted);">{{ total_enabled }} активных</span>
+    <span class="text-sm" style="color: var(--text-muted);">{{ "kanban.active_count" | t(locale=locale, n=total_enabled) }}</span>
     {% if remaining > 0 %}
-    <span class="badge badge-timeout">+{{ remaining }} не вместились</span>
+    <span class="badge badge-timeout">{{ "kanban.overflow" | t(locale=locale, n=remaining) }}</span>
     {% endif %}
   </div>
 </div>
@@ -35,32 +35,32 @@
                 style="background: {% if a.tier == 1 %}rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.30){% elif a.tier == 2 %}rgba(167,139,250,0.15);color:#c4b5fd;border:1px solid rgba(167,139,250,0.30){% else %}var(--bg-hover);color:var(--text-faint);border:1px solid var(--border-subtle){% endif %};">T{{ a.tier }}</span>
         </div>
         <div class="flex items-center justify-between text-[11px]" style="color: var(--text-faint);">
-          <span>{{ a.total_sessions }} сессий</span>
+          <span>{{ "kanban.sessions" | t(locale=locale, n=a.total_sessions) }}</span>
           {% if a.last_studied_at %}
           <span class="font-mono">{{ a.last_studied_at[:10] }}</span>
           {% else %}
-          <span style="color: var(--status-timeout);">новый</span>
+          <span style="color: var(--status-timeout);">{{ "kanban.new" | t(locale=locale) }}</span>
           {% endif %}
         </div>
       </div>
       {% endfor %}
       {% if not col.agents %}
       <div class="flex items-center justify-center h-full">
-        <span class="text-xs" style="color: var(--text-faint);">Нет агентов</span>
+        <span class="text-xs" style="color: var(--text-faint);">{{ "kanban.no_agents" | t(locale=locale) }}</span>
       </div>
       {% endif %}
     </div>
 
-    <div class="mt-2 text-center text-xs" style="color: var(--text-faint);">{{ col.agents|length }} из {{ per_night }}</div>
+    <div class="mt-2 text-center text-xs" style="color: var(--text-faint);">{{ "kanban.col_count" | t(locale=locale, cur=col.agents|length, total=per_night) }}</div>
   </div>
   {% endfor %}
 </div>
 
 <div class="flex items-center gap-5 text-xs mb-8 flex-wrap" style="color: var(--text-faint);">
-  <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background: var(--brand);"></span> T1 — ежедневно</div>
-  <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background: #a78bfa;"></span> T2 — еженедельно</div>
-  <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background: var(--text-faint);"></span> T3 — ежемесячно</div>
-  <div class="ml-auto">Порядок: сначала давно не обучавшиеся, затем по уровню</div>
+  <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background: var(--brand);"></span> {{ "kanban.legend.t1" | t(locale=locale) }}</div>
+  <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background: #a78bfa;"></span> {{ "kanban.legend.t2" | t(locale=locale) }}</div>
+  <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background: var(--text-faint);"></span> {{ "kanban.legend.t3" | t(locale=locale) }}</div>
+  <div class="ml-auto">{{ "kanban.legend.order" | t(locale=locale) }}</div>
 </div>
 
 <hr style="border-color: var(--border-subtle); margin: 1.5rem 0;">
@@ -71,40 +71,45 @@
     <button type="submit"
             class="text-xs rounded px-3 py-1.5 disabled:opacity-50"
             style="background: var(--brand); color: white; border:1px solid var(--brand-hover);"
-            {% if topics_running %}disabled title="Уже выполняется"{% endif %}>
+            {% if topics_running %}disabled title="{{ 'kanban.topics_running' | t(locale=locale) }}"{% endif %}>
       {% if topics_running %}{{ "topics.generate.running" | t(locale=locale) }}{% else %}{{ "topics.generate.button" | t(locale=locale) }}{% endif %}
     </button>
   </form>
 </div>
 <form method="post" action="/p/{{ project.slug }}/kanban/add" class="rounded-lg p-4 mb-4 grid grid-cols-2 gap-3"
       style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-  <input name="title" placeholder="Заголовок темы" required class="rounded p-2 col-span-2">
-  <input name="module" placeholder="модуль (опц.)" class="rounded p-2">
-  <input name="target_agents" placeholder="агенты, через запятую (или пусто=всем)" class="rounded p-2">
-  <textarea name="question" placeholder="Что именно изучить" class="rounded p-2 col-span-2"></textarea>
-  <textarea name="why_important" placeholder="Почему важно" class="rounded p-2 col-span-2"></textarea>
-  <button class="bg-blue-600 text-white rounded p-2 col-span-2">Добавить</button>
+  <input name="title" placeholder="{{ 'kanban.placeholder.title' | t(locale=locale) }}" required class="rounded p-2 col-span-2">
+  <input name="module" placeholder="{{ 'kanban.placeholder.module' | t(locale=locale) }}" class="rounded p-2">
+  <input name="target_agents" placeholder="{{ 'kanban.placeholder.agents' | t(locale=locale) }}" class="rounded p-2">
+  <textarea name="question" placeholder="{{ 'kanban.placeholder.question' | t(locale=locale) }}" class="rounded p-2 col-span-2"></textarea>
+  <textarea name="why_important" placeholder="{{ 'kanban.placeholder.why' | t(locale=locale) }}" class="rounded p-2 col-span-2"></textarea>
+  <button class="bg-blue-600 text-white rounded p-2 col-span-2">{{ "common.add" | t(locale=locale) }}</button>
 </form>
 
 {% if topics %}
+<style>
+  tr.target-highlight:target { background: rgb(254 240 138 / .55); transition: background-color 1.5s ease-out; }
+  tr.target-highlight:target td { animation: target-flash 2.5s ease-out 1; }
+  @keyframes target-flash { 0% { background: rgb(250 204 21 / .65); } 100% { background: transparent; } }
+</style>
 <table class="data-table">
   <thead><tr>
-    <th>Заголовок</th>
-    <th>Модуль</th>
-    <th>Агенты</th>
+    <th>{{ "kanban.col.title" | t(locale=locale) }}</th>
+    <th>{{ "kanban.col.module" | t(locale=locale) }}</th>
+    <th>{{ "kanban.col.agents" | t(locale=locale) }}</th>
     <th>active</th>
     <th></th>
   </tr></thead>
   <tbody>
   {% for t in topics %}
-  <tr>
+  <tr id="topic-{{ t.id }}" class="target-highlight">
     <td>{{ t.title }}</td>
     <td class="font-mono text-xs">{{ t.module or '' }}</td>
     <td class="font-mono text-xs">{{ t.target_agents or '*' }}</td>
     <td>{{ "✓" if t.active else "—" }}</td>
     <td>
       <form method="post" action="/p/{{ project.slug }}/kanban/{{ t.id }}/delete" class="inline"
-            data-confirm="Удалить custom topic «{{ t.title }}»?" data-confirm-variant="danger">
+            data-confirm="{{ 'kanban.confirm_delete_topic' | t(locale=locale, title=t.title) }}" data-confirm-variant="danger">
         <button class="text-xs underline" style="color: var(--status-failed);">delete</button>
       </form>
     </td>
@@ -113,6 +118,6 @@
   </tbody>
 </table>
 {% else %}
-<p class="muted">Нет custom topics. Добавь выше — они подмешаются в prompt nightly_learning.</p>
+<p class="muted">{{ "kanban.no_custom_topics" | t(locale=locale) }}</p>
 {% endif %}
 {% endblock %}

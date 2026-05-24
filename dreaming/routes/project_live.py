@@ -17,11 +17,18 @@ router = APIRouter()
 
 def _collect_runs_for_project(pm, slug: str) -> list[tuple[str, str, bool]]:
     """Return [(full_key, display_name, is_cmd)] for both self-study + cmd sessions
-    belonging to the given project."""
+    belonging to the given project.
+
+    Skips sessions whose child process has already exited — those are zombies
+    waiting for _cleanup to finish (or stuck holding a pipe); rendering them on
+    /live just leaves a "live"-pulsing card with no incoming stream.
+    """
     slug_prefix = f"{slug}:"
     cmd_prefix = f"cmd:{slug}:"
     runs: list[tuple[str, str, bool]] = []
-    for k in pm.list_running().keys():
+    for k, sess in pm.list_running().items():
+        if sess.process.returncode is not None:
+            continue
         if k.startswith(cmd_prefix):
             runs.append((k, k[len(cmd_prefix):], True))
         elif k.startswith(slug_prefix):

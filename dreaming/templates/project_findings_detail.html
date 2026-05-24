@@ -1,27 +1,31 @@
 {% extends "_project_layout.html" %}
 {% set active='findings' %}
 {% block project_content %}
-<a href="/p/{{ project.slug }}/findings" class="text-sm text-blue-600 underline">← к списку</a>
+<a href="/p/{{ project.slug }}/findings" class="text-sm text-blue-600 underline">{{ "common.back_to_list" | t(locale=locale) }}</a>
 
 {% if not item %}
-<p class="muted mt-4">Item <code>{{ item_id }}</code> не найден в <code>{{ td_dir }}</code>.</p>
+<p class="muted mt-4">{{ "findings.detail.not_found" | t(locale=locale, id=item_id, dir=td_dir) }}</p>
 {% else %}
 <h1 class="text-2xl font-bold mt-3">{{ item.title or item_id }}</h1>
-<div class="flex gap-3 text-xs mt-2">
-  <span class="font-mono">id: {{ item.id or item_id }}</span>
-  <span>status: <span class="font-mono">{{ item.status or '—' }}</span></span>
-  <span>priority: {{ item.priority or '—' }}</span>
-  <span>module: {{ item.module or '—' }}</span>
+<div class="flex flex-wrap gap-2 items-center mt-2 text-xs">
+  <span class="font-mono px-2 py-1 rounded" style="background: var(--bg-elevated); color: var(--text-muted);">id: {{ item.id or item_id }}</span>
+  <span class="px-2 py-1 rounded" style="background: var(--bg-elevated); color: var(--text-muted);">status: <strong>{{ item.status or '—' }}</strong></span>
+  <span class="px-2 py-1 rounded" style="background: var(--bg-elevated); color: var(--text-muted);">priority: <strong>{{ item.priority or '—' }}</strong></span>
+  {% if item.module %}<span class="px-2 py-1 rounded" style="background: var(--bg-elevated); color: var(--text-muted);">module: <strong>{{ item.module }}</strong></span>{% endif %}
+  {% if item.complexity %}<span class="px-2 py-1 rounded" style="background: rgba(99,102,241,.08); color: #4338ca;">complexity: {{ item.complexity }}</span>{% endif %}
+  {% if item.autonomy %}<span class="px-2 py-1 rounded" style="background: rgba(52,211,153,.10); color: #047857;">autonomy: {{ item.autonomy }}</span>{% endif %}
+  {% if item.confidence %}<span class="px-2 py-1 rounded" style="background: rgba(245,158,11,.10); color: #92400e;">confidence: {{ item.confidence }}</span>{% endif %}
+  {% if item.created %}<span class="font-mono px-2 py-1 rounded" style="background: var(--bg-elevated); color: var(--text-faint);">{{ item.created[:10] }}</span>{% endif %}
 </div>
 <div class="mt-4 flex flex-wrap gap-2 items-center">
   <form method="post" action="/p/{{ project.slug }}/findings/{{ item_id }}/orchestrate" class="inline"
-        data-confirm="Запустить Orchestrator с этим finding как целью?">
-    <button class="text-sm px-3 py-1 rounded bg-purple-600 text-white font-semibold">Отправить в Orchestrator</button>
+        data-confirm="{{ 'findings.detail.confirm_orch' | t(locale=locale) }}">
+    <button class="text-sm px-3 py-1 rounded bg-purple-600 text-white font-semibold">{{ "findings.detail.btn_orch" | t(locale=locale) }}</button>
   </form>
   {% if not item.github_issue %}
   <form method="post" action="/p/{{ project.slug }}/findings/{{ item_id }}/github" class="inline"
-        data-confirm="Создать GitHub issue из этого finding?">
-    <button class="text-sm px-3 py-1 border border-slate-500 text-slate-700 rounded">→ Создать GitHub issue</button>
+        data-confirm="{{ 'findings.detail.confirm_gh' | t(locale=locale) }}">
+    <button class="text-sm px-3 py-1 border border-slate-500 text-slate-700 rounded">{{ "findings.detail.btn_gh" | t(locale=locale) }}</button>
   </form>
   {% else %}
   <a target="_blank" href="{{ item.github_issue }}"
@@ -33,15 +37,22 @@
   </form>
   {% endif %}
   <form method="post" action="/p/{{ project.slug }}/findings/{{ item_id }}/delete" class="inline"
-        data-confirm="Удалить {{ item_id }}?" data-confirm-variant="danger">
+        data-confirm="{{ 'findings.detail.confirm_delete' | t(locale=locale, id=item_id) }}" data-confirm-variant="danger">
     <button class="text-sm px-3 py-1 border rounded text-red-600">delete file</button>
   </form>
 </div>
 {% if item.orchestration_run %}
 <p class="mt-2 text-xs muted">
-  Уже запускался Orchestrator:
-  <a class="text-blue-600 underline" href="/p/{{ project.slug }}/orchestration/{{ item.orchestration_run }}">run {{ item.orchestration_run[:8] }}…</a>
+  {{ "findings.detail.already_ran" | t(locale=locale) }}
+  <a class="text-blue-600 underline" href="/p/{{ project.slug }}/orchestration?run_id={{ item.orchestration_run }}">run {{ item.orchestration_run[:8] }}…</a>
 </p>
+{% endif %}
+{% if item %}
+<details class="mt-4">
+  <summary class="text-xs cursor-pointer" style="color: var(--text-muted);">{{ "findings.detail.show_frontmatter" | t(locale=locale) }}</summary>
+  <pre class="text-xs font-mono mt-2 p-3 rounded overflow-auto" style="background: var(--bg-elevated); color: var(--text-body); max-height: 16rem;">{% for field in ['id', 'title', 'status', 'priority', 'module', 'created', 'created_by', 'complexity', 'autonomy', 'confidence', 'jira', 'release', 'github_issue', 'orchestration_run'] %}{% set val = item|attr(field) %}{% if val %}{{ field }}: {{ val }}
+{% endif %}{% endfor %}</pre>
+</details>
 {% endif %}
 {% if body_md %}
 {% include "_markdown_partial.html" %}
@@ -54,7 +65,7 @@
   });
 </script>
 {% else %}
-<p class="mt-6 muted">(пустое тело)</p>
+<p class="mt-6 muted">{{ "common.empty_body" | t(locale=locale) }}</p>
 {% endif %}
 {% endif %}
 {% endblock %}

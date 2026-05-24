@@ -1,26 +1,127 @@
 {% extends "_project_layout.html" %}
-{% from "_autoconfig_banner.html" import autoconfig_banner %}
+{% from "_autoconfig_banner.html" import autoconfig_banner with context %}
 {% set active='evolutions' %}
 {% block project_content %}
+{% if rubric_stats and rubric_stats.total %}
+<div class="rounded-lg p-4 mb-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+  <div class="flex items-center justify-between mb-3">
+    <div>
+      <div class="text-xs uppercase tracking-wide" style="color: var(--text-faint);">{{ "evolutions.rubric.title" | t(locale=locale) }}</div>
+      <div class="text-xs mt-0.5" style="color: var(--text-muted);">{{ "evolutions.rubric.subtitle" | t(locale=locale) }}</div>
+    </div>
+    <div class="text-xs" style="color: var(--text-faint);">
+      {{ "evolutions.rubric.coverage" | t(locale=locale, with_rubric=rubric_stats.with_rubric, total=rubric_stats.total) }}
+    </div>
+  </div>
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+    <div class="rounded p-2 text-center" style="background: rgba(52,211,153,.10); border:1px solid rgba(52,211,153,.30);">
+      <div class="text-lg font-bold" style="color: #047857;">{{ rubric_stats.auto }}</div>
+      <div class="text-xs uppercase tracking-wide" style="color: var(--text-muted);">{{ "evolutions.rubric.auto" | t(locale=locale) }}</div>
+    </div>
+    <div class="rounded p-2 text-center" style="background: rgba(245,158,11,.10); border:1px solid rgba(245,158,11,.30);">
+      <div class="text-lg font-bold" style="color: #92400e;">{{ rubric_stats.review }}</div>
+      <div class="text-xs uppercase tracking-wide" style="color: var(--text-muted);">{{ "evolutions.rubric.review" | t(locale=locale) }}</div>
+    </div>
+    <div class="rounded p-2 text-center" style="background: rgba(248,113,113,.10); border:1px solid rgba(248,113,113,.30);">
+      <div class="text-lg font-bold" style="color: #b91c1c;">{{ rubric_stats.reject }}</div>
+      <div class="text-xs uppercase tracking-wide" style="color: var(--text-muted);">{{ "evolutions.rubric.reject" | t(locale=locale) }}</div>
+    </div>
+    <div class="rounded p-2 text-center" style="background: rgba(156,163,175,.10); border:1px solid rgba(156,163,175,.30);">
+      <div class="text-lg font-bold" style="color: #475569;">{{ rubric_stats.incomplete }}</div>
+      <div class="text-xs uppercase tracking-wide" style="color: var(--text-muted);">{{ "evolutions.rubric.incomplete" | t(locale=locale) }}</div>
+    </div>
+  </div>
+  {% if rubric_stats.with_rubric == 0 %}
+  <div class="text-xs mt-3" style="color: var(--text-faint);">{{ "evolutions.rubric.no_data_hint" | t(locale=locale) }}</div>
+  {% endif %}
+</div>
+{% endif %}
 {% if not exists %}
 {{ autoconfig_banner(project, "evolutions_dir", evolutions_dir, "Evolutions (_context)") }}
 {% elif error %}
-<p class="text-sm text-red-700">Ошибка: <code>{{ error }}</code></p>
+<p class="text-sm text-red-700">{{ "common.error" | t(locale=locale) }}: <code>{{ error }}</code></p>
 {% elif items %}
-<p class="text-xs muted mb-3">{{ items|length }} evolutions in <code>{{ evolutions_dir }}</code></p>
-<table class="w-full bg-white rounded shadow text-sm">
-  <thead class="text-left border-b"><tr>
-    <th class="p-2">agent</th>
-    <th class="p-2">name</th>
-    <th class="p-2">status</th>
-    <th class="p-2">conflict</th>
-    <th class="p-2">title</th>
-    <th class="p-2">refs</th>
-    <th class="p-2"></th>
-  </tr></thead>
+<p class="text-xs muted mb-3">
+  <span id="evo-count">{{ "evolutions.count_in_dir" | t(locale=locale, count=items|length, dir=evolutions_dir) }}</span>
+  <span id="evo-shown" class="ml-2 hidden"></span>
+</p>
+<form id="evo-bulk-form" method="post" action="/p/{{ project.slug }}/bulk/orchestrate" class="mb-2">
+  <input type="hidden" name="kind" value="evolution">
+  <button type="submit" data-bulk-run disabled
+          data-bulk-confirm-tmpl="{{ 'bulk.confirm' | t(locale=locale, n='__N__') }}"
+          data-bulk-label-none="{{ 'bulk.run_none' | t(locale=locale) }}"
+          data-bulk-label-tmpl="{{ 'bulk.run_selected' | t(locale=locale, n='__N__') }}"
+          class="text-xs px-3 py-1.5 rounded border border-purple-500 text-purple-700 disabled:opacity-50 disabled:cursor-not-allowed">
+    {{ "bulk.run_none" | t(locale=locale) }}
+  </button>
+</form>
+<table id="evo-table" class="w-full bg-white rounded shadow text-sm">
+  <thead class="text-left border-b">
+    <tr>
+      <th class="p-2 w-8"><input type="checkbox" id="evo-select-all" aria-label="select all visible"></th>
+      <th class="p-2">{{ "evolutions.col.agent" | t(locale=locale) }}</th>
+      <th class="p-2">{{ "evolutions.col.name" | t(locale=locale) }}</th>
+      <th class="p-2">{{ "evolutions.col.status" | t(locale=locale) }}</th>
+      <th class="p-2">{{ "evolutions.col.conflict" | t(locale=locale) }}</th>
+      <th class="p-2">{{ "evolutions.col.title" | t(locale=locale) }}</th>
+      <th class="p-2">{{ "evolutions.col.refs" | t(locale=locale) }}</th>
+      <th class="p-2"></th>
+    </tr>
+    <tr class="border-b bg-slate-50 text-xs" id="evo-filters">
+      <th class="p-1"></th>
+      <th class="p-1"><input type="text" data-evo-filter="agent"
+            placeholder="{{ 'evolutions.filter.search' | t(locale=locale) }}"
+            class="w-full border rounded p-1 text-xs font-mono"></th>
+      <th class="p-1"><input type="text" data-evo-filter="name"
+            placeholder="{{ 'evolutions.filter.search' | t(locale=locale) }}"
+            class="w-full border rounded p-1 text-xs font-mono"></th>
+      <th class="p-1">
+        <select data-evo-filter="status" class="w-full border rounded p-1 text-xs font-mono">
+          <option value="">{{ "evolutions.filter.opt.all" | t(locale=locale) }}</option>
+          {% for opt in ['proposed', 'active', 'applied', 'archived', 'rejected'] %}
+          <option value="{{ opt }}">{{ ('evolutions.status.' ~ opt) | t(locale=locale) }}</option>
+          {% endfor %}
+        </select>
+      </th>
+      <th class="p-1">
+        <select data-evo-filter="conflict" class="w-full border rounded p-1 text-xs font-mono">
+          <option value="">{{ "evolutions.filter.opt.all" | t(locale=locale) }}</option>
+          <option value="1">{{ "evolutions.filter.opt.conflict_only" | t(locale=locale) }}</option>
+          <option value="0">{{ "evolutions.filter.opt.no_conflict" | t(locale=locale) }}</option>
+        </select>
+      </th>
+      <th class="p-1"><input type="text" data-evo-filter="title"
+            placeholder="{{ 'evolutions.filter.search' | t(locale=locale) }}"
+            class="w-full border rounded p-1 text-xs font-mono"></th>
+      <th class="p-1">
+        <select data-evo-filter="refs" class="w-full border rounded p-1 text-xs font-mono">
+          <option value="">{{ "evolutions.filter.opt.all" | t(locale=locale) }}</option>
+          <option value="gh">{{ "evolutions.filter.opt.has_gh" | t(locale=locale) }}</option>
+          <option value="run">{{ "evolutions.filter.opt.has_run" | t(locale=locale) }}</option>
+          <option value="none">{{ "evolutions.filter.opt.no_refs" | t(locale=locale) }}</option>
+        </select>
+      </th>
+      <th class="p-1 text-right">
+        <button type="button" id="evo-filter-reset"
+                class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+          {{ "evolutions.filter.reset" | t(locale=locale) }}
+        </button>
+      </th>
+    </tr>
+  </thead>
   <tbody>
   {% for it in items %}
-  <tr class="border-b align-top">
+  <tr class="border-b align-top"
+      data-evo-row
+      data-agent="{{ (it.agent_name or '')|lower }}"
+      data-name="{{ (it.name or '')|lower }}"
+      data-status="{{ it.status or 'proposed' }}"
+      data-conflict="{{ '1' if it.has_conflict else '0' }}"
+      data-title="{{ (it.title or '')|lower }}"
+      data-has-gh="{{ '1' if it.github_issue else '0' }}"
+      data-has-run="{{ '1' if it.orchestration_run else '0' }}">
+    <td class="p-2"><input type="checkbox" form="evo-bulk-form" name="selected"
+        value="{{ it.relative_path }}" data-bulk-cb aria-label="select {{ it.name }}"></td>
     <td class="p-2 font-mono text-xs">{{ it.agent_name }}</td>
     <td class="p-2 font-mono text-xs">
       <a class="text-blue-600 underline cursor-pointer"
@@ -35,7 +136,7 @@
         <select name="status" onchange="this.form.submit()" class="border rounded p-1 text-xs font-mono">
           {% set cur = it.status or 'proposed' %}
           {% for opt in ['proposed', 'active', 'applied', 'archived', 'rejected'] %}
-          <option value="{{ opt }}" {% if cur==opt %}selected{% endif %}>{{ opt }}</option>
+          <option value="{{ opt }}" {% if cur==opt %}selected{% endif %}>{{ ('evolutions.status.' ~ opt) | t(locale=locale) }}</option>
           {% endfor %}
         </select>
       </form>
@@ -48,19 +149,23 @@
     </td>
     <td class="p-2 text-xs whitespace-nowrap">
       <form method="post" action="/p/{{ project.slug }}/evolutions/apply" class="inline"
-            data-confirm="Запустить Orchestrator: применить эту правку к `.claude/agents/{{ it.agent_name }}.md`?">
+            data-confirm="{% if it.has_conflict %}{{ 'evolutions.confirm_apply_force' | t(locale=locale, name=it.agent_name) }}{% else %}{{ 'evolutions.confirm_apply' | t(locale=locale, name=it.agent_name) }}{% endif %}"
+            {% if it.has_conflict %}data-confirm-variant="danger" data-confirm-ok-label="{{ 'evolutions.btn.apply_force' | t(locale=locale) }}"{% endif %}>
         <input type="hidden" name="path" value="{{ it.relative_path }}">
-        <button class="text-xs px-2 py-1 border border-purple-500 text-purple-700 rounded">Apply</button>
+        {% if it.has_conflict %}<input type="hidden" name="force" value="1">{% endif %}
+        <button class="text-xs px-2 py-1 border rounded {% if it.has_conflict %}border-red-500 text-red-700 bg-red-50{% else %}border-purple-500 text-purple-700{% endif %}">
+          {% if it.has_conflict %}{{ "evolutions.btn.apply_force" | t(locale=locale) }}{% else %}{{ "evolutions.btn.apply" | t(locale=locale) }}{% endif %}
+        </button>
       </form>
       {% if not it.github_issue %}
       <form method="post" action="/p/{{ project.slug }}/evolutions/github" class="inline ml-1"
-            data-confirm="Создать GitHub issue из этого evolution?">
+            data-confirm="{{ 'evolutions.confirm_gh' | t(locale=locale) }}">
         <input type="hidden" name="path" value="{{ it.relative_path }}">
         <button class="text-xs px-2 py-1 border border-slate-500 text-slate-700 rounded">→ GH</button>
       </form>
       {% endif %}
       <form method="post" action="/p/{{ project.slug }}/evolutions/delete" class="inline ml-1"
-            data-confirm="Удалить файл {{ it.relative_path }}?" data-confirm-variant="danger">
+            data-confirm="{{ 'evolutions.confirm_delete' | t(locale=locale, path=it.relative_path) }}" data-confirm-variant="danger">
         <input type="hidden" name="path" value="{{ it.relative_path }}">
         <button class="text-xs px-2 py-1 border rounded text-red-600">del</button>
       </form>
@@ -72,6 +177,122 @@
   {% endfor %}
   </tbody>
 </table>
+<p id="evo-filter-empty" class="muted text-sm mt-3 hidden">{{ "evolutions.filter.empty" | t(locale=locale) }}</p>
+
+<script>
+(() => {
+  const STORAGE_KEY = 'evolutions.filters.{{ project.slug }}';
+  const FIELDS = ['agent', 'name', 'status', 'conflict', 'title', 'refs'];
+  const table = document.getElementById('evo-table');
+  const rows = Array.from(table.querySelectorAll('[data-evo-row]'));
+  const inputs = {};
+  FIELDS.forEach(f => {
+    inputs[f] = table.querySelector(`[data-evo-filter="${f}"]`);
+  });
+  const shownEl = document.getElementById('evo-shown');
+  const emptyEl = document.getElementById('evo-filter-empty');
+  const resetBtn = document.getElementById('evo-filter-reset');
+  const total = rows.length;
+  const SHOWN_TMPL = {{ ("evolutions.filter.shown_count" | t(locale=locale)) | tojson }};
+
+  const loadState = () => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {}; }
+    catch { return {}; }
+  };
+  const saveState = () => {
+    const state = {};
+    FIELDS.forEach(f => { if (inputs[f] && inputs[f].value) state[f] = inputs[f].value; });
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+    catch { /* quota / privacy mode — silently ignore */ }
+  };
+
+  const matches = (row) => {
+    const v = (k) => (inputs[k] ? inputs[k].value : '').trim().toLowerCase();
+    const agent = v('agent'), name = v('name'), title = v('title');
+    if (agent && !row.dataset.agent.includes(agent)) return false;
+    if (name && !row.dataset.name.includes(name)) return false;
+    if (title && !row.dataset.title.includes(title)) return false;
+    const status = v('status');
+    if (status && row.dataset.status !== status) return false;
+    const conflict = v('conflict');
+    if (conflict && row.dataset.conflict !== conflict) return false;
+    const refs = v('refs');
+    if (refs === 'gh' && row.dataset.hasGh !== '1') return false;
+    if (refs === 'run' && row.dataset.hasRun !== '1') return false;
+    if (refs === 'none' && (row.dataset.hasGh === '1' || row.dataset.hasRun === '1')) return false;
+    return true;
+  };
+
+  const apply = () => {
+    let shown = 0;
+    rows.forEach(r => {
+      const ok = matches(r);
+      r.classList.toggle('hidden', !ok);
+      if (ok) shown++;
+    });
+    const hasFilter = FIELDS.some(f => inputs[f] && inputs[f].value);
+    if (hasFilter) {
+      shownEl.textContent = SHOWN_TMPL.replace('{shown}', shown).replace('{total}', total);
+      shownEl.classList.remove('hidden');
+    } else {
+      shownEl.classList.add('hidden');
+    }
+    emptyEl.classList.toggle('hidden', shown !== 0 || !hasFilter);
+    document.dispatchEvent(new CustomEvent('bulk:rows-changed', {detail: {table: 'evo'}}));
+  };
+
+  // Restore state, then wire change listeners
+  const saved = loadState();
+  FIELDS.forEach(f => {
+    if (inputs[f] && saved[f] != null) inputs[f].value = saved[f];
+  });
+  FIELDS.forEach(f => {
+    if (!inputs[f]) return;
+    const evt = inputs[f].tagName === 'SELECT' ? 'change' : 'input';
+    inputs[f].addEventListener(evt, () => { saveState(); apply(); });
+  });
+  resetBtn.addEventListener('click', () => {
+    FIELDS.forEach(f => { if (inputs[f]) inputs[f].value = ''; });
+    saveState();
+    apply();
+  });
+  apply();
+})();
+
+// Bulk-select bar — checkboxes + "Run N selected" button. Sync with filter.
+(() => {
+  const form = document.getElementById('evo-bulk-form');
+  if (!form) return;
+  const btn = form.querySelector('[data-bulk-run]');
+  const tmplActive = btn.dataset.bulkLabelTmpl;
+  const tmplNone = btn.dataset.bulkLabelNone;
+  const tmplConfirm = btn.dataset.bulkConfirmTmpl;
+  const checkboxes = Array.from(document.querySelectorAll('input[data-bulk-cb]'));
+  const selectAll = document.getElementById('evo-select-all');
+
+  const visibleCbs = () => checkboxes.filter(c => !c.closest('tr').classList.contains('hidden'));
+  const update = () => {
+    const checked = checkboxes.filter(c => c.checked);
+    const n = checked.length;
+    btn.disabled = (n === 0);
+    btn.textContent = n === 0 ? tmplNone : tmplActive.replace('__N__', n);
+    if (n > 0) form.setAttribute('data-confirm', tmplConfirm.replace('__N__', n));
+    else form.removeAttribute('data-confirm');
+    const vis = visibleCbs();
+    const allChecked = vis.length > 0 && vis.every(c => c.checked);
+    const someChecked = vis.some(c => c.checked);
+    selectAll.checked = allChecked;
+    selectAll.indeterminate = someChecked && !allChecked;
+  };
+  checkboxes.forEach(c => c.addEventListener('change', update));
+  selectAll.addEventListener('change', () => {
+    visibleCbs().forEach(c => { c.checked = selectAll.checked; });
+    update();
+  });
+  document.addEventListener('bulk:rows-changed', update);
+  update();
+})();
+</script>
 
 {% include "_markdown_partial.html" %}
 
@@ -100,7 +321,7 @@
     const rawUrl = `/p/${slug}/evolutions/raw?path=${encodeURIComponent(path)}`;
     title.textContent = name + " — " + path;
     rawLink.href = rawUrl;
-    body.innerHTML = '<p class="muted" style="padding: 1.5rem;">Загрузка…</p>';
+    body.innerHTML = '<p class="muted" style="padding: 1.5rem;">{{ "evolutions.modal_loading" | t(locale=locale) }}</p>';
     modal.showModal();
     try {
       const r = await fetch(rawUrl);
@@ -108,7 +329,7 @@
       const text = await r.text();
       window.dcRenderMarkdown(body, text);
     } catch (e) {
-      body.innerHTML = '<p class="text-red-700 font-mono text-xs" style="padding: 1.5rem;">Ошибка: ' + (e.message || e) + '</p>';
+      body.innerHTML = '<p class="text-red-700 font-mono text-xs" style="padding: 1.5rem;">{{ "common.error" | t(locale=locale) }}: ' + (e.message || e) + '</p>';
     }
   };
   window.closeEvolution = function() { modal.close(); };
@@ -118,6 +339,6 @@
 })();
 </script>
 {% else %}
-<p class="muted">Нет evolution-файлов в <code>{{ evolutions_dir }}</code>.</p>
+<p class="muted">{{ "evolutions.empty" | t(locale=locale, dir=evolutions_dir) }}</p>
 {% endif %}
 {% endblock %}

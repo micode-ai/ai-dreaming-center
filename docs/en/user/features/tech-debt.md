@@ -128,6 +128,25 @@ The directory must exist. DC does not create it — make it manually or let the 
 
 After configuring and the first weekly scan — items appear on `/findings`.
 
+## Column filters
+
+A filter row sits under the table headers, one per column:
+
+| Column | Filter type |
+|---|---|
+| id, title, module, complexity, autonomy, confidence | substring search |
+| status | dropdown (all / open / in-progress / blocked / closed / dropped) |
+| priority | dropdown (all / critical / high / medium / low) |
+| created | date substring (`YYYY-MM-DD` — type `2026-05` to filter by month) |
+| refs | dropdown (all / has GH / has run / has Jira / no refs) |
+| (actions) | "reset" button |
+
+State is stored in `localStorage` under `findings.filters.{slug}`. Works alongside header-click sorting and the server-side `?status=...` / `?module=...` query params.
+
+## Bulk run
+
+Each row has a checkbox on the left. The header checkbox toggles all **visible** rows. The **Run (N)** button under the row counter pushes the selection into the Orchestrator queue, which runs them one at a time (Orchestrator takes one run per project at a time). See [orchestration.md → Bulk queue](orchestration.md#bulk-queue--sequential-dispatch-of-many-items).
+
 ---
 
 See also:

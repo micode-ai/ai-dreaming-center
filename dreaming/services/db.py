@@ -692,18 +692,40 @@ class SqliteDB:
         if row is None:
             return False
         # Cascade — child tables don't have FK CASCADE on run_id (only on project_id),
-        # so we delete each child set manually.
+        # so we delete each child set manually. Order matters: child rows with FK
+        # references to stages/nodes must go before stages/nodes themselves, which
+        # in turn go before runs.
+        # Messages reference nodes; gate_verdicts and artifacts reference both
+        # stages and nodes. All four ultimately tie back to run_id via the row.
         await self._conn.execute(
             "DELETE FROM orchestrator_messages WHERE run_id=?", (run_id,),
         )
         await self._conn.execute(
-            "DELETE FROM orchestrator_nodes WHERE run_id=?", (run_id,),
+            "DELETE FROM orchestrator_gate_verdicts WHERE run_id=?", (run_id,),
+        )
+        await self._conn.execute(
+            "DELETE FROM orchestrator_artifacts WHERE run_id=?", (run_id,),
         )
         await self._conn.execute(
             "DELETE FROM orchestrator_events WHERE run_id=?", (run_id,),
         )
         await self._conn.execute(
             "DELETE FROM orchestrator_questions WHERE run_id=?", (run_id,),
+        )
+        # orchestrator_tts_messages also has FK on orchestrator_runs(id).
+        # Wrap in try/except — table is created by a migration that may not have
+        # run on very old DBs.
+        try:
+            await self._conn.execute(
+                "DELETE FROM orchestrator_tts_messages WHERE run_id=?", (run_id,),
+            )
+        except Exception as e:
+            log.warning("delete orchestrator_tts_messages skipped: %s", e)
+        await self._conn.execute(
+            "DELETE FROM orchestrator_nodes WHERE run_id=?", (run_id,),
+        )
+        await self._conn.execute(
+            "DELETE FROM orchestrator_stages WHERE run_id=?", (run_id,),
         )
         await self._conn.execute(
             "DELETE FROM orchestrator_runs WHERE id=? AND project_id=?",

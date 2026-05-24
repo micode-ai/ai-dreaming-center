@@ -37,6 +37,22 @@ async def dashboard(request: Request, slug: str):
 
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
     projects = await request.app.state.projects.list_all(only_enabled=True)
+
+    # Wave E MVP: bento-tile data
+    from dreaming.services.dashboard_tiles import (
+        build_orchestration_tile, build_evolutions_tile, build_loops_tile,
+    )
+    tile_orchestration = await build_orchestration_tile(
+        request.app.state.db,
+        request.app.state.orchestration_hub,
+        project,
+        app_state=request.app.state,
+    )
+    tile_evolutions = await build_evolutions_tile(
+        request.app.state.db, request.app.state.projects, project,
+    )
+    tile_loops = await build_loops_tile(request.app.state.db, project)
+
     return request.app.state.templates.TemplateResponse(
         request,
         "project_dashboard.html",
@@ -47,6 +63,9 @@ async def dashboard(request: Request, slug: str):
          "kit_status": kit_status,
          "missing_dirs": missing_dirs,
          "bootstrap_needed": bootstrap_needed,
+         "tile_orchestration": tile_orchestration,
+         "tile_evolutions": tile_evolutions,
+         "tile_loops": tile_loops,
          "projects": projects, "locale": locale},
     )
 
@@ -63,6 +82,16 @@ async def bootstrap_all(request: Request, slug: str):
     await autoconfig.apply_all_defaults(
         request.app.state.projects, project, skip_existing=True,
     )
+    # Seed the 16 built-in loop templates into the project's loops_templates_dir.
+    # Idempotent — skips entries whose slug already exists on disk.
+    try:
+        await autoconfig.seed_loop_templates_for_project(
+            request.app.state.projects, project,
+        )
+    except Exception as e:
+        # Non-fatal: bootstrap should not abort if seeding fails. Log via logger if available.
+        import logging
+        logging.getLogger(__name__).warning("loop_templates seed failed: %s", e)
     raw = request.headers.get("referer") or ""
     path = urlparse(raw).path if raw else ""
     if not path.startswith(f"/p/{project.slug}"):

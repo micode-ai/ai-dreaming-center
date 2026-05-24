@@ -1,7 +1,8 @@
-"""GET /p/{slug}/wiki — wiki bootstrap status (Wave 2 lean — Wave 4 adds full health).
+"""GET /p/{slug}/wiki — wiki bootstrap status + scan triggers.
 
 POST /p/{slug}/wiki/bootstrap — run /wiki-bootstrap via Claude CLI for the project.
-GET /p/{slug}/wiki/raw?name=X  — read a single wiki page as plain text.
+POST /p/{slug}/wiki/lint      — run /wiki-lint to find stale pages and broken refs.
+GET  /p/{slug}/wiki/raw?name=X  — read a single wiki page as plain text.
 """
 from __future__ import annotations
 from pathlib import Path
@@ -53,11 +54,15 @@ async def wiki_page(request: Request, slug: str):
         status_info = get_wiki_status(wiki_dir)
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
     projects = await request.app.state.projects.list_all(only_enabled=True)
+    pm = request.app.state.process_manager
+    bootstrap_running = f"cmd:{project.slug}:wiki-bootstrap" in pm.list_running()
+    lint_running = f"cmd:{project.slug}:wiki-lint" in pm.list_running()
     return request.app.state.templates.TemplateResponse(
         request, "project_wiki.html",
         {"project": project, "wiki_dir": wiki_dir, "wiki_dir_set": bool(wiki_dir),
          "status": status_info,
          "autoconfig_default": autoconfig.default_abs(project, "wiki_dir"),
+         "bootstrap_running": bootstrap_running, "lint_running": lint_running,
          "projects": projects, "locale": locale},
     )
 
@@ -80,14 +85,23 @@ async def wiki_raw(request: Request, slug: str, name: str):
 
 @router.post("/p/{slug}/wiki/bootstrap")
 async def wiki_bootstrap_run(request: Request, slug: str):
+    return await _spawn_wiki_command(request, "wiki-bootstrap", "/wiki-bootstrap")
+
+
+@router.post("/p/{slug}/wiki/lint")
+async def wiki_lint_run(request: Request, slug: str):
+    return await _spawn_wiki_command(request, "wiki-lint", "/wiki-lint")
+
+
+async def _spawn_wiki_command(request: Request, command_name: str, prompt: str):
     project = request.state.project
     pm = request.app.state.process_manager
     settings = request.app.state.settings
     try:
         await pm.start_command(
             project,
-            command_name="wiki-bootstrap",
-            prompt="/wiki-bootstrap",
+            command_name=command_name,
+            prompt=prompt,
             claude_path=getattr(settings, "claude_path", "claude"),
             working_dir=project.working_dir,
             model=getattr(settings, "model", "sonnet"),

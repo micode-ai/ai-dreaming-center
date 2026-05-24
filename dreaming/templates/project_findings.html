@@ -1,5 +1,6 @@
 {% extends "_project_layout.html" %}
-{% from "_autoconfig_banner.html" import autoconfig_banner %}
+{% from "_autoconfig_banner.html" import autoconfig_banner with context %}
+{% from "_scan_action_bar.html" import scan_action_bar %}
 {% set active='findings' %}
 {% block project_content %}
 {% if not td_dir_set %}
@@ -8,36 +9,135 @@
 {{ autoconfig_banner(project, "tech_debt_dir", td_dir, "Tech-debt") }}
 {% elif error %}
 <div class="bg-red-50 border border-red-200 rounded p-4 mb-4">
-  <p class="text-sm text-red-700">Ошибка парсинга: <code>{{ error }}</code></p>
+  <p class="text-sm text-red-700">{{ "common.parse_error" | t(locale=locale) }}: <code>{{ error }}</code></p>
 </div>
 {% else %}
+{{ scan_action_bar(
+     "/p/" ~ project.slug ~ "/tech-debt/scan",
+     scan_running,
+     "findings.scan.button" | t(locale=locale),
+     "findings.scan.running" | t(locale=locale),
+) }}
 {% if selected_status or selected_module %}
 <div class="mb-3 flex items-center gap-2 text-sm">
-  <span class="muted">Фильтр:</span>
+  <span class="muted">{{ "common.filter" | t(locale=locale) }}:</span>
   {% if selected_status %}
   <span class="bg-slate-200 rounded px-2 py-1 font-mono text-xs">status: {{ selected_status }}</span>
   {% endif %}
   {% if selected_module %}
   <span class="bg-slate-200 rounded px-2 py-1 font-mono text-xs">module: {{ selected_module }}</span>
   {% endif %}
-  <a class="text-xs text-blue-600 underline ml-1" href="/p/{{ project.slug }}/findings">очистить</a>
+  <a class="text-xs text-blue-600 underline ml-1" href="/p/{{ project.slug }}/findings">{{ "common.clear" | t(locale=locale) }}</a>
 </div>
 {% endif %}
 {% if items %}
-<p class="text-xs muted mb-3">{{ items|length }} items in <code>{{ td_dir }}</code></p>
-<table class="w-full bg-white rounded shadow text-sm">
-  <thead class="text-left border-b"><tr>
-    <th class="p-2">id</th>
-    <th class="p-2">title</th>
-    <th class="p-2">status</th>
-    <th class="p-2">priority</th>
-    <th class="p-2">module</th>
-    <th class="p-2">refs</th>
-    <th class="p-2"></th>
-  </tr></thead>
+<p class="text-xs muted mb-3">
+  <span id="td-count">{{ items|length }} items in <code>{{ td_dir }}</code></span>
+  <span id="td-shown" class="ml-2 hidden"></span>
+</p>
+<form id="td-bulk-form" method="post" action="/p/{{ project.slug }}/bulk/orchestrate" class="mb-2">
+  <input type="hidden" name="kind" value="finding">
+  <button type="submit" data-bulk-run disabled
+          data-bulk-confirm-tmpl="{{ 'bulk.confirm' | t(locale=locale, n='__N__') }}"
+          data-bulk-label-none="{{ 'bulk.run_none' | t(locale=locale) }}"
+          data-bulk-label-tmpl="{{ 'bulk.run_selected' | t(locale=locale, n='__N__') }}"
+          class="text-xs px-3 py-1.5 rounded border border-purple-500 text-purple-700 disabled:opacity-50 disabled:cursor-not-allowed">
+    {{ "bulk.run_none" | t(locale=locale) }}
+  </button>
+</form>
+<table id="td-table" class="w-full bg-white rounded shadow text-sm">
+  <thead class="text-left border-b">
+    <tr>
+      <th class="p-2 w-8"><input type="checkbox" id="td-select-all" aria-label="select all visible"></th>
+      <th class="p-2 td-th-sort" data-col="id" data-type="text">id <span class="sort-ind">↕</span></th>
+      <th class="p-2 td-th-sort" data-col="title" data-type="text">{{ "findings.col.title" | t(locale=locale) }} <span class="sort-ind">↕</span></th>
+      <th class="p-2 td-th-sort" data-col="status" data-type="text">status <span class="sort-ind">↕</span></th>
+      <th class="p-2 td-th-sort" data-col="priority" data-type="prio">priority <span class="sort-ind">↕</span></th>
+      <th class="p-2 td-th-sort" data-col="module" data-type="text">{{ "findings.col.module" | t(locale=locale) }} <span class="sort-ind">↕</span></th>
+      <th class="p-2 td-th-sort" data-col="complexity" data-type="text">{{ "findings.col.complexity" | t(locale=locale) }} <span class="sort-ind">↕</span></th>
+      <th class="p-2 td-th-sort" data-col="autonomy" data-type="text">{{ "findings.col.autonomy" | t(locale=locale) }} <span class="sort-ind">↕</span></th>
+      <th class="p-2 td-th-sort" data-col="confidence" data-type="text">{{ "findings.col.confidence" | t(locale=locale) }} <span class="sort-ind">↕</span></th>
+      <th class="p-2 td-th-sort" data-col="created" data-type="text">{{ "findings.col.created" | t(locale=locale) }} <span class="sort-ind">↕</span></th>
+      <th class="p-2">refs</th>
+      <th class="p-2"></th>
+    </tr>
+    <tr class="border-b bg-slate-50 text-xs" id="td-filters">
+      <th class="p-1"></th>
+      <th class="p-1"><input type="text" data-td-filter="id"
+            placeholder="{{ 'findings.filter.search' | t(locale=locale) }}"
+            class="w-full border rounded p-1 text-xs font-mono"></th>
+      <th class="p-1"><input type="text" data-td-filter="title"
+            placeholder="{{ 'findings.filter.search' | t(locale=locale) }}"
+            class="w-full border rounded p-1 text-xs font-mono"></th>
+      <th class="p-1">
+        <select data-td-filter="status" class="w-full border rounded p-1 text-xs font-mono">
+          <option value="">{{ "findings.filter.opt.all" | t(locale=locale) }}</option>
+          {% for opt in ['open', 'in-progress', 'blocked', 'closed', 'dropped'] %}
+          <option value="{{ opt }}">{{ opt }}</option>
+          {% endfor %}
+        </select>
+      </th>
+      <th class="p-1">
+        <select data-td-filter="priority" class="w-full border rounded p-1 text-xs font-mono">
+          <option value="">{{ "findings.filter.opt.all" | t(locale=locale) }}</option>
+          {% for opt in ['critical', 'high', 'medium', 'low'] %}
+          <option value="{{ opt }}">{{ opt }}</option>
+          {% endfor %}
+        </select>
+      </th>
+      <th class="p-1"><input type="text" data-td-filter="module"
+            placeholder="{{ 'findings.filter.search' | t(locale=locale) }}"
+            class="w-full border rounded p-1 text-xs font-mono"></th>
+      <th class="p-1"><input type="text" data-td-filter="complexity"
+            placeholder="{{ 'findings.filter.search' | t(locale=locale) }}"
+            class="w-full border rounded p-1 text-xs font-mono"></th>
+      <th class="p-1"><input type="text" data-td-filter="autonomy"
+            placeholder="{{ 'findings.filter.search' | t(locale=locale) }}"
+            class="w-full border rounded p-1 text-xs font-mono"></th>
+      <th class="p-1"><input type="text" data-td-filter="confidence"
+            placeholder="{{ 'findings.filter.search' | t(locale=locale) }}"
+            class="w-full border rounded p-1 text-xs font-mono"></th>
+      <th class="p-1"><input type="text" data-td-filter="created"
+            placeholder="YYYY-MM-DD"
+            class="w-full border rounded p-1 text-xs font-mono"></th>
+      <th class="p-1">
+        <select data-td-filter="refs" class="w-full border rounded p-1 text-xs font-mono">
+          <option value="">{{ "findings.filter.opt.all" | t(locale=locale) }}</option>
+          <option value="gh">{{ "findings.filter.opt.has_gh" | t(locale=locale) }}</option>
+          <option value="run">{{ "findings.filter.opt.has_run" | t(locale=locale) }}</option>
+          <option value="jira">{{ "findings.filter.opt.has_jira" | t(locale=locale) }}</option>
+          <option value="none">{{ "findings.filter.opt.no_refs" | t(locale=locale) }}</option>
+        </select>
+      </th>
+      <th class="p-1 text-right">
+        <button type="button" id="td-filter-reset"
+                class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+          {{ "findings.filter.reset" | t(locale=locale) }}
+        </button>
+      </th>
+    </tr>
+  </thead>
   <tbody>
   {% for it in items %}
-  <tr class="border-b align-top">
+  <tr class="border-b align-top"
+      data-td-row
+      data-id="{{ (it.id or it.slug or '')|lower }}"
+      data-title="{{ (it.title or '')|lower }}"
+      data-status="{{ it.status or '' }}"
+      data-priority="{{ (it.priority or '')|lower }}"
+      data-module="{{ (it.module or '')|lower }}"
+      data-complexity="{{ (it.complexity or '')|lower }}"
+      data-autonomy="{{ (it.autonomy or '')|lower }}"
+      data-confidence="{{ (it.confidence or '')|lower }}"
+      data-created="{{ (it.created or '')[:10] }}"
+      data-has-gh="{{ '1' if it.github_issue else '0' }}"
+      data-has-run="{{ '1' if it.orchestration_run else '0' }}"
+      data-bulk-id="{{ it.id or it.slug or '' }}"
+      data-has-jira="{{ '1' if it.jira else '0' }}">
+    <td class="p-2"><input type="checkbox" form="td-bulk-form" name="selected"
+        value="{{ it.id or it.slug or '' }}" data-bulk-cb
+        aria-label="select {{ it.id or it.slug }}"
+        {% if not (it.id or it.slug) %}disabled{% endif %}></td>
     <td class="p-2 font-mono text-xs"><a class="text-blue-600 underline" href="/p/{{ project.slug }}/findings/{{ it.id }}">{{ it.id or it.slug or '—' }}</a></td>
     <td class="p-2">{{ it.title or '—' }}</td>
     <td class="p-2 text-xs">
@@ -52,24 +152,28 @@
     </td>
     <td class="p-2 text-xs">{{ it.priority or '—' }}</td>
     <td class="p-2 text-xs muted">{{ it.module or '' }}</td>
+    <td class="p-2 text-xs muted">{{ it.complexity or '' }}</td>
+    <td class="p-2 text-xs muted">{{ it.autonomy or '' }}</td>
+    <td class="p-2 text-xs muted">{{ it.confidence or '' }}</td>
+    <td class="p-2 text-xs muted font-mono">{{ (it.created or '')[:10] }}</td>
     <td class="p-2 text-xs font-mono">
       {% if it.github_issue %}<a class="text-blue-600 underline" target="_blank" href="{{ it.github_issue }}">GH</a>{% endif %}
-      {% if it.orchestration_run %}<a class="text-purple-600 underline ml-1" href="/p/{{ project.slug }}/orchestration/{{ it.orchestration_run }}">run</a>{% endif %}
+      {% if it.orchestration_run %}<a class="text-purple-600 underline ml-1" href="/p/{{ project.slug }}/orchestration?run_id={{ it.orchestration_run }}">run</a>{% endif %}
       {% if it.jira %}<span class="ml-1 muted">{{ it.jira }}</span>{% endif %}
     </td>
     <td class="p-2 text-xs whitespace-nowrap">
       <form method="post" action="/p/{{ project.slug }}/findings/{{ it.id }}/orchestrate" class="inline"
-            data-confirm="Запустить Orchestrator с этим finding как целью?">
-        <button class="text-xs px-2 py-1 border border-purple-500 text-purple-700 rounded">Orchestrate</button>
+            data-confirm="{{ 'findings.confirm_orch' | t(locale=locale) }}">
+        <button class="text-xs px-2 py-1 border border-purple-500 text-purple-700 rounded">{{ "ideas.btn.orchestrate" | t(locale=locale) }}</button>
       </form>
       {% if not it.github_issue %}
       <form method="post" action="/p/{{ project.slug }}/findings/{{ it.id }}/github" class="inline ml-1"
-            data-confirm="Создать GitHub issue?">
-        <button class="text-xs px-2 py-1 border border-slate-500 text-slate-700 rounded">→ GH</button>
+            data-confirm="{{ 'findings.confirm_gh' | t(locale=locale) }}">
+        <button class="text-xs px-2 py-1 border border-slate-500 text-slate-700 rounded">{{ "ideas.btn.gh" | t(locale=locale) }}</button>
       </form>
       {% endif %}
       <form method="post" action="/p/{{ project.slug }}/findings/{{ it.id }}/delete" class="inline ml-1"
-            data-confirm="Удалить {{ it.id }}?" data-confirm-variant="danger">
+            data-confirm="{{ 'findings.confirm_delete' | t(locale=locale, id=it.id) }}" data-confirm-variant="danger">
         <button class="text-xs px-2 py-1 border rounded text-red-600">del</button>
       </form>
     </td>
@@ -77,16 +181,185 @@
   {% endfor %}
   </tbody>
 </table>
+
+<style>
+  .td-th-sort { cursor: pointer; user-select: none; }
+  .td-th-sort:hover { color: #4f46e5; }
+  .td-th-sort .sort-ind { display: inline-block; opacity: 0.4; font-size: 0.7em; }
+  .td-th-sort.sort-asc .sort-ind, .td-th-sort.sort-desc .sort-ind { opacity: 1; color: #4f46e5; }
+  .td-th-sort.sort-asc .sort-ind::before { content: "↑"; }
+  .td-th-sort.sort-desc .sort-ind::before { content: "↓"; }
+</style>
+
+<script>
+(function() {
+  const table = document.getElementById("td-table");
+  if (!table) return;
+  const tbody = table.querySelector("tbody");
+  const headers = table.querySelectorAll(".td-th-sort");
+  // Priority ordering: critical > high > medium > low > (empty)
+  const PRIO_ORDER = { critical: 4, high: 3, medium: 2, low: 1, "": 0 };
+
+  function compareVals(a, b, type) {
+    if (type === "prio") {
+      const ar = PRIO_ORDER[a.toLowerCase()] || 0;
+      const br = PRIO_ORDER[b.toLowerCase()] || 0;
+      return ar - br;
+    }
+    return a.localeCompare(b);
+  }
+
+  headers.forEach(h => {
+    h.addEventListener("click", () => {
+      const col = h.dataset.col;
+      const type = h.dataset.type || "text";
+      const current = h.classList.contains("sort-asc") ? "asc"
+                     : h.classList.contains("sort-desc") ? "desc" : "none";
+      const next = current === "asc" ? "desc" : "asc";
+      headers.forEach(other => other.classList.remove("sort-asc", "sort-desc"));
+      h.classList.add(next === "asc" ? "sort-asc" : "sort-desc");
+      const rows = Array.from(tbody.querySelectorAll("tr"));
+      rows.sort((ra, rb) => {
+        const va = ra.dataset[col] || "";
+        const vb = rb.dataset[col] || "";
+        const cmp = compareVals(va, vb, type);
+        return next === "asc" ? cmp : -cmp;
+      });
+      rows.forEach(r => tbody.appendChild(r));
+    });
+  });
+})();
+
+(() => {
+  const STORAGE_KEY = 'findings.filters.{{ project.slug }}';
+  const FIELDS = ['id', 'title', 'status', 'priority', 'module',
+                  'complexity', 'autonomy', 'confidence', 'created', 'refs'];
+  const table = document.getElementById('td-table');
+  if (!table) return;
+  const rows = Array.from(table.querySelectorAll('[data-td-row]'));
+  const inputs = {};
+  FIELDS.forEach(f => { inputs[f] = table.querySelector(`[data-td-filter="${f}"]`); });
+  const shownEl = document.getElementById('td-shown');
+  const resetBtn = document.getElementById('td-filter-reset');
+  const total = rows.length;
+  const SHOWN_TMPL = {{ ("findings.filter.shown_count" | t(locale=locale)) | tojson }};
+
+  // Empty-state marker placed after the table so it shows when no rows match.
+  let emptyEl = document.getElementById('td-filter-empty');
+  if (!emptyEl) {
+    emptyEl = document.createElement('p');
+    emptyEl.id = 'td-filter-empty';
+    emptyEl.className = 'muted text-sm mt-3 hidden';
+    emptyEl.textContent = {{ ("findings.filter.empty" | t(locale=locale)) | tojson }};
+    table.parentNode.insertBefore(emptyEl, table.nextSibling);
+  }
+
+  const loadState = () => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {}; }
+    catch { return {}; }
+  };
+  const saveState = () => {
+    const state = {};
+    FIELDS.forEach(f => { if (inputs[f] && inputs[f].value) state[f] = inputs[f].value; });
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+    catch { /* quota / privacy mode — silently ignore */ }
+  };
+
+  const matches = (row) => {
+    const v = (k) => (inputs[k] ? inputs[k].value : '').trim().toLowerCase();
+    // Substring fields
+    for (const k of ['id', 'title', 'module', 'complexity', 'autonomy', 'confidence', 'created']) {
+      const q = v(k);
+      if (q && !(row.dataset[k] || '').includes(q)) return false;
+    }
+    // Exact-match select fields
+    const status = v('status');
+    if (status && row.dataset.status !== status) return false;
+    const priority = v('priority');
+    if (priority && row.dataset.priority !== priority) return false;
+    // Refs select
+    const refs = v('refs');
+    if (refs === 'gh' && row.dataset.hasGh !== '1') return false;
+    if (refs === 'run' && row.dataset.hasRun !== '1') return false;
+    if (refs === 'jira' && row.dataset.hasJira !== '1') return false;
+    if (refs === 'none' && (row.dataset.hasGh === '1' || row.dataset.hasRun === '1' || row.dataset.hasJira === '1')) return false;
+    return true;
+  };
+
+  const apply = () => {
+    let shown = 0;
+    rows.forEach(r => {
+      const ok = matches(r);
+      r.classList.toggle('hidden', !ok);
+      if (ok) shown++;
+    });
+    const hasFilter = FIELDS.some(f => inputs[f] && inputs[f].value);
+    if (hasFilter) {
+      shownEl.textContent = SHOWN_TMPL.replace('{shown}', shown).replace('{total}', total);
+      shownEl.classList.remove('hidden');
+    } else {
+      shownEl.classList.add('hidden');
+    }
+    emptyEl.classList.toggle('hidden', shown !== 0 || !hasFilter);
+    document.dispatchEvent(new CustomEvent('bulk:rows-changed', {detail: {table: 'td'}}));
+  };
+
+  const saved = loadState();
+  FIELDS.forEach(f => {
+    if (inputs[f] && saved[f] != null) inputs[f].value = saved[f];
+  });
+  FIELDS.forEach(f => {
+    if (!inputs[f]) return;
+    const evt = inputs[f].tagName === 'SELECT' ? 'change' : 'input';
+    inputs[f].addEventListener(evt, () => { saveState(); apply(); });
+  });
+  resetBtn.addEventListener('click', () => {
+    FIELDS.forEach(f => { if (inputs[f]) inputs[f].value = ''; });
+    saveState();
+    apply();
+  });
+  apply();
+})();
+
+(() => {
+  const form = document.getElementById('td-bulk-form');
+  if (!form) return;
+  const btn = form.querySelector('[data-bulk-run]');
+  const tmplActive = btn.dataset.bulkLabelTmpl;
+  const tmplNone = btn.dataset.bulkLabelNone;
+  const tmplConfirm = btn.dataset.bulkConfirmTmpl;
+  const checkboxes = Array.from(document.querySelectorAll('input[data-bulk-cb]'));
+  const selectAll = document.getElementById('td-select-all');
+  const visibleCbs = () => checkboxes.filter(c => !c.closest('tr').classList.contains('hidden') && !c.disabled);
+  const update = () => {
+    const n = checkboxes.filter(c => c.checked).length;
+    btn.disabled = (n === 0);
+    btn.textContent = n === 0 ? tmplNone : tmplActive.replace('__N__', n);
+    if (n > 0) form.setAttribute('data-confirm', tmplConfirm.replace('__N__', n));
+    else form.removeAttribute('data-confirm');
+    const vis = visibleCbs();
+    const allChecked = vis.length > 0 && vis.every(c => c.checked);
+    const someChecked = vis.some(c => c.checked);
+    selectAll.checked = allChecked;
+    selectAll.indeterminate = someChecked && !allChecked;
+  };
+  checkboxes.forEach(c => c.addEventListener('change', update));
+  selectAll.addEventListener('change', () => {
+    visibleCbs().forEach(c => { c.checked = selectAll.checked; });
+    update();
+  });
+  document.addEventListener('bulk:rows-changed', update);
+  update();
+})();
+</script>
 {% else %}
 {% if selected_status or selected_module %}
-<p class="muted">По текущему фильтру ничего не нашлось.</p>
+<p class="muted">{{ "findings.empty_filter" | t(locale=locale) }}</p>
 {% else %}
 <div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
-  <p class="font-semibold text-sky-900 mb-1">В <code>{{ td_dir }}</code> нет markdown файлов</p>
+  <p class="font-semibold text-sky-900 mb-1">{{ "findings.empty.title" | t(locale=locale, dir=td_dir) }}</p>
   <p class="text-sm text-sky-900 mb-2">
-    Findings (они же tech-debt items) пишутся slash-командой <code>/tech-debt-scan</code> —
-    claude сканит репо на TODO/FIXME/legacy/смелли и кладёт каждую находку
-    отдельным markdown'ом сюда. Запустить можно прямо сейчас:
+    {{ "findings.empty.desc" | t(locale=locale, code='/tech-debt-scan') }}
   </p>
   <form method="post" action="/p/{{ project.slug }}/tech-debt/scan">
     <button class="text-sm bg-blue-600 text-white rounded px-3 py-1">Run /tech-debt-scan</button>

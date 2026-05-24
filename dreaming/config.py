@@ -61,9 +61,13 @@ class AppSettings(BaseSettings):
     session_logs_dir: str = "data/session_logs"
 
     # === Orchestration — separate limits because the orchestrator + subagents
-    # take many more turns than a single self-study session.
-    orchestration_max_turns: int = 150
-    orchestration_timeout_minutes: int = 120
+    # take many more turns than a single self-study session. The old 150-turn
+    # default was hitting `error_max_turns` mid-implementation on real features
+    # (60+ file feature ≈ 140-160 turns just from reads/edits); 500 covers all
+    # but the largest. Bumped on 2026-05-21 after a recurring-expense feature
+    # ran out at $5.97 / 140 turns half-finished.
+    orchestration_max_turns: int = 500
+    orchestration_timeout_minutes: int = 240
 
     # === Scheduling — nightly ===
     cron_expression: str = "0 2 * * *"

@@ -12,6 +12,7 @@ from fastapi.responses import PlainTextResponse, RedirectResponse
 
 from dreaming.services import autoconfig
 from dreaming.services.frontmatter_io import set_frontmatter_field
+from dreaming.services.evolution_rubric import collect_stats, ReportRubricStats
 
 
 router = APIRouter()
@@ -53,6 +54,11 @@ async def evolutions_page(request: Request, slug: str):
             items = [it.__dict__ if hasattr(it, "__dict__") else it for it in raw]
         except Exception as e:
             error = f"{type(e).__name__}: {e}"
+    # Project-wide rubric aggregation (ALC-style stats panel).
+    try:
+        rubric_stats = collect_stats(evolutions_dir) if Path(evolutions_dir).exists() else ReportRubricStats()
+    except Exception:
+        rubric_stats = ReportRubricStats()
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
     projects = await request.app.state.projects.list_all(only_enabled=True)
     return request.app.state.templates.TemplateResponse(
@@ -60,7 +66,8 @@ async def evolutions_page(request: Request, slug: str):
         {"project": project, "items": items, "evolutions_dir": evolutions_dir,
          "exists": Path(evolutions_dir).exists(), "error": error,
          "autoconfig_default": autoconfig.default_abs(project, "evolutions_dir"),
-         "projects": projects, "locale": locale},
+         "projects": projects, "locale": locale,
+         "rubric_stats": rubric_stats},
     )
 
 
@@ -107,14 +114,40 @@ async def evolutions_delete(request: Request, slug: str, path: str = Form(...)):
 
 
 @router.post("/p/{slug}/evolutions/apply")
-async def evolutions_apply(request: Request, slug: str, path: str = Form(...)):
+async def evolutions_apply(
+    request: Request, slug: str,
+    path: str = Form(...), force: str | None = Form(default=None),
+):
     """Spawn the Orchestrator with the evolution's proposed change + the
-    current agent file, asking it to merge the change cleanly."""
+    current agent file, asking it to merge the change cleanly.
+
+    Conflict-gate: if `list_evolutions` flags this item as conflicting with
+    another open evolution targeting the same agent, refuse to apply unless
+    the caller passes `force=1`. The check is intentionally on the server
+    even though the UI also blocks the button — a stale browser tab or curl
+    call must not bypass it.
+    """
     project = request.state.project
     evolutions_dir = await _resolve_evolutions_dir(request, project)
     target = _resolve_evolution_file(evolutions_dir, path)
     if target is None:
         raise HTTPException(status_code=404, detail=f"evolution {path} not found")
+
+    if not force:
+        from dreaming.services.evolutions import list_evolutions
+        items = list_evolutions(evolutions_dir)
+        same = next((it for it in items if it.path == str(target)), None)
+        if same and same.has_conflict:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Evolution '{same.name}' conflicts with another open evolution "
+                    f"targeting agent '{same.agent_name}'. Archive or reject the other one, "
+                    f"set 'conflict: false' in this file's frontmatter after manual review, "
+                    f"or resubmit with force=1."
+                ),
+            )
+
     text = target.read_text(encoding="utf-8")
     # Pull agent name from frontmatter (parser already does this — we re-parse
     # cheaply here to avoid a second list_evolutions pass).

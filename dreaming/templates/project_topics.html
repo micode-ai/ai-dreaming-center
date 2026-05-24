@@ -1,69 +1,105 @@
 {% extends "_project_layout.html" %}
 {% set active='topics' %}
 {% block project_content %}
+
+{% if db_topics %}
+<div class="flex items-center justify-between mb-2">
+  <h2 class="text-sm font-semibold" style="color: var(--text-strong);">{{ "topics.db_title" | t(locale=locale) }}</h2>
+  <a href="/p/{{ project.slug }}/kanban" class="text-xs underline">{{ "topics.open_kanban" | t(locale=locale) }}</a>
+</div>
+<p class="text-xs muted mb-3">{{ "topics.db_subtitle" | t(locale=locale) }}</p>
+<style>
+  tr.topic-row { cursor: pointer; transition: background-color .1s ease-in-out; }
+  tr.topic-row:hover { background: rgb(241 245 249); }
+  tr.topic-row a.topic-link { display: block; color: inherit; text-decoration: none; }
+  tr.topic-row:hover a.topic-link { color: rgb(37 99 235); }
+</style>
+<table class="data-table mb-6">
+  <thead><tr>
+    <th>{{ "kanban.col.title" | t(locale=locale) }}</th>
+    <th>{{ "kanban.col.module" | t(locale=locale) }}</th>
+    <th>{{ "kanban.col.agents" | t(locale=locale) }}</th>
+  </tr></thead>
+  <tbody>
+  {% for t in db_topics %}
+  <tr class="topic-row" data-href="/p/{{ project.slug }}/kanban#topic-{{ t.id }}">
+    <td>
+      <a class="topic-link" href="/p/{{ project.slug }}/kanban#topic-{{ t.id }}">{{ t.title }}</a>
+      {% if t.question %}<div class="text-xs muted">{{ t.question }}</div>{% endif %}
+      {% if t.why_important %}<div class="text-xs muted italic">{{ t.why_important }}</div>{% endif %}
+    </td>
+    <td class="font-mono text-xs">{{ t.module or '' }}</td>
+    <td class="font-mono text-xs">{{ t.target_agents or '*' }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<script>
+(() => {
+  document.querySelectorAll('tr.topic-row[data-href]').forEach(row => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('a, button, input, select, textarea, form')) return;
+      window.location.href = row.dataset.href;
+    });
+  });
+})();
+</script>
+{% endif %}
+
 {% if not found %}
-  {% if can_install_checklist %}
+  {% if not db_topics %}
+    {% if can_install_checklist %}
     <div class="mb-4 p-4 border border-amber-400 bg-amber-50 rounded">
-      <p class="font-semibold text-amber-900 mb-1">Weekly checklist ещё не создан</p>
+      <p class="font-semibold text-amber-900 mb-1">{{ "topics.weekly_not_ready" | t(locale=locale) }}</p>
       <p class="text-sm text-amber-900 mb-2">
-        Это файл со списком тем, которые агенты будут изучать на этой неделе.
-        Он лежит в проекте по пути
+        {{ "topics.weekly_desc" | t(locale=locale) }}
+        {{ "topics.location" | t(locale=locale) }}
         <code class="text-xs">{{ project.working_dir }}/.claude/agents/lessons/_weekly-learning-checklist.md</code>.
-        Сейчас его нет — поэтому страница «Темы» пустая, а <code>nightly_learning</code>
-        запускает агентов без подсказок про темы.
+        {{ "topics.current_empty" | t(locale=locale, code='nightly_learning') }}
       </p>
       <p class="text-sm text-amber-900 mb-3">
-        Создам заготовку из шаблона. Дальше ты сможешь открыть файл в редакторе
-        и вписать темы под каждого агента (формат <code>## agent-name</code> →
-        <code>- тема</code>).
+        {{ "topics.bootstrap_desc" | t(locale=locale, code1='## agent-name', code2='- topic') }}
       </p>
       <form method="post" action="/p/{{ project.slug }}/starter-kit/install">
         <input type="hidden" name="redirect_to" value="/p/{{ project.slug }}/topics">
         <button class="text-sm bg-amber-600 text-white rounded px-3 py-1">
-          Создать заготовку checklist
+          {{ "topics.bootstrap_btn" | t(locale=locale) }}
         </button>
       </form>
     </div>
-  {% else %}
-    <p class="muted">Weekly checklist не найден. Ожидаемые пути:</p>
+    {% else %}
+    <p class="muted">{{ "topics.not_found" | t(locale=locale) }}</p>
     <ul class="muted text-xs font-mono ml-4">
       <li>{{ project.working_dir }}/.claude/agents/lessons/_weekly-learning-checklist.md</li>
       <li>{{ project.working_dir }}/.claude/agents/_weekly-learning-checklist.md</li>
     </ul>
-    <p class="muted mt-4">Шаблон для автоматической установки не найден в <code>templates/starter-kit/</code>.</p>
+    <p class="muted mt-4">{{ "topics.template_missing" | t(locale=locale, dir='templates/starter-kit/') }}</p>
+    {% endif %}
   {% endif %}
 {% elif items %}
-<p class="text-xs muted mb-3">Источник: <code>{{ checklist_path }}</code></p>
+<h3 class="text-sm font-semibold mb-2" style="color: var(--text-strong);">{{ "topics.file_title" | t(locale=locale) }}</h3>
+<p class="text-xs muted mb-3">{{ "topics.source" | t(locale=locale) }}: <code>{{ checklist_path }}</code></p>
 <div class="bg-white rounded shadow p-4 space-y-1 text-sm font-mono">
 {% for it in items %}
   <div class="border-b py-1">
     {% if it is mapping %}
       {% if it.raw %}{{ it.raw }}{% else %}{{ it }}{% endif %}
-    {% else %}{{ it }}{% endif %}
+    {% else %}{{ it.title or it }}{% endif %}
   </div>
 {% endfor %}
 </div>
-{% else %}
+{% elif not db_topics %}
 <div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
-  <p class="font-semibold text-sky-900 mb-1">Файл-заготовка создан, но тем пока нет</p>
+  <p class="font-semibold text-sky-900 mb-1">{{ "topics.empty_title" | t(locale=locale) }}</p>
   <p class="text-sm text-sky-900 mb-2">
-    Файл: <code class="text-xs">{{ checklist_path }}</code>.
-    Открой его в редакторе и впиши темы в таком формате:
+    {{ "topics.empty_v2_desc" | t(locale=locale) }}
   </p>
-  <pre class="text-xs bg-white border rounded p-2 mb-2">## aba-architect
-- ревью миграции accounts→users
-- проверить spec под новый payment-flow
-
-## frontend-architect
-- consistency Modal в новых формах</pre>
-  <p class="text-xs text-sky-900">
-    После сохранения обнови эту страницу — увидишь свои темы.
-    Секции <code>## Приоритет недели</code> и <code>## Общие (любой агент)</code>
-    парсер пропускает, они только для человеческих заметок.
+  <p class="text-sm text-sky-900">
+    <a href="/p/{{ project.slug }}/kanban" class="underline font-medium">{{ "topics.open_kanban" | t(locale=locale) }}</a>
   </p>
-  <p class="text-xs mt-3 text-sky-900">
-    {{ "topics.editor_hint" | t(locale=locale) }}
-    <a href="/p/{{ project.slug }}/kanban" class="underline">Открыть Kanban →</a>
+  <p class="text-xs muted mt-3">
+    {{ "topics.empty_file_side_channel" | t(locale=locale) }}
+    <code class="text-xs">{{ checklist_path }}</code>
   </p>
 </div>
 {% endif %}

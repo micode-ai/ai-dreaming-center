@@ -1,5 +1,6 @@
 {% extends "_project_layout.html" %}
-{% from "_autoconfig_banner.html" import autoconfig_banner %}
+{% from "_autoconfig_banner.html" import autoconfig_banner with context %}
+{% from "_scan_action_bar.html" import scan_action_bar %}
 {% set active='wiki' %}
 {% block project_content %}
 {% if not wiki_dir_set %}
@@ -7,22 +8,27 @@
 {% elif not status.exists or status.domains_count == 0 %}
 <div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
   <p class="font-semibold text-sky-900 mb-1">
-    {% if not status.exists %}Каталог wiki не существует{% else %}Wiki ещё пустая{% endif %}
+    {% if not status.exists %}{{ "wiki.empty_dir" | t(locale=locale) }}{% else %}{{ "wiki.empty_wiki" | t(locale=locale) }}{% endif %}
   </p>
   <p class="text-sm text-sky-900 mb-2">
-    Путь: <code class="text-xs">{{ status.wiki_dir }}</code>
+    {{ "wiki.path" | t(locale=locale) }}: <code class="text-xs">{{ status.wiki_dir }}</code>
   </p>
   <p class="text-sm text-sky-900 mb-3">
-    Запусти <code>/wiki-bootstrap</code> — Claude CLI пройдёт по репо и сложит сюда
-    domain-страницы.
+    {{ "wiki.bootstrap_hint" | t(locale=locale, code='/wiki-bootstrap') }}
   </p>
   <form method="post" action="/p/{{ project.slug }}/wiki/bootstrap">
     <button class="text-sm bg-blue-600 text-white rounded px-3 py-1">Run /wiki-bootstrap</button>
   </form>
 </div>
 {% else %}
+{{ scan_action_bar(
+     "/p/" ~ project.slug ~ "/wiki/lint",
+     lint_running,
+     "wiki.lint.button" | t(locale=locale),
+     "wiki.lint.running" | t(locale=locale),
+) }}
 <div class="bg-white p-4 rounded shadow">
-  <p class="text-sm muted">Источник: <code>{{ status.wiki_dir }}</code></p>
+  <p class="text-sm muted">{{ "wiki.source" | t(locale=locale) }}: <code>{{ status.wiki_dir }}</code></p>
   <p class="mt-2 text-2xl font-bold">{{ status.domains_count }} domains</p>
   {% if status.domains %}
   <ul class="mt-4 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
@@ -67,7 +73,7 @@
     const rawUrl = `/p/${slug}/wiki/raw?name=${encodeURIComponent(name)}`;
     title.textContent = name + ".md";
     rawLink.href = rawUrl;
-    body.innerHTML = '<p class="muted" style="padding: 1.5rem;">Загрузка…</p>';
+    body.innerHTML = '<p class="muted" style="padding: 1.5rem;">{{ "wiki.loading" | t(locale=locale) }}</p>';
     modal.showModal();
     try {
       const r = await fetch(rawUrl);
@@ -75,7 +81,7 @@
       const text = await r.text();
       window.dcRenderMarkdown(body, text);
     } catch (e) {
-      body.innerHTML = '<p class="text-red-700 font-mono text-xs" style="padding: 1.5rem;">Ошибка: ' + (e.message || e) + '</p>';
+      body.innerHTML = '<p class="text-red-700 font-mono text-xs" style="padding: 1.5rem;">{{ "wiki.error_prefix" | t(locale=locale) }}: ' + (e.message || e) + '</p>';
     }
   };
   window.closeWiki = function() { modal.close(); };

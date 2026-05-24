@@ -1,6 +1,9 @@
 """Project-aware wiki status: presence check + domain count.
 
-Wave 2 lean — full deep-audit / health metrics arrive in Wave 4.
+Used by the /p/<slug>/wiki page for the bootstrap-status banner. The deeper
+health/trend analysis lives in /p/<slug>/wiki-health (services/cascade_costs
+unrelated; see routes/project_wiki_health.py + the /wiki-health-scan
+slash-command).
 """
 from __future__ import annotations
 from dataclasses import dataclass

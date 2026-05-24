@@ -1,0 +1,89 @@
+{% extends "_project_layout.html" %}
+{% set active='review' %}
+{% block project_content %}
+<header class="mb-4">
+  <h1 class="text-xl font-bold">{{ "review.title" | t(locale=locale) }}</h1>
+  <p class="text-sm mt-1" style="color: var(--text-muted);">{{ "review.subtitle" | t(locale=locale) }}</p>
+</header>
+
+<div class="grid gap-4 grid-cols-1 lg:grid-cols-3">
+  {# ─── Proposed evolutions ─── #}
+  <section class="rounded-lg p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-sm font-semibold uppercase tracking-wide" style="color: var(--text-muted);">{{ "review.evolutions" | t(locale=locale) }}</h2>
+      <span class="text-xs px-2 py-0.5 rounded" style="background: var(--bg-elevated); color: var(--text-faint);">{{ proposed_evolutions|length }}</span>
+    </div>
+    {% if proposed_evolutions %}
+    <ul class="space-y-2 text-sm">
+      {% for it in proposed_evolutions %}
+      <li class="rounded p-2" style="background: var(--bg-elevated); border:1px solid var(--border-subtle);">
+        <div class="flex items-center gap-2">
+          <code class="font-mono text-xs" style="color: var(--text-muted);">{{ it.agent_name }}</code>
+          {% if it.has_conflict %}
+          <span class="text-xs px-1.5 py-0.5 rounded" style="background: rgba(248,113,113,.12); color: #b91c1c;">{{ "review.conflict" | t(locale=locale) }}</span>
+          {% endif %}
+        </div>
+        <div class="text-xs mt-1 truncate" title="{{ it.title }}">{{ it.title }}</div>
+      </li>
+      {% endfor %}
+    </ul>
+    <a href="/p/{{ project.slug }}/evolutions" class="text-xs mt-3 inline-block" style="color: var(--brand-hover);">{{ "review.see_all" | t(locale=locale) }} →</a>
+    {% else %}
+    <p class="text-xs" style="color: var(--text-faint);">{{ "review.evolutions_empty" | t(locale=locale) }}</p>
+    {% endif %}
+  </section>
+
+  {# ─── Urgent tech-debt findings ─── #}
+  <section class="rounded-lg p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-sm font-semibold uppercase tracking-wide" style="color: var(--text-muted);">{{ "review.tech_debt" | t(locale=locale) }}</h2>
+      <span class="text-xs px-2 py-0.5 rounded" style="background: var(--bg-elevated); color: var(--text-faint);">{{ urgent_findings|length }}</span>
+    </div>
+    {% if urgent_findings %}
+    <ul class="space-y-2 text-sm">
+      {% for it in urgent_findings %}
+      <li class="rounded p-2" style="background: var(--bg-elevated); border:1px solid var(--border-subtle);">
+        <div class="flex items-center gap-2">
+          <a class="font-mono text-xs underline" style="color: var(--brand-hover);" href="/p/{{ project.slug }}/findings/{{ it.id }}">{{ it.id }}</a>
+          <span class="text-xs px-1.5 py-0.5 rounded" style="background: rgba(248,113,113,.10); color: #b91c1c;">{{ it.priority }}</span>
+        </div>
+        <div class="text-xs mt-1 truncate" title="{{ it.title }}">{{ it.title }}</div>
+        {% if it.module %}<div class="text-xs mt-0.5" style="color: var(--text-faint);">{{ it.module }}</div>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    <a href="/p/{{ project.slug }}/findings" class="text-xs mt-3 inline-block" style="color: var(--brand-hover);">{{ "review.see_all" | t(locale=locale) }} →</a>
+    {% else %}
+    <p class="text-xs" style="color: var(--text-faint);">{{ "review.tech_debt_empty" | t(locale=locale) }}</p>
+    {% endif %}
+  </section>
+
+  {# ─── Recent sidecar findings ─── #}
+  <section class="rounded-lg p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-sm font-semibold uppercase tracking-wide" style="color: var(--text-muted);">{{ "review.sidecar" | t(locale=locale) }}</h2>
+      <span class="text-xs px-2 py-0.5 rounded" style="background: var(--bg-elevated); color: var(--text-faint);">{{ recent_sidecar|length }}</span>
+    </div>
+    {% if recent_sidecar %}
+    <ul class="space-y-2 text-sm">
+      {% for it in recent_sidecar %}
+      <li class="rounded p-2" style="background: var(--bg-elevated); border:1px solid var(--border-subtle);">
+        <div class="flex items-center gap-2">
+          <code class="font-mono text-xs" style="color: var(--text-muted);">{{ it.id or '—' }}</code>
+          {% if it.severity %}
+          <span class="text-xs px-1.5 py-0.5 rounded"
+                style="background: rgba(245,158,11,.10); color: #92400e;">{{ it.severity }}</span>
+          {% endif %}
+        </div>
+        <div class="text-xs mt-1 truncate" title="{{ it.title }}">{{ it.title }}</div>
+        <div class="text-xs mt-0.5" style="color: var(--text-faint);">{{ it.reviewer }} · {{ it.file }}</div>
+      </li>
+      {% endfor %}
+    </ul>
+    <a href="/p/{{ project.slug }}/sidecar-findings" class="text-xs mt-3 inline-block" style="color: var(--brand-hover);">{{ "review.see_all" | t(locale=locale) }} →</a>
+    {% else %}
+    <p class="text-xs" style="color: var(--text-faint);">{{ "review.sidecar_empty" | t(locale=locale) }}</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
