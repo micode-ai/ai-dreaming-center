@@ -36,6 +36,29 @@ RING_BUFFER_SIZE = 5000
 # LimitOverrunError и не обрывал чтение посреди сессии.
 STDOUT_BUFFER_LIMIT = 16 * 1024 * 1024  # 16 MB
 
+# Permission grant for unattended sessions. We run claude with no TTY (-p /
+# --print), so it can never prompt for a permission; any tool not pre-approved
+# is silently denied.
+#
+# History of what does NOT work on Claude CLI >= 2.1.x outside a sandbox:
+#   - `--dangerously-skip-permissions` — gated ("sandboxes with no internet
+#     access only"); downgrades the session to `dontAsk` mode.
+#   - `--permission-mode bypassPermissions` — also downgraded to `dontAsk`
+#     in this environment (verified 2026-05-24: self-study still reported
+#     Write/Bash denied with the flag set).
+# In `dontAsk` mode the CLI denies anything not on the allow-list WITHOUT
+# prompting. The reliable lever is therefore the allow-list itself:
+# `--allowedTools` is honoured in every mode. We grant the full tool set the
+# self-study / orchestrator agents need (notes + evolution files via Write/Edit,
+# report-back curl via Bash, sub-agents via Task). `--permission-mode
+# bypassPermissions` is kept too — harmless if downgraded, and if a future CLI
+# honours it we get clean full access.
+_AGENT_TOOLS = "Bash Read Write Edit Glob Grep Task TodoWrite WebFetch WebSearch NotebookEdit Skill"
+_BYPASS_PERMISSION_FLAGS = [
+    "--permission-mode", "bypassPermissions",
+    "--allowedTools", _AGENT_TOOLS,
+]
+
 
 # Human-readable hints for the most common claude.exe exit codes. Appended
 # to the `[exit] code=N — <hint>` line so users can tell at a glance whether
@@ -199,7 +222,7 @@ class ProcessManager:
             "-p",
             prompt,
             "--model", model,
-            "--dangerously-skip-permissions",
+            *_BYPASS_PERMISSION_FLAGS,
             "--max-turns", str(max_turns),
             "--output-format", "stream-json",
             "--verbose",
@@ -311,7 +334,7 @@ class ProcessManager:
             resolved_path,
             "--print",
             "--model", model,
-            "--dangerously-skip-permissions",
+            *_BYPASS_PERMISSION_FLAGS,
             "--max-turns", str(max_turns),
             "--output-format", "stream-json",
             "--verbose",
