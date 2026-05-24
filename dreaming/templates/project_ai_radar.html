@@ -1,0 +1,57 @@
+{% extends "_project_layout.html" %}
+{% set active = 'ai_radar' %}
+{% block project_content %}
+<header class="mb-4 flex items-baseline gap-3 flex-wrap">
+  <h2 class="text-lg font-semibold" style="color: var(--text-strong);">
+    {{ "radar.title" | t(locale=locale) }}
+  </h2>
+  <span class="text-xs" style="color: var(--text-faint);">
+    {{ findings|length }} {{ "radar.findings_for_project" | t(locale=locale) }}
+  </span>
+  <a href="/ai-radar" class="ml-auto text-xs underline" style="color: var(--text-muted);">
+    {{ "radar.link.global" | t(locale=locale) }} →
+  </a>
+</header>
+
+<form method="get" class="mb-4 flex items-center gap-2 text-xs flex-wrap">
+  <select name="status" onchange="this.form.submit()"
+          class="rounded px-2 py-1"
+          style="background: var(--bg-elevated); border:1px solid var(--border-subtle); color: var(--text-body);">
+    <option value="" {% if not filter_status %}selected{% endif %}>
+      {{ "radar.filter.any_status" | t(locale=locale) }}
+    </option>
+    {% for s in ['new', 'seen', 'applied', 'dismissed'] %}
+      <option value="{{ s }}" {% if filter_status==s %}selected{% endif %}>{{ s }}</option>
+    {% endfor %}
+  </select>
+  <select name="since_days" onchange="this.form.submit()"
+          class="rounded px-2 py-1"
+          style="background: var(--bg-elevated); border:1px solid var(--border-subtle); color: var(--text-body);">
+    <option value="" {% if not filter_since_days %}selected{% endif %}>
+      {{ "radar.filter.any_time" | t(locale=locale) }}
+    </option>
+    {% for d in [1, 7, 30, 90] %}
+      <option value="{{ d }}" {% if filter_since_days==d %}selected{% endif %}>
+        {{ "radar.filter.last_n_days" | t(locale=locale, n=d) }}
+      </option>
+    {% endfor %}
+  </select>
+</form>
+
+{% if findings %}
+  {% for f in findings %}
+    {% include "_ai_radar_card.html" %}
+  {% endfor %}
+{% else %}
+  <div class="rounded-lg p-4"
+       style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+    <p class="text-sm" style="color: var(--text-body);">
+      {{ "radar.project.empty" | t(locale=locale) }}
+    </p>
+    <p class="text-xs mt-2" style="color: var(--text-faint);">
+      {{ "radar.project.hint" | t(locale=locale) }}
+      <a href="/ai-radar" class="underline">/ai-radar</a>.
+    </p>
+  </div>
+{% endif %}
+{% endblock %}
