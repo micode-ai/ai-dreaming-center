@@ -1,0 +1,109 @@
+{# Карточка одного finding-а. Параметры:
+   - f      — dict из ai_radar_findings (с tags / pinned_list)
+   - projects — список enabled-проектов для selectʼа
+   - locale — текущая локаль
+   - mode   — 'global' | 'project'
+#}
+<article class="rounded-lg p-4 mb-3"
+         style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+  <header class="flex items-baseline gap-3 flex-wrap mb-2">
+    <a href="{{ f.url }}" target="_blank" rel="noopener noreferrer"
+       class="text-base font-semibold" style="color: var(--text-strong);">
+      {{ f.title }}
+    </a>
+    <span class="text-xs font-mono" style="color: var(--text-faint);">{{ f.source_key }}</span>
+    <span class="text-xs" style="color: var(--text-faint);">
+      {{ (f.published_at or f.discovered_at or '')[:10] }}
+    </span>
+    {% if f.novelty_score is not none and f.novelty_score is number %}
+      <span class="text-xs px-1.5 py-0.5 rounded"
+            style="background: var(--brand-soft); color:#c7d2fe;">
+        novelty {{ "%.2f"|format(f.novelty_score) }}
+      </span>
+    {% endif %}
+    <span class="text-xs px-1.5 py-0.5 rounded"
+          style="background: var(--bg-hover); color: var(--text-muted);">
+      {{ f.status }}
+    </span>
+  </header>
+
+  {% set summary = (f.summary_ru if locale == 'ru' else f.summary_en) or f.summary_ru or f.summary_en %}
+  {% if summary %}
+    <p class="text-sm mb-2" style="color: var(--text-body);">{{ summary }}</p>
+  {% endif %}
+
+  {% if f.tags %}
+    <div class="text-xs mb-2" style="color: var(--text-faint);">
+      {% for t in f.tags %}
+        <span class="inline-block mr-1 px-1.5 py-0.5 rounded"
+              style="background: var(--bg-hover); color: var(--text-muted);">#{{ t }}</span>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if f.pinned_list %}
+    <div class="text-xs mb-2" style="color: var(--text-faint);">
+      pinned:
+      {% for s in f.pinned_list %}
+        <a href="/p/{{ s }}/ai-radar" class="underline ml-1">{{ s }}</a>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <footer class="flex gap-2 items-center text-xs flex-wrap mt-2">
+    {# Status toggle #}
+    {% if f.status != 'seen' %}
+    <form method="post" action="/ai-radar/{{ f.id }}/status" class="inline">
+      <input type="hidden" name="status" value="seen">
+      <button class="px-2 py-1 rounded"
+              style="border:1px solid var(--border-subtle); color: var(--text-muted);">
+        {{ "radar.btn.mark_seen" | t(locale=locale) }}
+      </button>
+    </form>
+    {% endif %}
+    {% if f.status != 'dismissed' %}
+    <form method="post" action="/ai-radar/{{ f.id }}/status" class="inline">
+      <input type="hidden" name="status" value="dismissed">
+      <button class="px-2 py-1 rounded"
+              style="border:1px solid var(--border-subtle); color: var(--text-muted);">
+        {{ "radar.btn.dismiss" | t(locale=locale) }}
+      </button>
+    </form>
+    {% endif %}
+
+    {# Pin to project — short form #}
+    {% if projects %}
+    <form method="post" action="/ai-radar/{{ f.id }}/pin"
+          class="inline flex items-center gap-1">
+      <select name="target_project" class="text-xs rounded px-1 py-1"
+              style="background: var(--bg-elevated); border:1px solid var(--border-subtle); color: var(--text-body);">
+        {% for p in projects %}<option value="{{ p.slug }}">{{ p.label }}</option>{% endfor %}
+      </select>
+      <button class="px-2 py-1 rounded"
+              style="border:1px solid var(--border-subtle); color: var(--text-muted);">
+        {{ "radar.btn.pin" | t(locale=locale) }}
+      </button>
+    </form>
+
+    {# Apply as note — R1: только kind=note. idea/topic/tech_debt — R3. #}
+    <form method="post" action="/ai-radar/{{ f.id }}/apply"
+          class="inline flex items-center gap-1">
+      <input type="hidden" name="kind" value="note">
+      <select name="target_project" class="text-xs rounded px-1 py-1"
+              style="background: var(--bg-elevated); border:1px solid var(--border-subtle); color: var(--text-body);">
+        {% for p in projects %}<option value="{{ p.slug }}">{{ p.label }}</option>{% endfor %}
+      </select>
+      <button class="px-2 py-1 rounded"
+              style="background: var(--brand); color:#fff;">
+        {{ "radar.btn.apply_note" | t(locale=locale) }}
+      </button>
+    </form>
+    {% endif %}
+
+    {% if f.applied_to_kind %}
+      <span class="ml-auto text-xs font-mono" style="color: var(--text-faint);">
+        → {{ f.applied_to_kind }}: {{ f.applied_to_ref }}
+      </span>
+    {% endif %}
+  </footer>
+</article>

@@ -256,6 +256,35 @@ CREATE TABLE IF NOT EXISTS orchestrator_tts_messages (
 CREATE INDEX IF NOT EXISTS idx_or_tts_run_ts ON orchestrator_tts_messages (run_id, ts);
 CREATE INDEX IF NOT EXISTS idx_or_tts_project_ts
     ON orchestrator_tts_messages (project_id, ts DESC);
+
+-- + dreaming: AI Radar — внешние сигналы (лидеры/лаборатории/фиды индустрии ИИ).
+-- Глобальная таблица (без project_id) — findings относятся к индустрии,
+-- релевантность конкретным проектам задаётся через relevance_hint + pinned_projects.
+CREATE TABLE IF NOT EXISTS ai_radar_findings (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_key      TEXT NOT NULL,
+    source_kind     TEXT NOT NULL,
+    url             TEXT NOT NULL,
+    title           TEXT NOT NULL,
+    summary_ru      TEXT NOT NULL DEFAULT '',
+    summary_en      TEXT NOT NULL DEFAULT '',
+    published_at    TEXT,
+    discovered_at   TEXT NOT NULL,
+    tags_json       TEXT NOT NULL DEFAULT '[]',
+    novelty_score   REAL,
+    relevance_hint  TEXT NOT NULL DEFAULT '',
+    pinned_projects TEXT NOT NULL DEFAULT '',
+    status          TEXT NOT NULL DEFAULT 'new',
+    applied_to_kind TEXT,
+    applied_to_ref  TEXT,
+    raw_payload     TEXT NOT NULL DEFAULT '{}'
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_radar_source_url
+    ON ai_radar_findings (source_key, url);
+CREATE INDEX IF NOT EXISTS idx_radar_discovered
+    ON ai_radar_findings (discovered_at DESC);
+CREATE INDEX IF NOT EXISTS idx_radar_status_discovered
+    ON ai_radar_findings (status, discovered_at DESC);
 """
 
 
@@ -826,3 +855,132 @@ class SqliteDB:
             n = cur.rowcount
         await self._conn.commit()
         return n > 0
+
+    # ── AI Radar (global, не project-scoped) ───────────────────────────
+
+    async def insert_radar_findings(self, records: list[dict]) -> int:
+        """Идемпотентный мердж findings. Возвращает число реально вставленных строк.
+        Уникальность — UNIQUE(source_key, url); INSERT OR IGNORE для дубликатов."""
+        if not records:
+            return 0
+        now_iso = datetime.now(timezone.utc).isoformat()
+        inserted = 0
+        for rec in records:
+            async with self._conn.execute(
+                "INSERT OR IGNORE INTO ai_radar_findings "
+                "(source_key, source_kind, url, title, summary_ru, summary_en, "
+                " published_at, discovered_at, tags_json, novelty_score, "
+                " relevance_hint, status, raw_payload) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?)",
+                (
+                    rec["source_key"], rec.get("source_kind", "feed"),
+                    rec["url"], rec["title"],
+                    rec.get("summary_ru", ""), rec.get("summary_en", ""),
+                    rec.get("published_at"),
+                    rec.get("discovered_at") or now_iso,
+                    rec.get("tags_json", "[]"),
+                    rec.get("novelty_score"),
+                    rec.get("relevance_hint", ""),
+                    rec.get("raw_payload", "{}"),
+                ),
+            ) as cur:
+                if cur.rowcount > 0:
+                    inserted += 1
+        await self._conn.commit()
+        return inserted
+
+    async def list_radar_findings(
+        self,
+        *,
+        status: str | None = None,
+        source_key: str | None = None,
+        since_days: int | None = None,
+        project_slug: str | None = None,
+        limit: int = 200,
+    ) -> list:
+        """Лента findings с фильтрами. project_slug — фильтр по relevance_hint
+        ИЛИ pinned_projects (substring match — оба поля хранят CSV-список slug-ов)."""
+        sql = "SELECT * FROM ai_radar_findings WHERE 1=1"
+        params: list = []
+        if status:
+            sql += " AND status=?"
+            params.append(status)
+        if source_key:
+            sql += " AND source_key=?"
+            params.append(source_key)
+        if since_days is not None:
+            cutoff = (
+                datetime.now(timezone.utc) - timedelta(days=since_days)
+            ).isoformat()
+            sql += " AND discovered_at >= ?"
+            params.append(cutoff)
+        if project_slug:
+            # CSV-substring через запятые; края добиваем запятыми для точного слова.
+            sql += (
+                " AND (',' || relevance_hint || ',' LIKE ? "
+                "  OR ',' || pinned_projects || ',' LIKE ?)"
+            )
+            needle = f"%,{project_slug},%"
+            params += [needle, needle]
+        sql += " ORDER BY discovered_at DESC LIMIT ?"
+        params.append(limit)
+        return await self.fetch_all(sql, tuple(params))
+
+    async def get_radar_finding(self, finding_id: int) -> dict | None:
+        row = await self.fetch_one(
+            "SELECT * FROM ai_radar_findings WHERE id=?", (finding_id,),
+        )
+        return dict(row) if row else None
+
+    async def set_radar_finding_status(self, finding_id: int, status: str) -> bool:
+        async with self._conn.execute(
+            "UPDATE ai_radar_findings SET status=? WHERE id=?",
+            (status, finding_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
+    async def mark_radar_finding_applied(
+        self, finding_id: int, kind: str, ref: str,
+    ) -> bool:
+        async with self._conn.execute(
+            "UPDATE ai_radar_findings "
+            "SET status='applied', applied_to_kind=?, applied_to_ref=? "
+            "WHERE id=?",
+            (kind, ref, finding_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
+    async def pin_radar_finding_to_project(
+        self, finding_id: int, project_slug: str,
+    ) -> bool:
+        """Добавить slug в CSV pinned_projects, если его там ещё нет."""
+        row = await self.fetch_one(
+            "SELECT pinned_projects FROM ai_radar_findings WHERE id=?",
+            (finding_id,),
+        )
+        if row is None:
+            return False
+        current = [s for s in (row["pinned_projects"] or "").split(",") if s]
+        if project_slug in current:
+            return True
+        current.append(project_slug)
+        await self.execute(
+            "UPDATE ai_radar_findings SET pinned_projects=? WHERE id=?",
+            (",".join(current), finding_id),
+        )
+        return True
+
+    async def radar_source_counts(self, since_days: int = 7) -> list:
+        """Топ источников по числу новых findings за N дней."""
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(days=since_days)
+        ).isoformat()
+        return await self.fetch_all(
+            "SELECT source_key, COUNT(*) AS n FROM ai_radar_findings "
+            "WHERE discovered_at >= ? GROUP BY source_key ORDER BY n DESC",
+            (cutoff,),
+        )
