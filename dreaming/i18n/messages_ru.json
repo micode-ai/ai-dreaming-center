@@ -543,5 +543,10 @@
   "radar.btn.apply_note": "В конспект",
   "radar.project.empty": "Сюда попадают сигналы, у которых в relevance_hint указан slug этого проекта, или которые ты вручную закрепил за ним.",
   "radar.project.hint": "Закрепить можно из глобальной ленты",
-  "radar.link.global": "Все сигналы"
+  "radar.link.global": "Все сигналы",
+  "radar.scan.run": "Сканировать сейчас",
+  "radar.scan.running": "Сканирую…",
+  "radar.scan.done": "Скан завершён: добавлено {inserted} новых сигналов из {sources} источников с RSS.",
+  "radar.scan.failed": "Скан упал: {err}",
+  "radar.scan.hint": "Тянет свежие статьи по RSS/Atom из источников watchlist'а (у кого есть фид)."
 }

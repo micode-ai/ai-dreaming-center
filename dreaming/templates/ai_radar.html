@@ -8,6 +8,10 @@
   <span class="text-xs" style="color: var(--text-faint);">
     {{ findings|length }} {{ "radar.findings_total" | t(locale=locale) }}
   </span>
+  <form method="post" action="/ai-radar/scan-now" class="ml-auto inline">
+    <button class="text-xs px-3 py-1.5 rounded" title="{{ 'radar.scan.hint' | t(locale=locale) }}"
+            style="background: var(--brand); color:#fff;">{{ "radar.scan.run" | t(locale=locale) }}</button>
+  </form>
 </header>
 
 {% if not watchlist.sources %}
