@@ -548,5 +548,9 @@
   "radar.scan.running": "Scanning…",
   "radar.scan.done": "Scan complete: added {inserted} new signals from {sources} sources with RSS.",
   "radar.scan.failed": "Scan failed: {err}",
-  "radar.scan.hint": "Pulls fresh articles via RSS/Atom from watchlist sources that publish a feed."
+  "radar.scan.hint": "Pulls fresh articles via RSS/Atom from watchlist sources that publish a feed.",
+  "radar.link.original": "↗ original",
+  "radar.btn.speak": "🔊 Tell it briefly (voice)",
+  "radar.btn.speak_stop": "⏹ Stop",
+  "radar.speak.unsupported": "Your browser doesn't support speech (Web Speech API)."
 }

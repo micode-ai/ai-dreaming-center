@@ -1,0 +1,59 @@
+{# Voice playback for AI Radar cards via the browser Web Speech API.
+   Delegated click handler for [data-radar-speak]; no backend, no API keys.
+   Include ONCE per page (not inside the card loop). #}
+<script>
+(() => {
+  if (window.__radarSpeakWired) return;
+  window.__radarSpeakWired = true;
+  const synth = window.speechSynthesis;
+  let activeBtn = null;
+
+  function resetBtn(btn) {
+    if (btn) btn.textContent = btn.dataset.labelSpeak;
+  }
+  function stop() {
+    if (synth) synth.cancel();
+    resetBtn(activeBtn);
+    activeBtn = null;
+  }
+  function pickVoice(lang) {
+    const vs = synth.getVoices() || [];
+    return vs.find(v => v.lang === lang)
+        || vs.find(v => v.lang && v.lang.slice(0, 2) === lang.slice(0, 2))
+        || null;
+  }
+
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-radar-speak]');
+    if (!btn) return;
+    e.preventDefault();
+    if (!synth || typeof SpeechSynthesisUtterance === 'undefined') {
+      if (window.appAlert) window.appAlert(btn.dataset.unsupported || 'Speech not supported');
+      return;
+    }
+    // Toggle: clicking the speaking button stops it.
+    if (activeBtn === btn && synth.speaking) { stop(); return; }
+    stop();  // stop any other card that's talking
+    const text = (btn.dataset.speakText || '').trim();
+    if (!text) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = btn.dataset.speakLang || 'en-US';
+    const v = pickVoice(u.lang);
+    if (v) u.voice = v;
+    u.rate = 1.0;
+    u.onend = () => { resetBtn(btn); if (activeBtn === btn) activeBtn = null; };
+    u.onerror = () => { resetBtn(btn); if (activeBtn === btn) activeBtn = null; };
+    activeBtn = btn;
+    btn.textContent = btn.dataset.labelStop;
+    synth.speak(u);
+  }, false);
+
+  // Voice list loads async in some browsers; warm it up.
+  if (synth && typeof synth.onvoiceschanged !== 'undefined') {
+    synth.getVoices();
+  }
+  // Don't keep speaking after navigating away.
+  window.addEventListener('pagehide', stop);
+  window.addEventListener('beforeunload', stop);
+})();
+</script>

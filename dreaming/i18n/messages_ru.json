@@ -548,5 +548,9 @@
   "radar.scan.running": "Сканирую…",
   "radar.scan.done": "Скан завершён: добавлено {inserted} новых сигналов из {sources} источников с RSS.",
   "radar.scan.failed": "Скан упал: {err}",
-  "radar.scan.hint": "Тянет свежие статьи по RSS/Atom из источников watchlist'а (у кого есть фид)."
+  "radar.scan.hint": "Тянет свежие статьи по RSS/Atom из источников watchlist'а (у кого есть фид).",
+  "radar.link.original": "↗ оригинал",
+  "radar.btn.speak": "🔊 Рассказать кратко голосом",
+  "radar.btn.speak_stop": "⏹ Стоп",
+  "radar.speak.unsupported": "Браузер не поддерживает озвучку (Web Speech API)."
 }

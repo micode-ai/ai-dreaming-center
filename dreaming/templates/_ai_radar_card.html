@@ -25,6 +25,10 @@
           style="background: var(--bg-hover); color: var(--text-muted);">
       {{ f.status }}
     </span>
+    <a href="{{ f.url }}" target="_blank" rel="noopener noreferrer"
+       class="text-xs underline ml-auto" style="color: var(--brand-hover);">
+      {{ "radar.link.original" | t(locale=locale) }}
+    </a>
   </header>
 
   {% set summary = (f.summary_ru if locale == 'ru' else f.summary_en) or f.summary_ru or f.summary_en %}
@@ -51,6 +55,18 @@
   {% endif %}
 
   <footer class="flex gap-2 items-center text-xs flex-wrap mt-2">
+    {# Speak summary aloud (browser Web Speech API; no backend) #}
+    <button type="button" data-radar-speak
+            data-speak-lang="{{ 'ru-RU' if locale == 'ru' else 'en-US' }}"
+            data-speak-text="{{ ((f.title ~ '. ') ~ (summary or ''))[:600] }}"
+            data-label-speak="{{ 'radar.btn.speak' | t(locale=locale) }}"
+            data-label-stop="{{ 'radar.btn.speak_stop' | t(locale=locale) }}"
+            data-unsupported="{{ 'radar.speak.unsupported' | t(locale=locale) }}"
+            class="px-2 py-1 rounded"
+            style="border:1px solid var(--border-subtle); color: var(--text-muted);">
+      {{ "radar.btn.speak" | t(locale=locale) }}
+    </button>
+
     {# Status toggle #}
     {% if f.status != 'seen' %}
     <form method="post" action="/ai-radar/{{ f.id }}/status" class="inline">
