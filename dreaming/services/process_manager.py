@@ -39,20 +39,24 @@ STDOUT_BUFFER_LIMIT = 16 * 1024 * 1024  # 16 MB
 # Permission grant for unattended sessions. We run claude with no TTY (-p /
 # --print), so it can never answer a permission prompt.
 #
-# What does NOT work on Claude CLI >= 2.1.x (verified 2026-05-24/25):
-#   - `--dangerously-skip-permissions` — gated ("sandboxes with no internet
-#     access only"); session runs but downgrades to `dontAsk`, which denies
-#     Write/Bash → self-study can't persist notes or curl /api/session/finish.
-#   - `--permission-mode bypassPermissions` — WORSE: in a non-interactive `-p`
-#     session it blocks waiting for a confirmation that can never arrive (no
-#     TTY), so claude produces ZERO output and just hangs ("ожидание вывода").
+# The critical constraint (verified 2026-05-25, CLI 2.1.150): self-study and
+# the orchestrator write to `.claude/agents/...` (learning notes, evolution
+# proposals). Claude Code SPECIALLY PROTECTS the `.claude/` config dir — in the
+# default non-interactive `dontAsk` mode, writes there are denied even when
+# `Write` is in `--allowedTools`, and neither a path-scoped `Write(.claude/**)`
+# allow nor `--permission-mode acceptEdits` overrides it. The agent then reports
+# "completed the study but couldn't persist anything".
 #
-# What works: a plain `-p` session defaults to `dontAsk`, and `--allowedTools`
-# is honoured there. Pre-approving the exact tool set lets every tool run with
-# no prompt. Verified: `claude -p "...Write rt.txt..." --allowedTools "Bash
-# Read Write Edit ..."` creates the file, result=success, no denials.
+# ONLY `--permission-mode bypassPermissions` bypasses the `.claude/` guard. It
+# does NOT hang in `-p` (verified: writes a `.claude/` file in ~8s, no denials).
+# `--allowedTools` is kept as a belt-and-suspenders fallback in case a future
+# CLI gates bypass back down to `dontAsk` — then at least non-`.claude` tools
+# still work.
 _AGENT_TOOLS = "Bash Read Write Edit Glob Grep Task TodoWrite WebFetch WebSearch NotebookEdit Skill"
-_BYPASS_PERMISSION_FLAGS = ["--allowedTools", _AGENT_TOOLS]
+_BYPASS_PERMISSION_FLAGS = [
+    "--permission-mode", "bypassPermissions",
+    "--allowedTools", _AGENT_TOOLS,
+]
 
 
 # Human-readable hints for the most common claude.exe exit codes. Appended
