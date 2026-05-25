@@ -20,8 +20,9 @@ from dreaming.services import ai_radar  # noqa: E402
 
 
 SOURCES_YAML = """\
-# AI Radar — watchlist. Редактируется вручную или из UI (Wave R2).
-# Все строковые поля помимо key/name/tags считаются URL-ами.
+# AI Radar — watchlist по умолчанию. Идея: пользователь почти ничего не
+# добавляет руками — приложение шипается с этим набором, юзер лишь правит.
+# Все строковые поля помимо key/name/tags считаются URL-ами (X/blog/rss/...).
 
 people:
   - key: karpathy
@@ -35,6 +36,52 @@ people:
     name: "Ilya Sutskever"
     org_url: "https://ssi.inc/"
     tags: [safety, frontier]
+
+  - key: jimfan
+    name: "Jim Fan"
+    x: "https://x.com/DrJimFan"
+    tags: [agents, robotics, embodied]
+
+  - key: chris_olah
+    name: "Chris Olah"
+    x: "https://x.com/ch402"
+    blog: "https://colah.github.io/"
+    tags: [interpretability]
+
+  - key: nathan_lambert
+    name: "Nathan Lambert"
+    blog: "https://www.interconnects.ai/"
+    x: "https://x.com/natolambert"
+    tags: [post-training, rlhf]
+
+  - key: simonw
+    name: "Simon Willison"
+    blog: "https://simonwillison.net/"
+    x: "https://x.com/simonw"
+    tags: [tooling, practical, agents]
+
+  - key: chollet
+    name: "François Chollet"
+    blog: "https://fchollet.com/"
+    x: "https://x.com/fchollet"
+    tags: [reasoning, arc]
+
+  - key: tri_dao
+    name: "Tri Dao"
+    blog: "https://tridao.me/"
+    x: "https://x.com/tri_dao"
+    tags: [architectures, efficiency]
+
+  - key: raschka
+    name: "Sebastian Raschka"
+    blog: "https://magazine.sebastianraschka.com/"
+    x: "https://x.com/rasbt"
+    tags: [education, llm-engineering]
+
+  - key: lilian_weng
+    name: "Lilian Weng"
+    blog: "https://lilianweng.github.io/"
+    tags: [surveys, agents]
 
 orgs:
   - key: anthropic
@@ -53,6 +100,46 @@ orgs:
     blog: "https://deepmind.google/discover/blog/"
     tags: [gemini, science]
 
+  - key: meta_fair
+    name: "Meta AI (FAIR)"
+    blog: "https://ai.meta.com/blog/"
+    tags: [llama, open-weights, research]
+
+  - key: mistral
+    name: "Mistral AI"
+    news: "https://mistral.ai/news/"
+    tags: [open-weights, efficiency]
+
+  - key: qwen
+    name: "Qwen (Alibaba)"
+    blog: "https://qwenlm.github.io/blog/"
+    tags: [open-weights, multilingual]
+
+  - key: deepseek
+    name: "DeepSeek"
+    blog: "https://www.deepseek.com/"
+    tags: [open-weights, reasoning]
+
+  - key: ai2
+    name: "Allen Institute for AI (AI2)"
+    blog: "https://allenai.org/blog"
+    tags: [olmo, open-science]
+
+  - key: xai
+    name: "xAI"
+    news: "https://x.ai/news"
+    tags: [grok, frontier]
+
+  - key: cohere
+    name: "Cohere"
+    blog: "https://cohere.com/blog"
+    tags: [enterprise, rag]
+
+  - key: huggingface
+    name: "Hugging Face"
+    blog: "https://huggingface.co/blog"
+    tags: [open-source, ecosystem]
+
 feeds:
   - key: hf_daily
     name: "Hugging Face Daily Papers"
@@ -62,7 +149,27 @@ feeds:
   - key: arxiv_cs_cl
     name: "arXiv cs.CL"
     rss: "http://export.arxiv.org/rss/cs.CL"
-    tags: [papers]
+    tags: [papers, nlp]
+
+  - key: arxiv_cs_lg
+    name: "arXiv cs.LG"
+    rss: "http://export.arxiv.org/rss/cs.LG"
+    tags: [papers, ml]
+
+  - key: import_ai
+    name: "Import AI (Jack Clark)"
+    url: "https://importai.substack.com/"
+    tags: [newsletter, policy, frontier]
+
+  - key: the_batch
+    name: "The Batch (DeepLearning.AI)"
+    url: "https://www.deeplearning.ai/the-batch/"
+    tags: [newsletter, weekly]
+
+  - key: latent_space
+    name: "Latent Space (swyx)"
+    url: "https://www.latent.space/"
+    tags: [newsletter, engineering, agents]
 """
 
 
