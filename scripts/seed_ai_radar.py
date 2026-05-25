@@ -1,15 +1,13 @@
-"""Seed AI Radar — данные для ручной проверки UI до того, как заработает реальный сканер.
+"""Seed AI Radar: write the default watchlist, then populate it with REAL
+findings via the live RSS/Atom scanner (dreaming.services.ai_radar_scan).
 
-Создаёт sources.yaml с базовым watchlist-ом (Karpathy, Anthropic, OpenAI, HF,
-arXiv) и вставляет 5 фиктивных findings в data/dreaming.db. Идемпотентен:
-UNIQUE(source_key, url) защищает от дублей при повторном запуске.
+Idempotent: UNIQUE(source_key, url) dedups across runs.
 
     python scripts/seed_ai_radar.py
 """
 from __future__ import annotations
 import asyncio
 import sys
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -173,73 +171,6 @@ feeds:
 """
 
 
-def _seed_records() -> list[dict]:
-    now = datetime.now(timezone.utc)
-    iso = lambda d: d.isoformat()  # noqa: E731
-    return [
-        {
-            "source_key": "karpathy",
-            "source_kind": "person",
-            "url": "https://example.test/karpathy/seed-llm-zoo",
-            "title": "Karpathy: краткий обзор LLM zoo 2026",
-            "summary_ru": "Карпатый прошёлся по текущим архитектурам — что выжило, что отвалилось, куда смотрит лагерь академии vs индустрии.",
-            "summary_en": "Karpathy's quick map of the 2026 LLM zoo — what survived, what didn't, where academia diverges from industry.",
-            "published_at": iso(now - timedelta(days=1)),
-            "tags_json": '["education", "agents", "llm-internals"]',
-            "novelty_score": 0.7,
-            "relevance_hint": "",
-        },
-        {
-            "source_key": "anthropic",
-            "source_kind": "org",
-            "url": "https://example.test/anthropic/seed-mech-interp",
-            "title": "Anthropic: интерпретируемость головок Claude — март 2026",
-            "summary_ru": "Новый paper по mechanistic interpretability: разбор где в Claude хранится «личность» агента и как это меняется через тонкие настройки.",
-            "summary_en": "New mech-interp paper: dissecting where Claude stores an agent persona and how light fine-tunes shift it.",
-            "published_at": iso(now - timedelta(days=3)),
-            "tags_json": '["interpretability", "claude", "safety"]',
-            "novelty_score": 0.85,
-            "relevance_hint": "",
-        },
-        {
-            "source_key": "openai",
-            "source_kind": "org",
-            "url": "https://example.test/openai/seed-realtime-agents",
-            "title": "OpenAI: realtime API для агентов c голосом",
-            "summary_ru": "OpenAI обновили realtime API — добавили поддержку tool-use внутри голосовых сессий с задержкой <250 мс.",
-            "summary_en": "OpenAI ships realtime API tool-use inside voice sessions, sub-250ms latency.",
-            "published_at": iso(now - timedelta(days=5)),
-            "tags_json": '["gpt", "agents", "voice"]',
-            "novelty_score": 0.6,
-            "relevance_hint": "",
-        },
-        {
-            "source_key": "hf_daily",
-            "source_kind": "feed",
-            "url": "https://example.test/hf/seed-paper-rlhf-cheaper",
-            "title": "Paper: RLHF дешевле на порядок через self-play preference data",
-            "summary_ru": "Авторы предлагают генерить preference-пары полностью моделью и матчатся с человеческими разметками на 96%.",
-            "summary_en": "Authors generate preference pairs from the model itself and match human labels at 96% — 10× cheaper than human RLHF.",
-            "published_at": iso(now - timedelta(days=2)),
-            "tags_json": '["papers", "rlhf"]',
-            "novelty_score": 0.55,
-            "relevance_hint": "",
-        },
-        {
-            "source_key": "deepmind",
-            "source_kind": "org",
-            "url": "https://example.test/deepmind/seed-gemini-coder",
-            "title": "DeepMind: Gemini Coder 2 — SOTA на SWE-bench Verified",
-            "summary_ru": "Новый кодер от DeepMind рвёт SWE-bench Verified на 8 п.п. за счёт улучшенного длинного контекста и patch-первой архитектуры.",
-            "summary_en": "DeepMind's new coder takes SWE-bench Verified by 8 points via better long-context and patch-first architecture.",
-            "published_at": iso(now - timedelta(hours=14)),
-            "tags_json": '["coding", "gemini", "benchmarks"]',
-            "novelty_score": 0.75,
-            "relevance_hint": "",
-        },
-    ]
-
-
 async def main() -> int:
     sources_path = ai_radar.DEFAULT_SOURCES_PATH
     sources_path.parent.mkdir(parents=True, exist_ok=True)
@@ -249,13 +180,15 @@ async def main() -> int:
     else:
         print(f"watchlist already exists: {sources_path} (left untouched)")
 
-    db_path = "data/dreaming.db"
-    db = SqliteDB(db_path)
+    # Populate with REAL findings via the live RSS/Atom scanner (no fake data).
+    from dreaming.services.ai_radar_scan import scan_now
+    db = SqliteDB("data/dreaming.db")
     await db.connect()
     try:
-        inserted = await db.insert_radar_findings(_seed_records())
-        rows = await db.list_radar_findings(limit=20)
-        print(f"inserted: {inserted} / 5 seed records")
+        res = await scan_now(db)
+        print(f"scan: {res['sources_with_feed']}/{res['sources']} sources had a feed, "
+              f"{res['items']} items, {res['inserted']} new inserted")
+        rows = await db.list_radar_findings(limit=500)
         print(f"radar table now holds: {len(rows)} rows")
     finally:
         await db.close()

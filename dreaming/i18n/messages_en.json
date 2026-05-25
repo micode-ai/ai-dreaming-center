@@ -543,5 +543,10 @@
   "radar.btn.apply_note": "To note",
   "radar.project.empty": "Findings whose relevance_hint contains this project's slug, or which you manually pinned to it, show up here.",
   "radar.project.hint": "Pin from the global feed",
-  "radar.link.global": "All findings"
+  "radar.link.global": "All findings",
+  "radar.scan.run": "Scan now",
+  "radar.scan.running": "Scanning…",
+  "radar.scan.done": "Scan complete: added {inserted} new signals from {sources} sources with RSS.",
+  "radar.scan.failed": "Scan failed: {err}",
+  "radar.scan.hint": "Pulls fresh articles via RSS/Atom from watchlist sources that publish a feed."
 }

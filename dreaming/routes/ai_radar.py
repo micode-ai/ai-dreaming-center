@@ -7,10 +7,14 @@ POST /ai-radar/{id}/pin              — закрепить за проекто�
 """
 from __future__ import annotations
 import json
+import logging
 from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 
+from dreaming.lib.flash import set_flash
 from dreaming.services import ai_radar
+
+log = logging.getLogger(__name__)
 
 
 router = APIRouter()
@@ -130,6 +134,27 @@ async def ai_radar_pin(
     if not ok:
         raise HTTPException(status_code=404, detail="finding not found")
     return RedirectResponse(_back_to(request), status_code=303)
+
+
+@router.post("/ai-radar/scan-now")
+async def ai_radar_scan_now(request: Request):
+    """Run the live RSS/Atom scanner against the watchlist and merge new
+    findings. Synchronous — the scan is bounded (concurrency-limited, per-source
+    timeout) and usually finishes in a few seconds."""
+    from dreaming.services.ai_radar_scan import scan_now
+    locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
+    resp = RedirectResponse(_back_to(request), status_code=303)
+    try:
+        res = await scan_now(request.app.state.db)
+        msg = request.app.state.i18n.t(
+            "radar.scan.done", locale=locale,
+            inserted=res["inserted"], sources=res["sources_with_feed"],
+        )
+        set_flash(resp, msg, level="success")
+    except Exception as e:
+        log.warning("ai-radar scan-now failed: %s", e)
+        set_flash(resp, request.app.state.i18n.t("radar.scan.failed", locale=locale, err=str(e)[:200]), level="error")
+    return resp
 
 
 def _back_to(request: Request) -> str:

@@ -8,7 +8,11 @@
   <span class="text-xs" style="color: var(--text-faint);">
     {{ findings|length }} {{ "radar.findings_for_project" | t(locale=locale) }}
   </span>
-  <a href="/ai-radar" class="ml-auto text-xs underline" style="color: var(--text-muted);">
+  <form method="post" action="/ai-radar/scan-now" class="ml-auto inline">
+    <button class="text-xs px-3 py-1 rounded" title="{{ 'radar.scan.hint' | t(locale=locale) }}"
+            style="background: var(--brand); color:#fff;">{{ "radar.scan.run" | t(locale=locale) }}</button>
+  </form>
+  <a href="/ai-radar" class="text-xs underline" style="color: var(--text-muted);">
     {{ "radar.link.global" | t(locale=locale) }} →
   </a>
 </header>
