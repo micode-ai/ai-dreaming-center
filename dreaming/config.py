@@ -89,6 +89,10 @@ class AppSettings(BaseSettings):
     weekly_evolve_apply_enabled: bool = False
     daily_bootstrap_cron: str = "0 4 * * *"
     daily_bootstrap_enabled: bool = False
+    # AI Radar — global weekly RSS/Atom scan of the watchlist (Monday 07:00).
+    # Off by default so it doesn't fetch external feeds without opt-in.
+    radar_scan_cron: str = "0 7 * * 1"
+    radar_scan_enabled: bool = False
     daily_plans_cleanup_cron: str = "30 23 * * *"
     daily_plans_cleanup_enabled: bool = False
     monthly_deep_audit_cron: str = "0 5 1 * *"

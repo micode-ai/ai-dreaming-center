@@ -304,6 +304,18 @@ async def unregister_project_jobs(scheduler: AsyncIOScheduler, project) -> None:
             pass
 
 
+async def _radar_scan_job(app_state):
+    """Global weekly AI Radar scan — fetch the watchlist's RSS/Atom feeds and
+    merge new findings. Gated by `radar_scan_enabled`."""
+    try:
+        from dreaming.services.ai_radar_scan import scan_now
+        res = await scan_now(app_state.db)
+        log.info("radar_scan_job: %d new findings from %d feeds",
+                 res.get("inserted", 0), res.get("sources_with_feed", 0))
+    except Exception as e:
+        log.warning("radar_scan_job failed: %s", e)
+
+
 def build_scheduler(app_state) -> AsyncIOScheduler:
     """Build scheduler with the global reconcile job. Per-project jobs are
     registered separately by main.py after lifespan startup completes."""
@@ -316,4 +328,14 @@ def build_scheduler(app_state) -> AsyncIOScheduler:
         _ai_usage_ingest_job, "interval", minutes=5, args=[app_state],
         id="ai_usage_ingest",
     )
+    settings = app_state.settings
+    if getattr(settings, "radar_scan_enabled", False):
+        cron = getattr(settings, "radar_scan_cron", "0 7 * * 1")
+        try:
+            sched.add_job(
+                _radar_scan_job, CronTrigger.from_crontab(cron), args=[app_state],
+                id="radar_scan",
+            )
+        except ValueError as e:
+            log.warning("radar_scan: bad cron %r (%s) — job not scheduled", cron, e)
     return sched
