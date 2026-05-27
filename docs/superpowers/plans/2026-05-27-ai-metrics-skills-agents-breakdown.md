@@ -91,7 +91,8 @@ python -c "import asyncio, tempfile, os; from dreaming.services.db import Sqlite
 async def m():
     p = os.path.join(tempfile.mkdtemp(), 't.db')
     db = SqliteDB(p); await db.connect()
-    cols = [r[1] async for r in db._conn.execute('PRAGMA table_info(ai_usage_events)')]
+    async with db._conn.execute('PRAGMA table_info(ai_usage_events)') as cur:
+        cols = [r[1] for r in await cur.fetchall()]
     assert 'agent_name' in cols, cols
     t = await db.fetch_one(\"SELECT name FROM sqlite_master WHERE type='table' AND name='ai_skill_invocations'\")
     assert t is not None
