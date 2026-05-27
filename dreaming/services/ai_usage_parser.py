@@ -530,3 +530,115 @@ async def ingest_ai_usage(
         result["errors"], result["duration_ms"],
     )
     return result
+
+
+async def backfill_skill_agent_stats(
+    db: SqliteDB,
+    projects: ProjectsService,
+    claude_projects_dir: str | None = None,
+    max_files: int = 20000,
+) -> dict:
+    """One-time re-scan from offset 0 that backfills `agent_name` on existing
+    ai_usage_events rows and fills ai_skill_invocations for historical files.
+
+    The incremental ingest tracks byte offsets and skips unchanged files, and
+    INSERT OR IGNORE won't update the new column on existing rows — so history
+    needs this dedicated pass. Idempotent: the UPDATE is deterministic and skill
+    inserts use INSERT OR IGNORE.
+
+    Two-phase approach:
+    1. Walk discovered on-disk JSONL files for skill invocations.
+    2. Query the DB for existing event rows with NULL agent_name whose
+       source_file has a sibling .meta.json — covers files already tracked
+       in the DB but no longer present on disk."""
+    result = {"files": 0, "agent_files": 0, "skills_inserted": 0, "errors": 0}
+    try:
+        cwd_to_pid = await build_cwd_to_project_id(db)
+        if not cwd_to_pid:
+            return result
+
+        # ── Phase 1: walk on-disk files for skill invocations ────────────
+        root = resolve_claude_projects_root(claude_projects_dir)
+        files = list(discover_jsonl_files(root))
+        if max_files and len(files) > max_files:
+            files = files[:max_files]
+
+        for jsonl, is_subagent, slug in files:
+            result["files"] += 1
+            path_str = str(jsonl)
+
+            if is_subagent:
+                agent_name = read_agent_name(jsonl)
+                if agent_name:
+                    try:
+                        await db.execute(
+                            "UPDATE ai_usage_events SET agent_name=? "
+                            "WHERE source_file=? AND (agent_name IS NULL OR agent_name='')",
+                            (agent_name, path_str),
+                        )
+                        result["agent_files"] += 1
+                    except Exception:
+                        result["errors"] += 1
+
+            try:
+                per_pid: dict[int, list[dict[str, Any]]] = {}
+                with jsonl.open(encoding="utf-8", errors="ignore") as f:
+                    for line in f:
+                        if '"Skill"' not in line:
+                            continue
+                        try:
+                            obj = json.loads(line)
+                        except ValueError:
+                            continue
+                        srows = extract_skill_invocations(obj, source_file=path_str)
+                        if not srows:
+                            continue
+                        cwd = obj.get("cwd")
+                        pid = cwd_to_pid.get(_norm_for_match(cwd)) if cwd else None
+                        if pid is None:
+                            continue
+                        per_pid.setdefault(pid, []).extend(srows)
+                for pid, srows in per_pid.items():
+                    result["skills_inserted"] += await _insert_skill_invocations(
+                        db, pid, srows
+                    )
+            except OSError:
+                result["errors"] += 1
+
+        # ── Phase 2: backfill agent_name from DB rows not yet updated ────
+        # Query distinct source_file paths that still have NULL agent_name.
+        # For each, read its sibling .meta.json if it exists.
+        try:
+            null_rows = await db.fetch_all(
+                "SELECT DISTINCT source_file FROM ai_usage_events "
+                "WHERE agent_name IS NULL OR agent_name=''"
+            )
+            for r in null_rows:
+                src = r["source_file"]
+                if not src:
+                    continue
+                jsonl_path = Path(src)
+                # Only process subagent files (in a 'subagents' directory)
+                if jsonl_path.parent.name != "subagents":
+                    continue
+                agent_name = read_agent_name(jsonl_path)
+                if not agent_name:
+                    continue
+                try:
+                    await db.execute(
+                        "UPDATE ai_usage_events SET agent_name=? "
+                        "WHERE source_file=? AND (agent_name IS NULL OR agent_name='')",
+                        (agent_name, src),
+                    )
+                    result["agent_files"] += 1
+                except Exception:
+                    result["errors"] += 1
+        except Exception:
+            log.exception("backfill_skill_agent_stats phase-2 failed")
+            result["errors"] += 1
+
+    except Exception:
+        log.exception("backfill_skill_agent_stats failed")
+        result["errors"] += 1
+    log.info("backfill_skill_agent_stats: %s", result)
+    return result
