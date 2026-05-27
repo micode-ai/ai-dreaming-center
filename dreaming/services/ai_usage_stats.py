@@ -135,6 +135,64 @@ async def _by_project(
     return [dict(r) for r in rows]
 
 
+async def _by_skill(
+    db: SqliteDB,
+    *,
+    start: str,
+    end: str,
+    project_id: int | None = None,
+    model: str | None = None,
+) -> list[dict[str, Any]]:
+    """Skill invocation counts in the window, ordered by calls desc."""
+    sql = (
+        "SELECT skill_name, COUNT(*) AS calls, "
+        "COUNT(DISTINCT session_id) AS sessions "
+        "FROM ai_skill_invocations "
+        "WHERE ts_date BETWEEN ? AND ? "
+    )
+    params: list[Any] = [start, end]
+    if project_id is not None:
+        sql += "AND project_id=? "
+        params.append(project_id)
+    if model:
+        sql += "AND model=? "
+        params.append(model)
+    sql += "GROUP BY skill_name ORDER BY calls DESC, skill_name ASC"
+    rows = await db.fetch_all(sql, tuple(params))
+    return [dict(r) for r in rows]
+
+
+async def _by_agent(
+    db: SqliteDB,
+    *,
+    start: str,
+    end: str,
+    project_id: int | None = None,
+    model: str | None = None,
+) -> list[dict[str, Any]]:
+    """Token totals + run count per Task subagent (agentType), tokens desc."""
+    sql = (
+        "SELECT agent_name, "
+        "COUNT(*) AS events, "
+        "COUNT(DISTINCT session_id) AS runs, "
+        "COALESCE(SUM(input_tokens+output_tokens+cache_read_tokens+cache_creation_tokens), 0) "
+        "  AS total_tokens "
+        "FROM ai_usage_events "
+        "WHERE ts_date BETWEEN ? AND ? "
+        "AND agent_name IS NOT NULL AND agent_name <> '' "
+    )
+    params: list[Any] = [start, end]
+    if project_id is not None:
+        sql += "AND project_id=? "
+        params.append(project_id)
+    if model:
+        sql += "AND model=? "
+        params.append(model)
+    sql += "GROUP BY agent_name ORDER BY total_tokens DESC, agent_name ASC"
+    rows = await db.fetch_all(sql, tuple(params))
+    return [dict(r) for r in rows]
+
+
 async def _events_total_all_time(db: SqliteDB) -> int:
     row = await db.fetch_one("SELECT COUNT(*) AS c FROM ai_usage_events")
     return int(row["c"]) if row else 0
@@ -412,6 +470,8 @@ async def project_summary(
     top_sessions = await _top_sessions(
         db, start=fs, end=fe, project_id=project_id, model=model, limit=5,
     )
+    by_skill = await _by_skill(db, start=fs, end=fe, project_id=project_id, model=model)
+    by_agent = await _by_agent(db, start=fs, end=fe, project_id=project_id, model=model)
     kpi = _kpi(filtered, main_sub, sessions)
     week = await _week_stats_project(db, project_id)
     recent = await _recent_learning_sessions(db, project_id, limit=10)
@@ -428,6 +488,8 @@ async def project_summary(
         "last_7d": last_7d,
         "last_30d": last_30d,
         "by_model": by_model,
+        "by_skill": by_skill,
+        "by_agent": by_agent,
         "daily": daily,
         "main_sub": main_sub,
         "top_sessions": top_sessions,
@@ -460,6 +522,8 @@ async def global_summary(
     top_sessions = await _top_sessions(
         db, start=fs, end=fe, project_id=None, model=model, limit=5,
     )
+    by_skill = await _by_skill(db, start=fs, end=fe, project_id=None, model=model)
+    by_agent = await _by_agent(db, start=fs, end=fe, project_id=None, model=model)
     by_project = await _by_project(db, start=fs, end=fe)
     events_total = await _events_total_all_time(db)
     kpi = _kpi(filtered, main_sub, sessions)
@@ -475,6 +539,8 @@ async def global_summary(
         "last_7d": last_7d,
         "last_30d": last_30d,
         "by_model": by_model,
+        "by_skill": by_skill,
+        "by_agent": by_agent,
         "by_project": by_project,
         "daily": daily,
         "main_sub": main_sub,
