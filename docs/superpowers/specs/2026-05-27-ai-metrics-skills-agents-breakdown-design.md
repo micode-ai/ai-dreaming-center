@@ -151,6 +151,24 @@ build a temp DB, ingest a fixture session containing a Skill invocation and a
 subagent file + meta, then assert `_by_skill` / `_by_agent` and the backfill produce
 the expected aggregates. Run after implementation.
 
+## Implementation notes (from spec review)
+
+- **Schema placement.** Apply both schema changes through the idempotent
+  `_migrate_orchestration` path (guarded `PRAGMA table_info` + `ALTER TABLE … ADD
+  COLUMN agent_name`; `CREATE TABLE IF NOT EXISTS ai_skill_invocations`). A bare
+  `ADD COLUMN` re-run on an existing DB throws "duplicate column", so it must be
+  guarded — matching the existing migration pattern called out in CLAUDE.md.
+- **`project_id` for skill rows.** Skill invocations live on the same JSONL lines
+  the ingest already parses. Reuse the existing `cwd_to_pid` map and apply the same
+  skip rule (drop rows whose `cwd` matches no project) so a skill row always has a
+  valid FK `project_id`. Do not invent a separate resolution path.
+- **Backfill file cap.** The one-time backfill must apply the same generous
+  `max_files` cap / project-cwd filter the scheduler uses for `ingest_ai_usage`
+  (raised well above the default for exactly this reason), or it will stamp only a
+  subset of files.
+- **Global aggregation.** `_by_skill` / `_by_agent` called with `project_id=None`
+  aggregate across all projects for the global view, exactly like `_by_model`.
+
 ## Out of scope
 
 - Per-skill token attribution (intentionally — see above).
