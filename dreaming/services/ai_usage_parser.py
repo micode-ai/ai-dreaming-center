@@ -281,11 +281,30 @@ async def _insert_events(db: SqliteDB, project_id: int, rows: list[dict[str, Any
     await db._conn.executemany(
         "INSERT OR IGNORE INTO ai_usage_events "
         "(message_id, project_id, ts, ts_date, session_id, project_slug, project_cwd, "
-        "git_branch, model, is_sidechain, agent_id, input_tokens, output_tokens, "
+        "git_branch, model, is_sidechain, agent_id, agent_name, input_tokens, output_tokens, "
         "cache_read_tokens, cache_creation_tokens, source_file, source_line) "
         "VALUES (:message_id, :project_id, :ts, :ts_date, :session_id, :project_slug, "
-        ":project_cwd, :git_branch, :model, :is_sidechain, :agent_id, :input_tokens, "
+        ":project_cwd, :git_branch, :model, :is_sidechain, :agent_id, :agent_name, :input_tokens, "
         ":output_tokens, :cache_read_tokens, :cache_creation_tokens, :source_file, :source_line)",
+        [{**r, "project_id": project_id} for r in rows],
+    )
+    await db._conn.commit()
+    return db._conn.total_changes - before
+
+
+async def _insert_skill_invocations(
+    db: SqliteDB, project_id: int, rows: list[dict[str, Any]]
+) -> int:
+    """Batch INSERT OR IGNORE into ai_skill_invocations. Returns inserted count."""
+    if not rows or db._conn is None:
+        return 0
+    before = db._conn.total_changes
+    await db._conn.executemany(
+        "INSERT OR IGNORE INTO ai_skill_invocations "
+        "(message_id, skill_name, project_id, ts, ts_date, session_id, "
+        "is_sidechain, model, source_file) "
+        "VALUES (:message_id, :skill_name, :project_id, :ts, :ts_date, "
+        ":session_id, :is_sidechain, :model, :source_file)",
         [{**r, "project_id": project_id} for r in rows],
     )
     await db._conn.commit()
@@ -350,6 +369,7 @@ async def ingest_ai_usage(
     result = {
         "files": 0,
         "events_inserted": 0,
+        "skills_inserted": 0,
         "events_skipped": 0,
         "errors": 0,
         "duration_ms": 0,
@@ -375,6 +395,7 @@ async def ingest_ai_usage(
             result["files"] += 1
             path_str = str(jsonl)
             on_disk.add(path_str)
+            agent_name = read_agent_name(jsonl) if is_subagent else None
             try:
                 st = jsonl.stat()
             except OSError as e:
@@ -402,6 +423,7 @@ async def ingest_ai_usage(
 
             # Group rows by resolved project_id; skip those that don't map.
             per_project_rows: dict[int, list[dict[str, Any]]] = {}
+            per_project_skills: dict[int, list[dict[str, Any]]] = {}
             errors_in_file = 0
             skipped_rows = 0
             file_project_id = stored["project_id"] if stored else None
@@ -413,31 +435,47 @@ async def ingest_ai_usage(
                 except Exception:
                     errors_in_file += 1
                     continue
-                row = parse_line(
-                    text,
-                    project_slug=slug,
-                    source_file=path_str,
-                    source_line=i,
-                )
-                if row is None:
+                try:
+                    obj = json.loads(text)
+                except json.JSONDecodeError:
                     if text.strip() and not text.startswith("{"):
                         errors_in_file += 1
                     continue
 
-                cwd = row.get("project_cwd")
+                # Same pid resolution as before — the original resolved from
+                # row["project_cwd"], which parse_obj sets to obj["cwd"]; this is
+                # equivalent, just hoisted so skill rows can reuse it.
+                cwd = obj.get("cwd")
                 pid = cwd_to_pid.get(_norm_for_match(cwd)) if cwd else None
-                if pid is None:
-                    skipped_rows += 1
-                    continue
-                per_project_rows.setdefault(pid, []).append(row)
-                if file_project_id is None:
-                    file_project_id = pid
+
+                row = parse_obj(
+                    obj, project_slug=slug, source_file=path_str, source_line=i,
+                )
+                if row is not None:
+                    if pid is None:
+                        skipped_rows += 1
+                    else:
+                        row["agent_name"] = agent_name
+                        per_project_rows.setdefault(pid, []).append(row)
+                        if file_project_id is None:
+                            file_project_id = pid
+
+                skill_rows = extract_skill_invocations(obj, source_file=path_str)
+                if skill_rows and pid is not None:
+                    per_project_skills.setdefault(pid, []).extend(skill_rows)
 
             inserted_here = 0
             for pid, prows in per_project_rows.items():
                 for start in range(0, len(prows), batch_size):
                     inserted_here += await _insert_events(
                         db, pid, prows[start:start + batch_size]
+                    )
+
+            skills_here = 0
+            for pid, srows in per_project_skills.items():
+                for start in range(0, len(srows), batch_size):
+                    skills_here += await _insert_skill_invocations(
+                        db, pid, srows[start:start + batch_size]
                     )
 
             # Pick a project_id for the ai_usage_files row. Prefer the most
@@ -469,6 +507,7 @@ async def ingest_ai_usage(
             )
 
             result["events_inserted"] += inserted_here
+            result["skills_inserted"] += skills_here
             result["events_skipped"] += skipped_rows
             result["errors"] += errors_in_file
 
