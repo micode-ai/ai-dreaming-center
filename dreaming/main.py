@@ -64,7 +64,8 @@ async def lifespan(app: FastAPI):
         )
         if row is not None and int(row["c"]) == 0 and has_events is not None:
             from dreaming.services.ai_usage_parser import backfill_skill_agent_stats
-            asyncio.create_task(
+            # Keep a reference so the event loop doesn't GC the task mid-run.
+            app.state.skill_backfill_task = asyncio.create_task(
                 backfill_skill_agent_stats(app.state.db, app.state.projects)
             )
     except Exception as e:

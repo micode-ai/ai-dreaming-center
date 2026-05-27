@@ -174,7 +174,10 @@ async def _by_agent(
     sql = (
         "SELECT agent_name, "
         "COUNT(*) AS events, "
-        "COUNT(DISTINCT session_id) AS runs, "
+        # One subagent run == one agent-<hash>.jsonl == one source_file.
+        # session_id is the PARENT session and is shared across all subagents
+        # of a run, so COUNT(DISTINCT session_id) collapses N parallel runs to 1.
+        "COUNT(DISTINCT source_file) AS runs, "
         "COALESCE(SUM(input_tokens+output_tokens+cache_read_tokens+cache_creation_tokens), 0) "
         "  AS total_tokens "
         "FROM ai_usage_events "
