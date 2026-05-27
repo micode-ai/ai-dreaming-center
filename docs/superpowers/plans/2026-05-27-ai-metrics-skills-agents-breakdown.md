@@ -505,6 +505,9 @@ Then replace the line-parsing block (the `per_project_rows`/`for i, line in enum
                         errors_in_file += 1
                     continue
 
+                # Same pid resolution as before — the original resolved from
+                # row["project_cwd"], which parse_obj sets to obj["cwd"]; this is
+                # equivalent, just hoisted so skill rows can reuse it.
                 cwd = obj.get("cwd")
                 pid = cwd_to_pid.get(_norm_for_match(cwd)) if cwd else None
 
@@ -878,7 +881,9 @@ Expected: success / no missing-key errors.
 
 - [ ] **Step 4: Add the new section to both templates**
 
-In **both** `project_ai_usage.html` and `global_ai_usage.html`, insert this block immediately after the "models / sidechain" row (the `</div>` that closes the `grid ... lg:grid-cols-3` block — in `project_ai_usage.html` that is right after the comment `{# 5. Top sessions #}` begins; insert *before* it):
+In **both** `project_ai_usage.html` and `global_ai_usage.html`, insert this block immediately after the `</div>` that closes the "models / sidechain" `grid ... lg:grid-cols-3` row. The marker comment differs between the files:
+- In `project_ai_usage.html` the grid closes at ~line 108; insert the new block right **before** `{# 5. Top sessions #}` (~line 110).
+- In `global_ai_usage.html` there is **no** `{# 5. Top sessions #}` comment — the same grid closes at ~line 110; insert the new block right **before** `{# Top projects table … #}` (~line 112).
 
 ```html
 {# 3b. Skills (calls) / Agents (tokens) breakdown #}
