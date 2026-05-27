@@ -51,6 +51,20 @@ def discover_jsonl_files(root: Path) -> Iterator[tuple[Path, bool, str]]:
             yield jsonl, is_subagent, slug
 
 
+def read_agent_name(jsonl_path: Path) -> str | None:
+    """For a subagent file `agent-<hash>.jsonl`, read its sibling
+    `agent-<hash>.meta.json` and return the `agentType`, or None."""
+    meta = jsonl_path.with_name(jsonl_path.stem + ".meta.json")
+    if not meta.exists():
+        return None
+    try:
+        data = json.loads(meta.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    name = (data.get("agentType") or "").strip() if isinstance(data, dict) else ""
+    return name or None
+
+
 # ── cwd → project_id resolver ─────────────────────────────────────
 
 def _normalize_cwd(cwd: str | None) -> str | None:
@@ -117,7 +131,22 @@ def parse_line(
         obj = json.loads(raw)
     except json.JSONDecodeError:
         return None
+    return parse_obj(
+        obj,
+        project_slug=project_slug,
+        source_file=source_file,
+        source_line=source_line,
+    )
 
+
+def parse_obj(
+    obj: dict[str, Any],
+    *,
+    project_slug: str,
+    source_file: str,
+    source_line: int,
+) -> dict[str, Any] | None:
+    """Build an event row from an already-parsed JSONL object, or None to skip."""
     t = obj.get("type")
     if t != "assistant":
         return None
@@ -153,6 +182,7 @@ def parse_line(
         "model": msg.get("model"),
         "is_sidechain": 1 if obj.get("isSidechain") else 0,
         "agent_id": obj.get("agentId"),
+        "agent_name": None,
         "input_tokens": input_t,
         "output_tokens": output_t,
         "cache_read_tokens": cache_read_t,
@@ -160,6 +190,56 @@ def parse_line(
         "source_file": source_file,
         "source_line": source_line,
     }
+
+
+def extract_skill_invocations(
+    obj: dict[str, Any],
+    *,
+    source_file: str,
+) -> list[dict[str, Any]]:
+    """Return one row per distinct `Skill` tool_use block in an assistant message.
+
+    Independent of the usage>0 gate parse_obj applies: skill rows do NOT require
+    token usage to be present. `project_id` is attached later by the caller from
+    the cwd→project map. Multiple Skill calls in one message are de-duped per
+    skill name (the PK is (message_id, skill_name))."""
+    if obj.get("type") != "assistant":
+        return []
+    msg = obj.get("message") or {}
+    if not isinstance(msg, dict):
+        return []
+    message_id = msg.get("id")
+    content = msg.get("content")
+    if not message_id or not isinstance(content, list):
+        return []
+    ts = obj.get("timestamp") or ""
+    ts_date = ts[:10] if len(ts) >= 10 else ""
+    if not ts_date:
+        return []
+
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for c in content:
+        if not isinstance(c, dict):
+            continue
+        if c.get("type") != "tool_use" or c.get("name") != "Skill":
+            continue
+        inp = c.get("input")
+        skill = (inp.get("skill") or "").strip() if isinstance(inp, dict) else ""
+        if not skill or skill in seen:
+            continue
+        seen.add(skill)
+        out.append({
+            "message_id": message_id,
+            "skill_name": skill,
+            "ts": ts,
+            "ts_date": ts_date,
+            "session_id": obj.get("sessionId") or "",
+            "is_sidechain": 1 if obj.get("isSidechain") else 0,
+            "model": msg.get("model"),
+            "source_file": source_file,
+        })
+    return out
 
 
 # ── incremental reader ─────────────────────────────────────────────
