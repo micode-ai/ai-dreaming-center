@@ -1,5 +1,7 @@
 """ai-dreaming-center FastAPI entry point."""
 from __future__ import annotations
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI
@@ -25,6 +27,8 @@ from dreaming.routes.api import router as api_router
 from dreaming.routes.ai_radar import router as ai_radar_router
 from dreaming.routes.project_router import router as project_router
 
+log = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -48,6 +52,23 @@ async def lifespan(app: FastAPI):
     # Register per-project jobs for every enabled project
     for proj in await app.state.projects.list_all(only_enabled=True):
         await register_project_jobs(app.state.scheduler, app.state, proj)
+    # One-time backfill of skill/agent breakdown for pre-existing history.
+    # Runs in the background so startup isn't blocked; guarded so it only fires
+    # while ai_skill_invocations is still empty. Idempotent if it re-fires.
+    try:
+        row = await app.state.db.fetch_one(
+            "SELECT COUNT(*) AS c FROM ai_skill_invocations"
+        )
+        has_events = await app.state.db.fetch_one(
+            "SELECT 1 FROM ai_usage_events LIMIT 1"
+        )
+        if row is not None and int(row["c"]) == 0 and has_events is not None:
+            from dreaming.services.ai_usage_parser import backfill_skill_agent_stats
+            asyncio.create_task(
+                backfill_skill_agent_stats(app.state.db, app.state.projects)
+            )
+    except Exception as e:
+        log.warning("skill/agent backfill kickoff failed: %s", e)
     app.state.resolver_factory = get_resolver
     try:
         yield
