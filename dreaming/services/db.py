@@ -376,6 +376,48 @@ class SqliteDB:
         except Exception as e:
             log.warning("Failed to create orchestrator_questions table: %s", e)
 
+        # --- ai-metrics: skills & agents breakdown ---
+        async with self._conn.execute(
+            "PRAGMA table_info(ai_usage_events)"
+        ) as cur:
+            aue_cols = {row[1] for row in await cur.fetchall()}
+        if "agent_name" not in aue_cols:
+            try:
+                await self._conn.execute(
+                    "ALTER TABLE ai_usage_events ADD COLUMN agent_name TEXT"
+                )
+            except Exception as e:
+                log.warning("Failed to add agent_name column: %s", e)
+
+        try:
+            await self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS ai_skill_invocations (
+                    message_id   TEXT NOT NULL,
+                    skill_name   TEXT NOT NULL,
+                    project_id   INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                    ts           TEXT NOT NULL,
+                    ts_date      TEXT NOT NULL,
+                    session_id   TEXT NOT NULL,
+                    is_sidechain INTEGER NOT NULL DEFAULT 0,
+                    model        TEXT,
+                    source_file  TEXT NOT NULL,
+                    PRIMARY KEY (message_id, skill_name)
+                )
+                """
+            )
+            await self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_skill_inv_proj_date "
+                "ON ai_skill_invocations (project_id, ts_date)"
+            )
+            await self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_skill_inv_name "
+                "ON ai_skill_invocations (skill_name, ts_date)"
+            )
+            await self._conn.commit()
+        except Exception as e:
+            log.warning("Failed to create ai_skill_invocations: %s", e)
+
     async def close(self) -> None:
         if self._conn:
             await self._conn.close()
