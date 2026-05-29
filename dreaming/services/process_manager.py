@@ -391,13 +391,19 @@ class ProcessManager:
         self.keep_awake.acquire()
 
         # В interactive-режиме prompt не доехал в argv — отправляем его сейчас
-        # через stdin как первое user-message. resume-сессия не получает prompt
-        # повторно (caller сам решит, нужно ли что-то слать).
-        if interactive_stdin and prompt and not resume_session_id:
+        # через stdin как user-message. Это верно и для resume: «второй ход» в
+        # существующей сессии — это и есть текст, который ввёл пользователь
+        # (или «продолжай» по умолчанию). Раньше resume исключался из условия
+        # (`and not resume_session_id`), и CLI с `--input-format stream-json`
+        # вечно ждал ввод, которого никто не слал → run висел в running, а в UI
+        # «нажимаю Продолжить — ничего не происходит». Шлём всегда, когда есть
+        # prompt; resume-сессия без prompt (если когда-нибудь появится такой
+        # вызыватель) просто ничего не отправит.
+        if interactive_stdin and prompt:
             ok = await session.send_user_message(prompt)
             if not ok:
                 log.warning(
-                    "Failed to send initial prompt to interactive session %s",
+                    "Failed to send prompt to interactive session %s",
                     session_id,
                 )
 
