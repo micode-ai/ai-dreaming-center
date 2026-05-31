@@ -511,6 +511,19 @@ class SqliteDB:
         )
         return sid
 
+    async def get_last_command_session(self, project_id: int, agent_name: str) -> dict | None:
+        """Most-recent session row for a composite command agent_name
+        (e.g. 'cmd:slug:tech-debt-scan'). Returns a dict with status/started_at/
+        finished_at/error_message, or None if the command never ran."""
+        row = await self.fetch_one(
+            "SELECT status, started_at, finished_at, error_message "
+            "FROM agent_learning_sessions "
+            "WHERE project_id=? AND agent_name=? "
+            "ORDER BY started_at DESC LIMIT 1",
+            (project_id, agent_name),
+        )
+        return dict(row) if row else None
+
     async def get_or_create_session(
         self, project_id: int, agent_name: str,
         model: str = "sonnet", reuse_window_sec: int = 120,

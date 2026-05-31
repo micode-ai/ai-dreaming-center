@@ -50,6 +50,12 @@ async def ideas_page(request: Request, slug: str, status: str | None = None):
     projects = await request.app.state.projects.list_all(only_enabled=True)
     pm = request.app.state.process_manager
     scan_running = f"cmd:{project.slug}:product-idea-scan" in pm.list_running()
+    last_scan = None
+    try:
+        last_scan = await request.app.state.db.get_last_command_session(
+            project.id, f"cmd:{project.slug}:product-idea-scan")
+    except Exception:
+        last_scan = None
     return request.app.state.templates.TemplateResponse(
         request, "project_ideas.html",
         {"project": project, "items": items, "ideas_dir": ideas_dir,
@@ -58,6 +64,7 @@ async def ideas_page(request: Request, slug: str, status: str | None = None):
          "autoconfig_default": autoconfig.default_abs(project, "product_ideas_dir"),
          "error": error, "statuses": statuses, "selected_status": status or "",
          "scan_running": scan_running,
+         "last_scan": last_scan,
          "projects": projects, "locale": locale},
     )
 

@@ -1,6 +1,6 @@
 {% extends "_project_layout.html" %}
 {% from "_autoconfig_banner.html" import autoconfig_banner with context %}
-{% from "_scan_action_bar.html" import scan_action_bar %}
+{% from "_scan_action_bar.html" import scan_action_bar with context %}
 {% set active='ideas' %}
 {% block project_content %}
 {% if not ideas_dir_set %}
@@ -15,6 +15,7 @@
      scan_running,
      "ideas.scan.button" | t(locale=locale),
      "ideas.scan.running" | t(locale=locale),
+     last_scan=last_scan,
 ) }}
 <p class="mb-3 text-xs muted">
   <span id="ideas-count">{{ "ideas.count_in_dir" | t(locale=locale, n=items|length, dir=ideas_dir) }}</span>
