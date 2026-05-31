@@ -262,11 +262,30 @@
       {% set unassigned = nodes_by_stage.get('_unassigned', []) %}
       {% if unassigned %}
       <h3 class="font-semibold mb-2 mt-4 text-sm">{{ "orchestration.nodes_unassigned" | t(locale=locale) }} (<span id="node-count">{{ selected_nodes|length }}</span>)</h3>
-      <table class="data-table">
-        <thead><tr><th>agent</th><th>role</th><th>status</th><th>started</th></tr></thead>
+      <div data-tt-scope>
+      <div class="mb-2 flex items-center gap-2">
+        <input type="text" data-tt-search
+               placeholder="{{ 'table.search' | t(locale=locale) }}"
+               class="tt-search">
+        <button type="button" data-tt-reset
+                class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+          {{ "table.reset" | t(locale=locale) }}
+        </button>
+      </div>
+      <table class="data-table"
+             data-table-tools
+             data-tt-key="orch-roster.{{ project.slug }}"
+             data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+             data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
+        <thead><tr>
+          <th data-sort-col="agent" data-sort-type="text">agent</th>
+          <th data-sort-col="role" data-sort-type="text">role</th>
+          <th data-sort-col="status" data-sort-type="status">status</th>
+          <th data-sort-col="started" data-sort-type="date">started</th>
+        </tr></thead>
         <tbody>
         {% for n in unassigned %}
-        <tr>
+        <tr data-filter-row data-status="{{ n.status }}" data-started="{{ (n.started_at or '')[:19] }}">
           <td class="font-mono text-xs">{{ n.agent_name }}</td>
           <td class="text-xs">{{ n.role }}</td>
           <td class="text-xs"><span class="status-pill status-{{ n.status }}">{{ n.status }}</span></td>
@@ -275,6 +294,7 @@
         {% endfor %}
         </tbody>
       </table>
+      </div>
       {% else %}
       <span id="node-count" class="hidden">{{ selected_nodes|length }}</span>
       {% endif %}
@@ -404,18 +424,35 @@
 {% if runs %}
 <details class="mt-6" style="color: var(--text-muted);">
   <summary class="text-xs cursor-pointer">{{ "orchestration.full_list" | t(locale=locale, n=runs|length) }}</summary>
-  <table class="data-table mt-3">
+  <div data-tt-scope>
+  <div class="mb-2 mt-3 flex items-center gap-2">
+    <input type="text" data-tt-search
+           placeholder="{{ 'table.search' | t(locale=locale) }}"
+           class="tt-search">
+    <button type="button" data-tt-reset
+            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+      {{ "table.reset" | t(locale=locale) }}
+    </button>
+  </div>
+  <table class="data-table"
+         data-table-tools
+         data-tt-key="orch-runs.{{ project.slug }}"
+         data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+         data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
     <thead><tr>
-      <th>run_id</th>
-      <th>goal</th>
-      <th>status</th>
-      <th>started</th>
-      <th>finished</th>
+      <th data-sort-col="run_id" data-sort-type="text">run_id</th>
+      <th data-sort-col="goal" data-sort-type="text">goal</th>
+      <th data-sort-col="status" data-sort-type="status">status</th>
+      <th data-sort-col="started" data-sort-type="date">started</th>
+      <th data-sort-col="finished" data-sort-type="date">finished</th>
       <th></th>
     </tr></thead>
     <tbody>
     {% for r in runs %}
-    <tr>
+    <tr data-filter-row
+        data-status="{{ r.status }}"
+        data-started="{{ (r.started_at or '')[:19] }}"
+        data-finished="{{ (r.finished_at or '')[:19] }}">
       <td><a class="font-mono text-xs" style="color: var(--brand-hover); text-decoration: underline;" href="/p/{{ project.slug }}/orchestration?run_id={{ r.id }}">{{ r.id[:8] }}…</a></td>
       <td class="text-xs">{{ (r.goal or '')[:80] }}</td>
       <td><span class="badge badge-{{ {'running':'running','completed':'success','failed':'failed','cancelled':'neutral'}.get(r.status, 'neutral') }}">{{ r.status }}</span></td>
@@ -432,6 +469,7 @@
     {% endfor %}
     </tbody>
   </table>
+  </div>
 </details>
 {% endif %}
 {% endblock %}
