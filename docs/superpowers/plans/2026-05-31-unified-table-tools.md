@@ -640,7 +640,9 @@ window.tableToolsFilters.refs = function (row, value) {
 </script>
 ```
 
-  **Keep** the evolutions bulk-selection IIFE.
+  **Keep** the evolutions bulk-selection IIFE. **Leave untouched** the unrelated
+  `openEvolution` modal `<script>` and the `_markdown_partial.html` include — only
+  the *filter* IIFE is removed.
 - [ ] **Step 4: Parity check** on `/p/<slug>/evolutions` — Step 1 behaviour plus new
   sorting; verify the conflict "apply force" danger modal still fires. Commit:
 
