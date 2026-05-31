@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <title>{{ "setup.title" | t(locale=locale) }}</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/table_tools.css">
+  <script defer src="/static/table_tools.js"></script>
 </head>
 <body class="bg-slate-50">
 <main class="max-w-3xl mx-auto p-8">
@@ -36,28 +38,42 @@
     {% if scan %}
     <section class="bg-white p-6 rounded shadow">
       <h2 class="text-xl font-semibold mb-3">{{ "setup.found_step" | t(locale=locale, scan_root=scan_root) }}</h2>
-      <table class="w-full text-sm">
-        <thead><tr class="text-left border-b">
-          <th class="p-1">{{ "setup.col.enable" | t(locale=locale) }}</th>
-          <th class="p-1">{{ "setup.col.default" | t(locale=locale) }}</th>
-          <th class="p-1">slug</th>
-          <th class="p-1">label</th>
-          <th class="p-1">{{ "setup.col.path" | t(locale=locale) }}</th>
-          <th class="p-1">.claude</th>
-        </tr></thead>
-        <tbody>
-        {% for it in scan %}
-        <tr class="border-b">
-          <td class="p-1"><input type="checkbox" name="enabled_{{ loop.index0 }}" {% if it.has_claude %}checked{% endif %}></td>
-          <td class="p-1"><input type="radio" name="default_idx" value="{{ loop.index0 }}" {% if loop.first %}checked{% endif %}></td>
-          <td class="p-1"><input name="slug_{{ loop.index0 }}" value="{{ it.suggested_slug }}" class="border rounded p-1 w-full"></td>
-          <td class="p-1"><input name="label_{{ loop.index0 }}" value="{{ it.suggested_label }}" class="border rounded p-1 w-full"></td>
-          <td class="p-1"><input name="path_{{ loop.index0 }}" value="{{ it.path }}" class="border rounded p-1 w-full" readonly></td>
-          <td class="p-1">{{ "✓" if it.has_claude else "" }}</td>
-        </tr>
-        {% endfor %}
-        </tbody>
-      </table>
+      <div data-tt-scope>
+        <div class="mb-2 flex items-center gap-2">
+          <input type="text" data-tt-search
+                 placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
+          <button type="button" data-tt-reset
+                  class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+            {{ "table.reset" | t(locale=locale) }}
+          </button>
+        </div>
+        <table class="w-full text-sm"
+               data-table-tools
+               data-tt-key="setup.scan"
+               data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+               data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
+          <thead><tr class="text-left border-b">
+            <th class="p-1">{{ "setup.col.enable" | t(locale=locale) }}</th>
+            <th class="p-1">{{ "setup.col.default" | t(locale=locale) }}</th>
+            <th class="p-1" data-sort-col="slug" data-sort-type="text">slug</th>
+            <th class="p-1" data-sort-col="label" data-sort-type="text">label</th>
+            <th class="p-1" data-sort-col="path" data-sort-type="text">{{ "setup.col.path" | t(locale=locale) }}</th>
+            <th class="p-1">.claude</th>
+          </tr></thead>
+          <tbody>
+          {% for it in scan %}
+          <tr class="border-b" data-filter-row data-path="{{ it.path }}">
+            <td class="p-1"><input type="checkbox" name="enabled_{{ loop.index0 }}" {% if it.has_claude %}checked{% endif %}></td>
+            <td class="p-1"><input type="radio" name="default_idx" value="{{ loop.index0 }}" {% if loop.first %}checked{% endif %}></td>
+            <td class="p-1"><input name="slug_{{ loop.index0 }}" value="{{ it.suggested_slug }}" class="border rounded p-1 w-full"></td>
+            <td class="p-1"><input name="label_{{ loop.index0 }}" value="{{ it.suggested_label }}" class="border rounded p-1 w-full"></td>
+            <td class="p-1"><input name="path_{{ loop.index0 }}" value="{{ it.path }}" class="border rounded p-1 w-full" readonly></td>
+            <td class="p-1">{{ "✓" if it.has_claude else "" }}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
       <input type="hidden" name="scan_count" value="{{ scan|length }}">
       <p class="text-sm muted mt-3">{{ "setup.found_count" | t(locale=locale, n=scan|length) }}</p>
     </section>
