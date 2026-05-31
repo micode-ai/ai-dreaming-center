@@ -17,7 +17,7 @@ async def dashboard(request: Request, slug: str):
     db = request.app.state.db
     pm = request.app.state.process_manager
     stats = await db.week_stats(project.id)
-    sessions = await db.list_sessions(project.id, limit=20)
+    sessions = await db.list_sessions(project.id, limit=20)  # table-tools filters client-side over this capped set (most-recent 20); see docs/superpowers/plans re: table-tools
     pfx = f"{project.slug}:"
     cmd_pfx = f"cmd:{project.slug}:"
     # Include both self-study and command-style keys; the template constructs

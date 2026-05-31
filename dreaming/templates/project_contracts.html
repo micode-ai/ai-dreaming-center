@@ -10,19 +10,36 @@
 <p class="text-sm text-red-700">{{ "common.error" | t(locale=locale) }}: <code>{{ error }}</code></p>
 {% elif items %}
 <p class="text-xs muted mb-3">{{ items|length }} contracts</p>
-<table class="w-full bg-white rounded shadow text-sm">
+<div data-tt-scope>
+  <div class="mb-2 flex items-center gap-2">
+    <input type="text" data-tt-search
+           placeholder="{{ 'table.search' | t(locale=locale) }}"
+           class="tt-search">
+    <button type="button" data-tt-reset
+            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+      {{ "table.reset" | t(locale=locale) }}
+    </button>
+  </div>
+<table class="w-full bg-white rounded shadow text-sm"
+       data-table-tools
+       data-tt-key="contracts.{{ project.slug }}"
+       data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+       data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
   <thead class="text-left border-b"><tr>
-    <th class="p-2">name</th>
-    <th class="p-2">kind</th>
-    <th class="p-2">module / page</th>
-    <th class="p-2">status</th>
-    <th class="p-2">last review</th>
+    <th class="p-2" data-sort-col="name" data-sort-type="text">name</th>
+    <th class="p-2" data-sort-col="kind" data-sort-type="text">kind</th>
+    <th class="p-2" data-sort-col="module" data-sort-type="text">module / page</th>
+    <th class="p-2" data-sort-col="status" data-sort-type="status">status</th>
+    <th class="p-2" data-sort-col="review" data-sort-type="date">last review</th>
     <th class="p-2">refs</th>
     <th class="p-2"></th>
   </tr></thead>
   <tbody>
   {% for it in items %}
-  <tr class="border-b align-top">
+  <tr class="border-b align-top"
+      data-filter-row
+      data-status="{{ it.status or 'draft' }}"
+      data-review="{{ (it.last_review_at or '')[:10] }}">
     <td class="p-2 font-mono text-xs">
       <a class="text-blue-600 underline" href="/p/{{ project.slug }}/contracts/view?path={{ it.relative_path | urlencode }}">{{ it.name }}</a>
     </td>
@@ -67,6 +84,7 @@
   {% endfor %}
   </tbody>
 </table>
+</div>
 {% else %}
 <div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
   <p class="font-semibold text-sky-900 mb-1">{{ "contracts.empty.title" | t(locale=locale, dir=contracts_dir) }}</p>

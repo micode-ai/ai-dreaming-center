@@ -20,30 +20,44 @@
   </form>
   {% endif %}
 </div>
-<table class="w-full bg-white rounded shadow text-sm">
-  <thead class="text-left border-b"><tr>
-    <th class="p-2">reviewer</th>
-    <th class="p-2">id</th>
-    <th class="p-2">title</th>
-    <th class="p-2">severity</th>
-    <th class="p-2">module</th>
-    <th class="p-2">file</th>
-    <th class="p-2">rule</th>
-  </tr></thead>
-  <tbody>
-  {% for it in items %}
-  <tr class="border-b">
-    <td class="p-2 font-mono text-xs">{{ it.reviewer }}</td>
-    <td class="p-2 font-mono text-xs">{{ it.id }}</td>
-    <td class="p-2 text-xs">{{ it.title }}</td>
-    <td class="p-2"><span class="font-mono text-xs">{{ it.severity }}</span></td>
-    <td class="p-2 text-xs">{{ it.module }}</td>
-    <td class="p-2 font-mono text-xs muted">{{ it.file }}</td>
-    <td class="p-2 font-mono text-xs muted">{{ it.rule }}</td>
-  </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div data-tt-scope>
+  <div class="mb-2 flex items-center gap-2">
+    <input type="text" data-tt-search
+           placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
+    <button type="button" data-tt-reset
+            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+      {{ "table.reset" | t(locale=locale) }}
+    </button>
+  </div>
+  <table class="w-full bg-white rounded shadow text-sm"
+         data-table-tools
+         data-tt-key="sidecar_findings.{{ project.slug }}"
+         data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+         data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
+    <thead class="text-left border-b"><tr>
+      <th class="p-2" data-sort-col="reviewer" data-sort-type="text">reviewer</th>
+      <th class="p-2" data-sort-col="id" data-sort-type="text">id</th>
+      <th class="p-2" data-sort-col="title" data-sort-type="text">title</th>
+      <th class="p-2" data-sort-col="severity" data-sort-type="prio">severity</th>
+      <th class="p-2" data-sort-col="module" data-sort-type="text">module</th>
+      <th class="p-2" data-sort-col="file" data-sort-type="text">file</th>
+      <th class="p-2" data-sort-col="rule" data-sort-type="text">rule</th>
+    </tr></thead>
+    <tbody>
+    {% for it in items %}
+    <tr class="border-b" data-filter-row>
+      <td class="p-2 font-mono text-xs">{{ it.reviewer }}</td>
+      <td class="p-2 font-mono text-xs">{{ it.id }}</td>
+      <td class="p-2 text-xs">{{ it.title }}</td>
+      <td class="p-2"><span class="font-mono text-xs">{{ it.severity }}</span></td>
+      <td class="p-2 text-xs">{{ it.module }}</td>
+      <td class="p-2 font-mono text-xs muted">{{ it.file }}</td>
+      <td class="p-2 font-mono text-xs muted">{{ it.rule }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% else %}
 <p class="muted">{{ "sidecar.empty" | t(locale=locale) }}</p>
 {% endif %}

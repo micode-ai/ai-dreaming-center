@@ -10,3 +10,4 @@ config.yaml
 *.db
 *.db-shm
 *.db-wal
+.worktrees/

@@ -10,18 +10,35 @@
 <p class="text-sm text-red-700">{{ "common.error" | t(locale=locale) }}: <code>{{ error }}</code></p>
 {% elif items %}
 <p class="text-xs muted mb-3">{{ items|length }} plans in <code>{{ plans_dir }}</code></p>
-<table class="w-full bg-white rounded shadow text-sm">
+<div data-tt-scope>
+  <div class="mb-2 flex items-center gap-2">
+    <input type="text" data-tt-search
+           placeholder="{{ 'table.search' | t(locale=locale) }}"
+           class="tt-search">
+    <button type="button" data-tt-reset
+            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+      {{ "table.reset" | t(locale=locale) }}
+    </button>
+  </div>
+<table class="w-full bg-white rounded shadow text-sm"
+       data-table-tools
+       data-tt-key="plans.{{ project.slug }}"
+       data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+       data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
   <thead class="text-left border-b"><tr>
-    <th class="p-2">name</th>
-    <th class="p-2">title</th>
-    <th class="p-2">status</th>
-    <th class="p-2">progress</th>
+    <th class="p-2" data-sort-col="name" data-sort-type="text">name</th>
+    <th class="p-2" data-sort-col="title" data-sort-type="text">title</th>
+    <th class="p-2" data-sort-col="status" data-sort-type="status">status</th>
+    <th class="p-2" data-sort-col="progress" data-sort-type="num">progress</th>
     <th class="p-2">refs</th>
     <th class="p-2"></th>
   </tr></thead>
   <tbody>
   {% for it in items %}
-  <tr class="border-b align-top">
+  <tr class="border-b align-top"
+      data-filter-row
+      data-status="{{ it.status or 'active' }}"
+      data-progress="{{ it.progress_pct }}">
     <td class="p-2 font-mono text-xs">
       <a class="text-blue-600 underline" href="/p/{{ project.slug }}/plans/{{ it.name }}">{{ it.name }}</a>
     </td>
@@ -68,6 +85,7 @@
   {% endfor %}
   </tbody>
 </table>
+</div>
 {% else %}
 <div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
   <p class="font-semibold text-sky-900 mb-1">{{ "plans.empty.title" | t(locale=locale, dir=plans_dir) }}</p>

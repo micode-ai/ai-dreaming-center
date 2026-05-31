@@ -1,7 +1,7 @@
 {% extends "_project_layout.html" %}
 {% set active='orchestration' %}
 {% block project_content %}
-<link rel="stylesheet" href="/static/orchestration_swimlane.css?v=wave-a6">
+<link rel="stylesheet" href="/static/orchestration_swimlane.css?v=node-skills-1">
 {% if bulk_queue %}
 <div class="mb-3 p-3 rounded-lg text-sm"
      style="background: rgba(99,102,241,0.08); border:1px solid rgba(99,102,241,0.35);">
@@ -244,6 +244,11 @@
                      data-node-id="{{ n.id }}">
                   <span class="chip-action">{{ n.agent_name }}</span>
                   <span class="text-xs muted">{{ n.role }} · {{ n.status }}</span>
+                  <div class="chip-skills">
+                    {% for sk in skills_by_node.get(n.id, []) %}
+                    <span class="skill-badge" data-skill="{{ sk }}" title="{{ 'orchestration.skill_used' | t(locale=locale) }}: {{ sk }}">🧩 {{ sk }}</span>
+                    {% endfor %}
+                  </div>
                 </div>
               {% else %}
                 <span class="text-xs muted">{{ "orchestration.no_agents_yet" | t(locale=locale) }}</span>
@@ -257,11 +262,30 @@
       {% set unassigned = nodes_by_stage.get('_unassigned', []) %}
       {% if unassigned %}
       <h3 class="font-semibold mb-2 mt-4 text-sm">{{ "orchestration.nodes_unassigned" | t(locale=locale) }} (<span id="node-count">{{ selected_nodes|length }}</span>)</h3>
-      <table class="data-table">
-        <thead><tr><th>agent</th><th>role</th><th>status</th><th>started</th></tr></thead>
+      <div data-tt-scope>
+      <div class="mb-2 flex items-center gap-2">
+        <input type="text" data-tt-search
+               placeholder="{{ 'table.search' | t(locale=locale) }}"
+               class="tt-search">
+        <button type="button" data-tt-reset
+                class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+          {{ "table.reset" | t(locale=locale) }}
+        </button>
+      </div>
+      <table class="data-table"
+             data-table-tools
+             data-tt-key="orch-roster.{{ project.slug }}"
+             data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+             data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
+        <thead><tr>
+          <th data-sort-col="agent" data-sort-type="text">agent</th>
+          <th data-sort-col="role" data-sort-type="text">role</th>
+          <th data-sort-col="status" data-sort-type="status">status</th>
+          <th data-sort-col="started" data-sort-type="date">started</th>
+        </tr></thead>
         <tbody>
         {% for n in unassigned %}
-        <tr>
+        <tr data-filter-row data-status="{{ n.status }}" data-started="{{ (n.started_at or '')[:19] }}">
           <td class="font-mono text-xs">{{ n.agent_name }}</td>
           <td class="text-xs">{{ n.role }}</td>
           <td class="text-xs"><span class="status-pill status-{{ n.status }}">{{ n.status }}</span></td>
@@ -270,11 +294,18 @@
         {% endfor %}
         </tbody>
       </table>
+      </div>
       {% else %}
       <span id="node-count" class="hidden">{{ selected_nodes|length }}</span>
       {% endif %}
 
-      <h3 class="font-semibold mb-2 mt-4 text-sm">{{ "orchestration.messages" | t(locale=locale) }} (<span id="msg-count">{{ selected_messages|length }}</span>)</h3>
+      <div class="flex items-center justify-between gap-3 flex-wrap mb-2 mt-4">
+        <h3 class="font-semibold text-sm">{{ "orchestration.messages" | t(locale=locale) }} (<span id="msg-count">{{ selected_messages|length }}</span>)</h3>
+        <label class="flex items-center gap-1.5 text-xs cursor-pointer select-none" style="color: var(--text-faint);">
+          <input type="checkbox" id="autoscroll-toggle" checked>
+          {{ "orchestration.autoscroll" | t(locale=locale) }}
+        </label>
+      </div>
       {% if selected_messages %}
       <div id="msg-filter-bar" class="hidden mb-2 flex items-center gap-2 text-xs">
         <span style="color: var(--text-faint);">{{ "orchestration.filter_node" | t(locale=locale) }}:</span>
@@ -351,7 +382,7 @@
       <p class="text-sm" style="color: var(--text-faint);">{{ "orchestration.no_messages" | t(locale=locale) }}</p>
       {% endif %}
     </div>
-    <script src="/static/orchestration_stream.js?v=autoscroll-1" defer></script>
+    <script src="/static/orchestration_stream.js?v=node-skills-2-autoscroll" defer></script>
     {% elif runs %}
     <div class="flex-1 flex flex-col items-center justify-center text-center px-6">
       <div class="text-sm" style="color: var(--text-muted);">{{ "orchestration.pick_run" | t(locale=locale) }}</div>
@@ -393,18 +424,35 @@
 {% if runs %}
 <details class="mt-6" style="color: var(--text-muted);">
   <summary class="text-xs cursor-pointer">{{ "orchestration.full_list" | t(locale=locale, n=runs|length) }}</summary>
-  <table class="data-table mt-3">
+  <div data-tt-scope>
+  <div class="mb-2 mt-3 flex items-center gap-2">
+    <input type="text" data-tt-search
+           placeholder="{{ 'table.search' | t(locale=locale) }}"
+           class="tt-search">
+    <button type="button" data-tt-reset
+            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+      {{ "table.reset" | t(locale=locale) }}
+    </button>
+  </div>
+  <table class="data-table"
+         data-table-tools
+         data-tt-key="orch-runs.{{ project.slug }}"
+         data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+         data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
     <thead><tr>
-      <th>run_id</th>
-      <th>goal</th>
-      <th>status</th>
-      <th>started</th>
-      <th>finished</th>
+      <th data-sort-col="run_id" data-sort-type="text">run_id</th>
+      <th data-sort-col="goal" data-sort-type="text">goal</th>
+      <th data-sort-col="status" data-sort-type="status">status</th>
+      <th data-sort-col="started" data-sort-type="date">started</th>
+      <th data-sort-col="finished" data-sort-type="date">finished</th>
       <th></th>
     </tr></thead>
     <tbody>
     {% for r in runs %}
-    <tr>
+    <tr data-filter-row
+        data-status="{{ r.status }}"
+        data-started="{{ (r.started_at or '')[:19] }}"
+        data-finished="{{ (r.finished_at or '')[:19] }}">
       <td><a class="font-mono text-xs" style="color: var(--brand-hover); text-decoration: underline;" href="/p/{{ project.slug }}/orchestration?run_id={{ r.id }}">{{ r.id[:8] }}…</a></td>
       <td class="text-xs">{{ (r.goal or '')[:80] }}</td>
       <td><span class="badge badge-{{ {'running':'running','completed':'success','failed':'failed','cancelled':'neutral'}.get(r.status, 'neutral') }}">{{ r.status }}</span></td>
@@ -421,6 +469,7 @@
     {% endfor %}
     </tbody>
   </table>
+  </div>
 </details>
 {% endif %}
 {% endblock %}

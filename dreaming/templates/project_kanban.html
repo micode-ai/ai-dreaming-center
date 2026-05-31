@@ -92,31 +92,45 @@
   tr.target-highlight:target td { animation: target-flash 2.5s ease-out 1; }
   @keyframes target-flash { 0% { background: rgb(250 204 21 / .65); } 100% { background: transparent; } }
 </style>
-<table class="data-table">
-  <thead><tr>
-    <th>{{ "kanban.col.title" | t(locale=locale) }}</th>
-    <th>{{ "kanban.col.module" | t(locale=locale) }}</th>
-    <th>{{ "kanban.col.agents" | t(locale=locale) }}</th>
-    <th>active</th>
-    <th></th>
-  </tr></thead>
-  <tbody>
-  {% for t in topics %}
-  <tr id="topic-{{ t.id }}" class="target-highlight">
-    <td>{{ t.title }}</td>
-    <td class="font-mono text-xs">{{ t.module or '' }}</td>
-    <td class="font-mono text-xs">{{ t.target_agents or '*' }}</td>
-    <td>{{ "✓" if t.active else "—" }}</td>
-    <td>
-      <form method="post" action="/p/{{ project.slug }}/kanban/{{ t.id }}/delete" class="inline"
-            data-confirm="{{ 'kanban.confirm_delete_topic' | t(locale=locale, title=t.title) }}" data-confirm-variant="danger">
-        <button class="text-xs underline" style="color: var(--status-failed);">delete</button>
-      </form>
-    </td>
-  </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div data-tt-scope>
+  <div class="mb-2 flex items-center gap-2">
+    <input type="text" data-tt-search
+           placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
+    <button type="button" data-tt-reset
+            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+      {{ "table.reset" | t(locale=locale) }}
+    </button>
+  </div>
+  <table class="data-table"
+         data-table-tools
+         data-tt-key="kanban.topics.{{ project.slug }}"
+         data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+         data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
+    <thead><tr>
+      <th data-sort-col="title" data-sort-type="text">{{ "kanban.col.title" | t(locale=locale) }}</th>
+      <th data-sort-col="module" data-sort-type="text">{{ "kanban.col.module" | t(locale=locale) }}</th>
+      <th data-sort-col="agents" data-sort-type="text">{{ "kanban.col.agents" | t(locale=locale) }}</th>
+      <th>active</th>
+      <th></th>
+    </tr></thead>
+    <tbody>
+    {% for t in topics %}
+    <tr id="topic-{{ t.id }}" class="target-highlight" data-filter-row>
+      <td>{{ t.title }}</td>
+      <td class="font-mono text-xs">{{ t.module or '' }}</td>
+      <td class="font-mono text-xs">{{ t.target_agents or '*' }}</td>
+      <td>{{ "✓" if t.active else "—" }}</td>
+      <td>
+        <form method="post" action="/p/{{ project.slug }}/kanban/{{ t.id }}/delete" class="inline"
+              data-confirm="{{ 'kanban.confirm_delete_topic' | t(locale=locale, title=t.title) }}" data-confirm-variant="danger">
+          <button class="text-xs underline" style="color: var(--status-failed);">delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% else %}
 <p class="muted">{{ "kanban.no_custom_topics" | t(locale=locale) }}</p>
 {% endif %}
