@@ -20,7 +20,7 @@ async def cascade_costs_page(
     error: str | None = None
     try:
         raw = await list_cascade_costs(
-            db, project.id, start=start, end=end, status=status, limit=200,
+            db, project.id, start=start, end=end, status=status, limit=200,  # table-tools filters client-side over this capped set (most-recent 200 in window); see docs/superpowers/plans re: table-tools
         )
         rows = [r.__dict__ for r in raw]
     except Exception as e:
