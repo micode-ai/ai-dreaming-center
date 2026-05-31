@@ -4,51 +4,65 @@
 <h1 class="text-2xl font-bold mb-4" style="color: var(--text-strong);">{{ "projects.title" | t(locale=locale) }}</h1>
 
 {% if projects %}
-<table class="data-table">
-  <thead><tr>
-    <th>slug</th>
-    <th>label</th>
-    <th>working_dir</th>
-    <th>enabled</th>
-    <th>default</th>
-    <th></th>
-  </tr></thead>
-  <tbody>
-  {% for p in projects %}
-  <tr>
-    <td>
-      <form method="post" action="/projects/{{ p.id }}/rename"
-            class="flex items-center gap-1 js-slug-form" data-original-slug="{{ p.slug }}">
-        <input name="slug" value="{{ p.slug }}" required pattern="^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$"
-               class="font-mono text-xs rounded px-2 py-1" style="width: 14rem;"
-               title="{{ 'projects.slug_hint' | t(locale=locale) }}">
-        <button class="text-xs px-2 py-1 rounded" style="background: var(--bg-hover); color: var(--text-muted); border:1px solid var(--border-subtle);" title="{{ 'projects.save_slug' | t(locale=locale) }}">↵</button>
-      </form>
-    </td>
-    <td>
-      <form method="post" action="/projects/{{ p.id }}/rename" class="flex items-center gap-1">
-        <input name="label" value="{{ p.label }}" required class="rounded px-2 py-1" style="width: 16rem;">
-        <button class="text-xs px-2 py-1 rounded" style="background: var(--bg-hover); color: var(--text-muted); border:1px solid var(--border-subtle);" title="{{ 'projects.save_label' | t(locale=locale) }}">↵</button>
-      </form>
-    </td>
-    <td class="text-xs font-mono" style="color: var(--text-faint);">{{ p.working_dir }}</td>
-    <td>{{ "✓" if p.enabled else "—" }}</td>
-    <td>{{ "★" if p.is_default else "" }}</td>
-    <td class="whitespace-nowrap">
-      <form method="post" action="/projects/{{ p.id }}/toggle" class="inline">
-        <button class="text-xs px-2 py-1 rounded" style="border:1px solid var(--border-subtle);">{{ "Disable" if p.enabled else "Enable" }}</button>
-      </form>
-      <form method="post" action="/projects/{{ p.id }}/delete" class="inline ml-1"
-            data-confirm="{{ 'projects.confirm_delete' | t(locale=locale, slug=p.slug) }}"
-            data-confirm-input="{{ p.slug }}"
-            data-confirm-variant="danger">
-        <button class="text-xs px-2 py-1 rounded" style="color: var(--status-failed); border:1px solid var(--border-subtle);">Delete</button>
-      </form>
-    </td>
-  </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div data-tt-scope>
+  <div class="mb-2 flex items-center gap-2">
+    <input type="text" data-tt-search
+           placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
+    <button type="button" data-tt-reset
+            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+      {{ "table.reset" | t(locale=locale) }}
+    </button>
+  </div>
+  <table class="data-table"
+         data-table-tools
+         data-tt-key="projects"
+         data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+         data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
+    <thead><tr>
+      <th data-sort-col="slug" data-sort-type="text">slug</th>
+      <th data-sort-col="label" data-sort-type="text">label</th>
+      <th data-sort-col="dir" data-sort-type="text">working_dir</th>
+      <th>enabled</th>
+      <th>default</th>
+      <th></th>
+    </tr></thead>
+    <tbody>
+    {% for p in projects %}
+    <tr data-filter-row data-dir="{{ p.working_dir }}">
+      <td>
+        <form method="post" action="/projects/{{ p.id }}/rename"
+              class="flex items-center gap-1 js-slug-form" data-original-slug="{{ p.slug }}">
+          <input name="slug" value="{{ p.slug }}" required pattern="^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$"
+                 class="font-mono text-xs rounded px-2 py-1" style="width: 14rem;"
+                 title="{{ 'projects.slug_hint' | t(locale=locale) }}">
+          <button class="text-xs px-2 py-1 rounded" style="background: var(--bg-hover); color: var(--text-muted); border:1px solid var(--border-subtle);" title="{{ 'projects.save_slug' | t(locale=locale) }}">↵</button>
+        </form>
+      </td>
+      <td>
+        <form method="post" action="/projects/{{ p.id }}/rename" class="flex items-center gap-1">
+          <input name="label" value="{{ p.label }}" required class="rounded px-2 py-1" style="width: 16rem;">
+          <button class="text-xs px-2 py-1 rounded" style="background: var(--bg-hover); color: var(--text-muted); border:1px solid var(--border-subtle);" title="{{ 'projects.save_label' | t(locale=locale) }}">↵</button>
+        </form>
+      </td>
+      <td class="text-xs font-mono" style="color: var(--text-faint);">{{ p.working_dir }}</td>
+      <td>{{ "✓" if p.enabled else "—" }}</td>
+      <td>{{ "★" if p.is_default else "" }}</td>
+      <td class="whitespace-nowrap">
+        <form method="post" action="/projects/{{ p.id }}/toggle" class="inline">
+          <button class="text-xs px-2 py-1 rounded" style="border:1px solid var(--border-subtle);">{{ "Disable" if p.enabled else "Enable" }}</button>
+        </form>
+        <form method="post" action="/projects/{{ p.id }}/delete" class="inline ml-1"
+              data-confirm="{{ 'projects.confirm_delete' | t(locale=locale, slug=p.slug) }}"
+              data-confirm-input="{{ p.slug }}"
+              data-confirm-variant="danger">
+          <button class="text-xs px-2 py-1 rounded" style="color: var(--status-failed); border:1px solid var(--border-subtle);">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
 <p class="text-xs mt-3" style="color: var(--text-faint);">
   {{ "projects.legend_save" | t(locale=locale, enter='↵') }}
   {{ "projects.legend_slug" | t(locale=locale) }}
