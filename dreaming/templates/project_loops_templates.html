@@ -14,32 +14,46 @@
 </div>
 
 {% if items %}
-<table class="data-table">
-  <thead><tr>
-    <th>slug</th>
-    <th>{{ "loops_tpl.col.name" | t(locale=locale) }}</th>
-    <th>{{ "loops_tpl.col.engine" | t(locale=locale) }}</th>
-    <th>{{ "loops_tpl.col.tags" | t(locale=locale) }}</th>
-    <th class="text-right">{{ "loops_tpl.col.actions" | t(locale=locale) }}</th>
-  </tr></thead>
-  <tbody>
-  {% for it in items %}
-  <tr>
-    <td class="font-mono text-xs"><a class="underline" style="color: var(--brand-hover);" href="/p/{{ project.slug }}/loops/templates/{{ it.slug }}">{{ it.slug }}</a></td>
-    <td>{{ it.name }}</td>
-    <td class="text-xs muted">{{ it.engine }}{% if it.max_iterations %} ({{ it.max_iterations }}x){% endif %}</td>
-    <td class="text-xs muted">{{ (it.tags or [])|join(', ') }}</td>
-    <td class="text-right whitespace-nowrap">
-      <a class="text-xs px-2 py-1 rounded" style="color: var(--text-muted); border:1px solid var(--border-subtle);" href="/p/{{ project.slug }}/loops/templates/{{ it.slug }}">{{ "loops_tpl.edit" | t(locale=locale) }}</a>
-      <form method="post" action="/p/{{ project.slug }}/loops/templates/{{ it.slug }}/delete" class="inline ml-1"
-            data-confirm="{{ 'loops_tpl.confirm_delete' | t(locale=locale, slug=it.slug) }}" data-confirm-variant="danger">
-        <button class="text-xs px-2 py-1 rounded" style="color: var(--status-failed); border:1px solid var(--border-subtle);">{{ "loops_tpl.delete" | t(locale=locale) }}</button>
-      </form>
-    </td>
-  </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div data-tt-scope>
+  <div class="mb-2 flex items-center gap-2">
+    <input type="text" data-tt-search
+           placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
+    <button type="button" data-tt-reset
+            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+      {{ "table.reset" | t(locale=locale) }}
+    </button>
+  </div>
+  <table class="data-table"
+         data-table-tools
+         data-tt-key="loops_templates.{{ project.slug }}"
+         data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+         data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
+    <thead><tr>
+      <th data-sort-col="slug" data-sort-type="text">slug</th>
+      <th data-sort-col="name" data-sort-type="text">{{ "loops_tpl.col.name" | t(locale=locale) }}</th>
+      <th data-sort-col="engine" data-sort-type="text">{{ "loops_tpl.col.engine" | t(locale=locale) }}</th>
+      <th>{{ "loops_tpl.col.tags" | t(locale=locale) }}</th>
+      <th class="text-right">{{ "loops_tpl.col.actions" | t(locale=locale) }}</th>
+    </tr></thead>
+    <tbody>
+    {% for it in items %}
+    <tr data-filter-row>
+      <td class="font-mono text-xs"><a class="underline" style="color: var(--brand-hover);" href="/p/{{ project.slug }}/loops/templates/{{ it.slug }}">{{ it.slug }}</a></td>
+      <td>{{ it.name }}</td>
+      <td class="text-xs muted">{{ it.engine }}{% if it.max_iterations %} ({{ it.max_iterations }}x){% endif %}</td>
+      <td class="text-xs muted">{{ (it.tags or [])|join(', ') }}</td>
+      <td class="text-right whitespace-nowrap">
+        <a class="text-xs px-2 py-1 rounded" style="color: var(--text-muted); border:1px solid var(--border-subtle);" href="/p/{{ project.slug }}/loops/templates/{{ it.slug }}">{{ "loops_tpl.edit" | t(locale=locale) }}</a>
+        <form method="post" action="/p/{{ project.slug }}/loops/templates/{{ it.slug }}/delete" class="inline ml-1"
+              data-confirm="{{ 'loops_tpl.confirm_delete' | t(locale=locale, slug=it.slug) }}" data-confirm-variant="danger">
+          <button class="text-xs px-2 py-1 rounded" style="color: var(--status-failed); border:1px solid var(--border-subtle);">{{ "loops_tpl.delete" | t(locale=locale) }}</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% else %}
 <p class="muted">{{ "loops_tpl.empty" | t(locale=locale, ext='.md') }}</p>
 {% endif %}
