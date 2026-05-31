@@ -56,6 +56,12 @@ async def findings_page(
     projects = await request.app.state.projects.list_all(only_enabled=True)
     pm = request.app.state.process_manager
     scan_running = f"cmd:{project.slug}:tech-debt-scan" in pm.list_running()
+    last_scan = None
+    try:
+        last_scan = await request.app.state.db.get_last_command_session(
+            project.id, f"cmd:{project.slug}:tech-debt-scan")
+    except Exception:
+        last_scan = None
     return request.app.state.templates.TemplateResponse(
         request, "project_findings.html",
         {"project": project, "items": items, "td_dir": td_dir,
@@ -64,6 +70,7 @@ async def findings_page(
          "statuses": statuses, "modules": modules,
          "selected_status": status or "", "selected_module": module or "",
          "error": error, "scan_running": scan_running,
+         "last_scan": last_scan,
          "projects": projects, "locale": locale},
     )
 
