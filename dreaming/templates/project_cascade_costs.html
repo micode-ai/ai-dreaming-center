@@ -86,37 +86,56 @@
 {% endif %}
 
 {% if rows %}
-<table class="data-table">
-  <thead><tr>
-    <th>run</th>
-    <th>goal</th>
-    <th>status</th>
-    <th>started</th>
-    <th class="text-right">events</th>
-    <th class="text-right">tokens</th>
-    <th class="text-right">cost USD</th>
-  </tr></thead>
-  <tbody>
-  {% for r in rows %}
-  <tr>
-    <td>
-      <a href="/p/{{ project.slug }}/orchestration/{{ r.run_id }}"
-         class="font-mono text-xs" style="color: var(--brand-hover); text-decoration: underline;">{{ r.run_id[:8] }}…</a>
-    </td>
-    <td class="text-xs">{{ r.goal[:90] }}</td>
-    <td>
-      <span class="badge badge-{{ {'running':'running','completed':'success','failed':'failed','cancelled':'neutral'}.get(r.status, 'neutral') }}">
-        {{ r.status or '—' }}
-      </span>
-    </td>
-    <td class="text-xs muted whitespace-nowrap font-mono">{{ (r.started_at or '')[:19] }}</td>
-    <td class="text-right text-xs">{{ r.event_count }}</td>
-    <td class="text-right text-xs">{{ "{:,}".format(r.total_tokens) }}</td>
-    <td class="text-right font-mono">${{ "%.4f" | format(r.total_cost_usd) }}</td>
-  </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div data-tt-scope>
+  <div class="mb-2 flex items-center gap-2">
+    <input type="text" data-tt-search
+           placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
+    <button type="button" data-tt-reset
+            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+      {{ "table.reset" | t(locale=locale) }}
+    </button>
+  </div>
+  <table class="data-table"
+         data-table-tools
+         data-tt-key="cascade_costs.{{ project.slug }}"
+         data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+         data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
+    <thead><tr>
+      <th>run</th>
+      <th data-sort-col="goal" data-sort-type="text">goal</th>
+      <th data-sort-col="status" data-sort-type="status">status</th>
+      <th data-sort-col="started" data-sort-type="date">started</th>
+      <th class="text-right" data-sort-col="events" data-sort-type="num">events</th>
+      <th class="text-right" data-sort-col="tokens" data-sort-type="num">tokens</th>
+      <th class="text-right" data-sort-col="cost" data-sort-type="num">cost USD</th>
+    </tr></thead>
+    <tbody>
+    {% for r in rows %}
+    <tr data-filter-row
+        data-status="{{ r.status or '' }}"
+        data-started="{{ (r.started_at or '')[:19] }}"
+        data-events="{{ r.event_count }}"
+        data-tokens="{{ r.total_tokens }}"
+        data-cost="{{ r.total_cost_usd }}">
+      <td>
+        <a href="/p/{{ project.slug }}/orchestration/{{ r.run_id }}"
+           class="font-mono text-xs" style="color: var(--brand-hover); text-decoration: underline;">{{ r.run_id[:8] }}…</a>
+      </td>
+      <td class="text-xs">{{ r.goal[:90] }}</td>
+      <td>
+        <span class="badge badge-{{ {'running':'running','completed':'success','failed':'failed','cancelled':'neutral'}.get(r.status, 'neutral') }}">
+          {{ r.status or '—' }}
+        </span>
+      </td>
+      <td class="text-xs muted whitespace-nowrap font-mono">{{ (r.started_at or '')[:19] }}</td>
+      <td class="text-right text-xs">{{ r.event_count }}</td>
+      <td class="text-right text-xs">{{ "{:,}".format(r.total_tokens) }}</td>
+      <td class="text-right font-mono">${{ "%.4f" | format(r.total_cost_usd) }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% else %}
 <div class="rounded-lg p-4 text-sm" style="background: var(--bg-card); border:1px solid var(--border-subtle); color: var(--text-muted);">
   <p class="mb-2">{{ "cascade_costs.empty" | t(locale=locale) }}</p>
