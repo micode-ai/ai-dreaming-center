@@ -33,7 +33,6 @@
 {% if items %}
 <p class="text-xs muted mb-3">
   <span id="td-count">{{ items|length }} items in <code>{{ td_dir }}</code></span>
-  <span id="td-shown" class="ml-2 hidden"></span>
 </p>
 <form id="td-bulk-form" method="post" action="/p/{{ project.slug }}/bulk/orchestrate" class="mb-2">
   <input type="hidden" name="kind" value="finding">
@@ -45,32 +44,36 @@
     {{ "bulk.run_none" | t(locale=locale) }}
   </button>
 </form>
-<table id="td-table" class="w-full bg-white rounded shadow text-sm">
+<table id="td-table" class="w-full bg-white rounded shadow text-sm"
+       data-table-tools
+       data-tt-key="findings.{{ project.slug }}"
+       data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+       data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
   <thead class="text-left border-b">
     <tr>
       <th class="p-2 w-8"><input type="checkbox" id="td-select-all" aria-label="select all visible"></th>
-      <th class="p-2 td-th-sort" data-col="id" data-type="text">id <span class="sort-ind">↕</span></th>
-      <th class="p-2 td-th-sort" data-col="title" data-type="text">{{ "findings.col.title" | t(locale=locale) }} <span class="sort-ind">↕</span></th>
-      <th class="p-2 td-th-sort" data-col="status" data-type="text">status <span class="sort-ind">↕</span></th>
-      <th class="p-2 td-th-sort" data-col="priority" data-type="prio">priority <span class="sort-ind">↕</span></th>
-      <th class="p-2 td-th-sort" data-col="module" data-type="text">{{ "findings.col.module" | t(locale=locale) }} <span class="sort-ind">↕</span></th>
-      <th class="p-2 td-th-sort" data-col="complexity" data-type="text">{{ "findings.col.complexity" | t(locale=locale) }} <span class="sort-ind">↕</span></th>
-      <th class="p-2 td-th-sort" data-col="autonomy" data-type="text">{{ "findings.col.autonomy" | t(locale=locale) }} <span class="sort-ind">↕</span></th>
-      <th class="p-2 td-th-sort" data-col="confidence" data-type="text">{{ "findings.col.confidence" | t(locale=locale) }} <span class="sort-ind">↕</span></th>
-      <th class="p-2 td-th-sort" data-col="created" data-type="text">{{ "findings.col.created" | t(locale=locale) }} <span class="sort-ind">↕</span></th>
+      <th class="p-2" data-sort-col="id" data-sort-type="text">id</th>
+      <th class="p-2" data-sort-col="title" data-sort-type="text">{{ "findings.col.title" | t(locale=locale) }}</th>
+      <th class="p-2" data-sort-col="status" data-sort-type="text">status</th>
+      <th class="p-2" data-sort-col="priority" data-sort-type="prio">priority</th>
+      <th class="p-2" data-sort-col="module" data-sort-type="text">{{ "findings.col.module" | t(locale=locale) }}</th>
+      <th class="p-2" data-sort-col="complexity" data-sort-type="text">{{ "findings.col.complexity" | t(locale=locale) }}</th>
+      <th class="p-2" data-sort-col="autonomy" data-sort-type="text">{{ "findings.col.autonomy" | t(locale=locale) }}</th>
+      <th class="p-2" data-sort-col="confidence" data-sort-type="text">{{ "findings.col.confidence" | t(locale=locale) }}</th>
+      <th class="p-2" data-sort-col="created" data-sort-type="date">{{ "findings.col.created" | t(locale=locale) }}</th>
       <th class="p-2">refs</th>
       <th class="p-2"></th>
     </tr>
-    <tr class="border-b bg-slate-50 text-xs" id="td-filters">
+    <tr class="border-b bg-slate-50 text-xs" id="td-filters" data-tt-filter-row>
       <th class="p-1"></th>
-      <th class="p-1"><input type="text" data-td-filter="id"
+      <th class="p-1"><input type="text" data-filter-col="id"
             placeholder="{{ 'findings.filter.search' | t(locale=locale) }}"
             class="w-full border rounded p-1 text-xs font-mono"></th>
-      <th class="p-1"><input type="text" data-td-filter="title"
+      <th class="p-1"><input type="text" data-filter-col="title"
             placeholder="{{ 'findings.filter.search' | t(locale=locale) }}"
             class="w-full border rounded p-1 text-xs font-mono"></th>
       <th class="p-1">
-        <select data-td-filter="status" class="w-full border rounded p-1 text-xs font-mono">
+        <select data-filter-col="status" class="w-full border rounded p-1 text-xs font-mono">
           <option value="">{{ "findings.filter.opt.all" | t(locale=locale) }}</option>
           {% for opt in ['open', 'in-progress', 'blocked', 'closed', 'dropped'] %}
           <option value="{{ opt }}">{{ opt }}</option>
@@ -78,30 +81,30 @@
         </select>
       </th>
       <th class="p-1">
-        <select data-td-filter="priority" class="w-full border rounded p-1 text-xs font-mono">
+        <select data-filter-col="priority" class="w-full border rounded p-1 text-xs font-mono">
           <option value="">{{ "findings.filter.opt.all" | t(locale=locale) }}</option>
           {% for opt in ['critical', 'high', 'medium', 'low'] %}
           <option value="{{ opt }}">{{ opt }}</option>
           {% endfor %}
         </select>
       </th>
-      <th class="p-1"><input type="text" data-td-filter="module"
+      <th class="p-1"><input type="text" data-filter-col="module"
             placeholder="{{ 'findings.filter.search' | t(locale=locale) }}"
             class="w-full border rounded p-1 text-xs font-mono"></th>
-      <th class="p-1"><input type="text" data-td-filter="complexity"
+      <th class="p-1"><input type="text" data-filter-col="complexity"
             placeholder="{{ 'findings.filter.search' | t(locale=locale) }}"
             class="w-full border rounded p-1 text-xs font-mono"></th>
-      <th class="p-1"><input type="text" data-td-filter="autonomy"
+      <th class="p-1"><input type="text" data-filter-col="autonomy"
             placeholder="{{ 'findings.filter.search' | t(locale=locale) }}"
             class="w-full border rounded p-1 text-xs font-mono"></th>
-      <th class="p-1"><input type="text" data-td-filter="confidence"
+      <th class="p-1"><input type="text" data-filter-col="confidence"
             placeholder="{{ 'findings.filter.search' | t(locale=locale) }}"
             class="w-full border rounded p-1 text-xs font-mono"></th>
-      <th class="p-1"><input type="text" data-td-filter="created"
+      <th class="p-1"><input type="text" data-filter-col="created"
             placeholder="YYYY-MM-DD"
             class="w-full border rounded p-1 text-xs font-mono"></th>
       <th class="p-1">
-        <select data-td-filter="refs" class="w-full border rounded p-1 text-xs font-mono">
+        <select data-filter-col="refs" class="w-full border rounded p-1 text-xs font-mono">
           <option value="">{{ "findings.filter.opt.all" | t(locale=locale) }}</option>
           <option value="gh">{{ "findings.filter.opt.has_gh" | t(locale=locale) }}</option>
           <option value="run">{{ "findings.filter.opt.has_run" | t(locale=locale) }}</option>
@@ -110,7 +113,7 @@
         </select>
       </th>
       <th class="p-1 text-right">
-        <button type="button" id="td-filter-reset"
+        <button type="button" id="td-filter-reset" data-tt-reset
                 class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
           {{ "findings.filter.reset" | t(locale=locale) }}
         </button>
@@ -121,6 +124,7 @@
   {% for it in items %}
   <tr class="border-b align-top"
       data-td-row
+      data-filter-row
       data-id="{{ (it.id or it.slug or '')|lower }}"
       data-title="{{ (it.title or '')|lower }}"
       data-status="{{ it.status or '' }}"
@@ -182,145 +186,19 @@
   </tbody>
 </table>
 
-<style>
-  .td-th-sort { cursor: pointer; user-select: none; }
-  .td-th-sort:hover { color: #4f46e5; }
-  .td-th-sort .sort-ind { display: inline-block; opacity: 0.4; font-size: 0.7em; }
-  .td-th-sort.sort-asc .sort-ind, .td-th-sort.sort-desc .sort-ind { opacity: 1; color: #4f46e5; }
-  .td-th-sort.sort-asc .sort-ind::before { content: "↑"; }
-  .td-th-sort.sort-desc .sort-ind::before { content: "↓"; }
-</style>
+<script>
+// Custom predicate for the "refs" filter column (gh / run / jira / none).
+window.tableToolsFilters = window.tableToolsFilters || {};
+window.tableToolsFilters.refs = function (row, value) {
+  if (value === "gh")   return row.dataset.hasGh === "1";
+  if (value === "run")  return row.dataset.hasRun === "1";
+  if (value === "jira") return row.dataset.hasJira === "1";
+  if (value === "none") return !(row.dataset.hasGh === "1" || row.dataset.hasRun === "1" || row.dataset.hasJira === "1");
+  return true;
+};
+</script>
 
 <script>
-(function() {
-  const table = document.getElementById("td-table");
-  if (!table) return;
-  const tbody = table.querySelector("tbody");
-  const headers = table.querySelectorAll(".td-th-sort");
-  // Priority ordering: critical > high > medium > low > (empty)
-  const PRIO_ORDER = { critical: 4, high: 3, medium: 2, low: 1, "": 0 };
-
-  function compareVals(a, b, type) {
-    if (type === "prio") {
-      const ar = PRIO_ORDER[a.toLowerCase()] || 0;
-      const br = PRIO_ORDER[b.toLowerCase()] || 0;
-      return ar - br;
-    }
-    return a.localeCompare(b);
-  }
-
-  headers.forEach(h => {
-    h.addEventListener("click", () => {
-      const col = h.dataset.col;
-      const type = h.dataset.type || "text";
-      const current = h.classList.contains("sort-asc") ? "asc"
-                     : h.classList.contains("sort-desc") ? "desc" : "none";
-      const next = current === "asc" ? "desc" : "asc";
-      headers.forEach(other => other.classList.remove("sort-asc", "sort-desc"));
-      h.classList.add(next === "asc" ? "sort-asc" : "sort-desc");
-      const rows = Array.from(tbody.querySelectorAll("tr"));
-      rows.sort((ra, rb) => {
-        const va = ra.dataset[col] || "";
-        const vb = rb.dataset[col] || "";
-        const cmp = compareVals(va, vb, type);
-        return next === "asc" ? cmp : -cmp;
-      });
-      rows.forEach(r => tbody.appendChild(r));
-    });
-  });
-})();
-
-(() => {
-  const STORAGE_KEY = 'findings.filters.{{ project.slug }}';
-  const FIELDS = ['id', 'title', 'status', 'priority', 'module',
-                  'complexity', 'autonomy', 'confidence', 'created', 'refs'];
-  const table = document.getElementById('td-table');
-  if (!table) return;
-  const rows = Array.from(table.querySelectorAll('[data-td-row]'));
-  const inputs = {};
-  FIELDS.forEach(f => { inputs[f] = table.querySelector(`[data-td-filter="${f}"]`); });
-  const shownEl = document.getElementById('td-shown');
-  const resetBtn = document.getElementById('td-filter-reset');
-  const total = rows.length;
-  const SHOWN_TMPL = {{ ("findings.filter.shown_count" | t(locale=locale)) | tojson }};
-
-  // Empty-state marker placed after the table so it shows when no rows match.
-  let emptyEl = document.getElementById('td-filter-empty');
-  if (!emptyEl) {
-    emptyEl = document.createElement('p');
-    emptyEl.id = 'td-filter-empty';
-    emptyEl.className = 'muted text-sm mt-3 hidden';
-    emptyEl.textContent = {{ ("findings.filter.empty" | t(locale=locale)) | tojson }};
-    table.parentNode.insertBefore(emptyEl, table.nextSibling);
-  }
-
-  const loadState = () => {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {}; }
-    catch { return {}; }
-  };
-  const saveState = () => {
-    const state = {};
-    FIELDS.forEach(f => { if (inputs[f] && inputs[f].value) state[f] = inputs[f].value; });
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-    catch { /* quota / privacy mode — silently ignore */ }
-  };
-
-  const matches = (row) => {
-    const v = (k) => (inputs[k] ? inputs[k].value : '').trim().toLowerCase();
-    // Substring fields
-    for (const k of ['id', 'title', 'module', 'complexity', 'autonomy', 'confidence', 'created']) {
-      const q = v(k);
-      if (q && !(row.dataset[k] || '').includes(q)) return false;
-    }
-    // Exact-match select fields
-    const status = v('status');
-    if (status && row.dataset.status !== status) return false;
-    const priority = v('priority');
-    if (priority && row.dataset.priority !== priority) return false;
-    // Refs select
-    const refs = v('refs');
-    if (refs === 'gh' && row.dataset.hasGh !== '1') return false;
-    if (refs === 'run' && row.dataset.hasRun !== '1') return false;
-    if (refs === 'jira' && row.dataset.hasJira !== '1') return false;
-    if (refs === 'none' && (row.dataset.hasGh === '1' || row.dataset.hasRun === '1' || row.dataset.hasJira === '1')) return false;
-    return true;
-  };
-
-  const apply = () => {
-    let shown = 0;
-    rows.forEach(r => {
-      const ok = matches(r);
-      r.classList.toggle('hidden', !ok);
-      if (ok) shown++;
-    });
-    const hasFilter = FIELDS.some(f => inputs[f] && inputs[f].value);
-    if (hasFilter) {
-      shownEl.textContent = SHOWN_TMPL.replace('{shown}', shown).replace('{total}', total);
-      shownEl.classList.remove('hidden');
-    } else {
-      shownEl.classList.add('hidden');
-    }
-    emptyEl.classList.toggle('hidden', shown !== 0 || !hasFilter);
-    document.dispatchEvent(new CustomEvent('bulk:rows-changed', {detail: {table: 'td'}}));
-  };
-
-  const saved = loadState();
-  FIELDS.forEach(f => {
-    if (inputs[f] && saved[f] != null) inputs[f].value = saved[f];
-  });
-  FIELDS.forEach(f => {
-    if (!inputs[f]) return;
-    const evt = inputs[f].tagName === 'SELECT' ? 'change' : 'input';
-    inputs[f].addEventListener(evt, () => { saveState(); apply(); });
-  });
-  resetBtn.addEventListener('click', () => {
-    FIELDS.forEach(f => { if (inputs[f]) inputs[f].value = ''; });
-    saveState();
-    apply();
-  });
-  apply();
-})();
-
 (() => {
   const form = document.getElementById('td-bulk-form');
   if (!form) return;

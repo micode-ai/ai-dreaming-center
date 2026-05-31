@@ -84,66 +84,82 @@
 {% endif %}
 
 <h2 class="font-semibold text-slate-900 mb-2">{{ "p.recent_sessions" | t(locale=locale) }}</h2>
-<table class="data-table">
-  <thead><tr>
-    <th>{{ "p.col.agent" | t(locale=locale) }}</th>
-    <th>{{ "p.col.status" | t(locale=locale) }}</th>
-    <th>{{ "p.col.topic" | t(locale=locale) }}</th>
-    <th>{{ "p.col.started" | t(locale=locale) }}</th>
-    <th></th>
-  </tr></thead>
-  <tbody>
-  {% for s in sessions %}
-  {% set key = s.agent_name if s.agent_name.startswith("cmd:") else (project.slug ~ ":" ~ s.agent_name) %}
-  {% set is_live = key in active_key_set %}
-  {% set is_running_row = s.status == 'running' %}
-  {% set is_cmd_row = s.agent_name.startswith("cmd:") %}
-  {% set display_name = s.agent_name.split(":", 2)[2] if is_cmd_row else s.agent_name %}
-  <tr>
-    <td class="font-mono text-xs">
-      {{ display_name }}
-      {% if is_cmd_row %}<span class="ml-1 badge badge-neutral">cmd</span>{% endif %}
-    </td>
-    <td>
-      {% if is_running_row and not is_live %}
-        <span class="badge badge-timeout">running (orphan)</span>
-      {% elif s.status == 'success' %}
-        <span class="badge badge-success">{{ s.status }}</span>
-      {% elif s.status == 'failed' %}
-        <span class="badge badge-failed">{{ s.status }}</span>
-      {% elif s.status == 'timeout' %}
-        <span class="badge badge-timeout">{{ s.status }}</span>
-      {% elif s.status == 'running' %}
-        <span class="badge badge-live"><span class="dot dot-pulse" aria-hidden="true"></span>{{ s.status }}</span>
-      {% else %}
-        <span class="badge badge-neutral">{{ s.status or '—' }}</span>
-      {% endif %}
-    </td>
-    <td class="text-xs">{{ s.topic or '' }}</td>
-    <td class="text-xs muted whitespace-nowrap">{{ s.started_at }}</td>
-    <td class="text-right whitespace-nowrap">
-      <a class="text-xs border border-slate-200 hover:border-slate-300 rounded px-2 py-1 mr-1 text-slate-700 hover:bg-slate-50 transition-colors inline-block" href="/p/{{ project.slug }}/sessions/{{ s.id }}/log">log</a>
-      {% if is_running_row %}
-        <form method="post" action="/p/{{ project.slug }}/sessions/{{ s.id }}/stop" class="inline"
-            data-confirm="{{ "Stop running process for " if is_live else "Force-close orphan row for " }}{{ s.agent_name }}?" data-confirm-variant="danger">
-          <button class="text-xs border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded px-2 py-1 mr-1 transition-colors">
-            {{ "Stop" if is_live else "Force-close" }}
+<div data-tt-scope>
+  <div class="mb-2 flex items-center gap-2">
+    <input type="text" data-tt-search
+           placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
+    <button type="button" data-tt-reset
+            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+      {{ "table.reset" | t(locale=locale) }}
+    </button>
+  </div>
+  <table class="data-table"
+         data-table-tools
+         data-tt-key="dashboard.sessions.{{ project.slug }}"
+         data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+         data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
+    <thead><tr>
+      <th data-sort-col="agent" data-sort-type="text">{{ "p.col.agent" | t(locale=locale) }}</th>
+      <th data-sort-col="status" data-sort-type="status">{{ "p.col.status" | t(locale=locale) }}</th>
+      <th data-sort-col="topic" data-sort-type="text">{{ "p.col.topic" | t(locale=locale) }}</th>
+      <th data-sort-col="started" data-sort-type="date">{{ "p.col.started" | t(locale=locale) }}</th>
+      <th></th>
+    </tr></thead>
+    <tbody>
+    {% for s in sessions %}
+    {% set key = s.agent_name if s.agent_name.startswith("cmd:") else (project.slug ~ ":" ~ s.agent_name) %}
+    {% set is_live = key in active_key_set %}
+    {% set is_running_row = s.status == 'running' %}
+    {% set is_cmd_row = s.agent_name.startswith("cmd:") %}
+    {% set display_name = s.agent_name.split(":", 2)[2] if is_cmd_row else s.agent_name %}
+    <tr data-filter-row
+        data-status="{{ s.status or '' }}"
+        data-started="{{ s.started_at or '' }}">
+      <td class="font-mono text-xs">
+        {{ display_name }}
+        {% if is_cmd_row %}<span class="ml-1 badge badge-neutral">cmd</span>{% endif %}
+      </td>
+      <td>
+        {% if is_running_row and not is_live %}
+          <span class="badge badge-timeout">running (orphan)</span>
+        {% elif s.status == 'success' %}
+          <span class="badge badge-success">{{ s.status }}</span>
+        {% elif s.status == 'failed' %}
+          <span class="badge badge-failed">{{ s.status }}</span>
+        {% elif s.status == 'timeout' %}
+          <span class="badge badge-timeout">{{ s.status }}</span>
+        {% elif s.status == 'running' %}
+          <span class="badge badge-live"><span class="dot dot-pulse" aria-hidden="true"></span>{{ s.status }}</span>
+        {% else %}
+          <span class="badge badge-neutral">{{ s.status or '—' }}</span>
+        {% endif %}
+      </td>
+      <td class="text-xs">{{ s.topic or '' }}</td>
+      <td class="text-xs muted whitespace-nowrap">{{ s.started_at }}</td>
+      <td class="text-right whitespace-nowrap">
+        <a class="text-xs border border-slate-200 hover:border-slate-300 rounded px-2 py-1 mr-1 text-slate-700 hover:bg-slate-50 transition-colors inline-block" href="/p/{{ project.slug }}/sessions/{{ s.id }}/log">log</a>
+        {% if is_running_row %}
+          <form method="post" action="/p/{{ project.slug }}/sessions/{{ s.id }}/stop" class="inline"
+              data-confirm="{{ "Stop running process for " if is_live else "Force-close orphan row for " }}{{ s.agent_name }}?" data-confirm-variant="danger">
+            <button class="text-xs border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded px-2 py-1 mr-1 transition-colors">
+              {{ "Stop" if is_live else "Force-close" }}
+            </button>
+          </form>
+        {% endif %}
+        <form method="post" action="/p/{{ project.slug }}/sessions/{{ s.id }}/delete" class="inline"
+              data-confirm="Permanently delete this session row?{{ "  (process is still running — it will be killed first)" if is_live else "" }}" data-confirm-variant="danger">
+          <button class="text-xs border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded px-2 py-1 transition-colors">
+            Delete
           </button>
         </form>
-      {% endif %}
-      <form method="post" action="/p/{{ project.slug }}/sessions/{{ s.id }}/delete" class="inline"
-            data-confirm="Permanently delete this session row?{{ "  (process is still running — it will be killed first)" if is_live else "" }}" data-confirm-variant="danger">
-        <button class="text-xs border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded px-2 py-1 transition-colors">
-          Delete
-        </button>
-      </form>
-    </td>
-  </tr>
-  {% else %}
-  <tr><td class="muted text-center py-4" colspan="5">{{ "p.no_sessions_yet" | t(locale=locale) }}</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td class="muted text-center py-4" colspan="5">{{ "p.no_sessions_yet" | t(locale=locale) }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
 
 <h2 class="font-semibold text-slate-900 mt-6 mb-2 flex items-center gap-2">
   {{ "p.active_runs" | t(locale=locale) }}

@@ -48,28 +48,47 @@
 </div>
 
 <h2 class="text-sm font-semibold mb-2" style="color: var(--text-strong);">{{ "wiki_health.snapshots" | t(locale=locale) }}</h2>
-<table class="data-table">
-  <thead><tr>
-    <th>{{ "wiki_health.col.date" | t(locale=locale) }}</th>
-    <th>{{ "wiki_health.col.label" | t(locale=locale) }}</th>
-    <th class="text-right">covered_pct</th>
-    <th class="text-right">covered</th>
-    <th class="text-right">learning_notes</th>
-    <th class="text-right">uncovered_p1p2</th>
-  </tr></thead>
-  <tbody>
-  {% for s in series|reverse %}
-  <tr>
-    <td class="font-mono text-xs">{{ s.date }}</td>
-    <td class="text-xs">{{ s.label }}</td>
-    <td class="text-right">{{ s.metrics.covered_pct if s.metrics.covered_pct is not none else '—' }}</td>
-    <td class="text-right">{{ s.metrics.covered if s.metrics.covered is not none else '—' }}</td>
-    <td class="text-right">{{ s.metrics.learning_notes if s.metrics.learning_notes is not none else '—' }}</td>
-    <td class="text-right">{{ s.metrics.uncovered_p1p2 if s.metrics.uncovered_p1p2 is not none else '—' }}</td>
-  </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div data-tt-scope>
+  <div class="mb-2 flex items-center gap-2">
+    <input type="text" data-tt-search
+           placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
+    <button type="button" data-tt-reset
+            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+      {{ "table.reset" | t(locale=locale) }}
+    </button>
+  </div>
+  <table class="data-table"
+         data-table-tools
+         data-tt-key="wiki_health.{{ project.slug }}"
+         data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+         data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
+    <thead><tr>
+      <th data-sort-col="date" data-sort-type="date">{{ "wiki_health.col.date" | t(locale=locale) }}</th>
+      <th data-sort-col="label" data-sort-type="text">{{ "wiki_health.col.label" | t(locale=locale) }}</th>
+      <th class="text-right" data-sort-col="covered_pct" data-sort-type="num">covered_pct</th>
+      <th class="text-right" data-sort-col="covered" data-sort-type="num">covered</th>
+      <th class="text-right" data-sort-col="learning_notes" data-sort-type="num">learning_notes</th>
+      <th class="text-right" data-sort-col="uncovered_p1p2" data-sort-type="num">uncovered_p1p2</th>
+    </tr></thead>
+    <tbody>
+    {% for s in series|reverse %}
+    <tr data-filter-row
+        data-date="{{ s.date }}"
+        data-covered_pct="{{ s.metrics.covered_pct if s.metrics.covered_pct is not none else '' }}"
+        data-covered="{{ s.metrics.covered if s.metrics.covered is not none else '' }}"
+        data-learning_notes="{{ s.metrics.learning_notes if s.metrics.learning_notes is not none else '' }}"
+        data-uncovered_p1p2="{{ s.metrics.uncovered_p1p2 if s.metrics.uncovered_p1p2 is not none else '' }}">
+      <td class="font-mono text-xs">{{ s.date }}</td>
+      <td class="text-xs">{{ s.label }}</td>
+      <td class="text-right">{{ s.metrics.covered_pct if s.metrics.covered_pct is not none else '—' }}</td>
+      <td class="text-right">{{ s.metrics.covered if s.metrics.covered is not none else '—' }}</td>
+      <td class="text-right">{{ s.metrics.learning_notes if s.metrics.learning_notes is not none else '—' }}</td>
+      <td class="text-right">{{ s.metrics.uncovered_p1p2 if s.metrics.uncovered_p1p2 is not none else '—' }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
 
 <script>
 (() => {

@@ -25,8 +25,8 @@ def _enrich(row) -> dict:
 async def questions_page(request: Request, slug: str):
     project = request.state.project
     db = request.app.state.db
-    pending = [_enrich(r) for r in await db.list_questions(project.id, status="pending", limit=50)]
-    answered = [_enrich(r) for r in await db.list_questions(project.id, status="answered", limit=20)]
+    pending = [_enrich(r) for r in await db.list_questions(project.id, status="pending", limit=50)]   # table-tools filters client-side over this capped set (most-recent 50 pending); see docs/superpowers/plans re: table-tools
+    answered = [_enrich(r) for r in await db.list_questions(project.id, status="answered", limit=20)]  # table-tools filters client-side over this capped set (most-recent 20 answered); see docs/superpowers/plans re: table-tools
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
     projects = await request.app.state.projects.list_all(only_enabled=True)
     return request.app.state.templates.TemplateResponse(

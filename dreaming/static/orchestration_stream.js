@@ -40,34 +40,43 @@
     if (el) el.textContent = String(value);
   }
 
-  function getScrollContainer(el) {
-    // Find the nearest scrollable ancestor (overflow-y: auto|scroll). The
-    // chat lives inside the center <section> which has overflow-y:auto.
-    for (let p = el && el.parentElement; p; p = p.parentElement) {
-      const s = getComputedStyle(p);
-      if (s.overflowY === "auto" || s.overflowY === "scroll") return p;
+  function scrollChatToBottom(behavior) {
+    // Reveal the newest message. We scroll the message ELEMENT (not an
+    // ancestor) via scrollIntoView on purpose: the chat has no bounded scroll
+    // container — the center <section> sets overflow-y:auto but never overflows
+    // (min-height with no ceiling grows it to fit), so the *document* is the
+    // real scroller. scrollIntoView scrolls whatever actually scrolls and stops
+    // at the card, so it never overshoots past the chat to the page footer.
+    const list = document.getElementById("messages-list");
+    const last = list && list.lastElementChild;
+    if (last && typeof last.scrollIntoView === "function") {
+      last.scrollIntoView({ behavior: behavior || "auto", block: "end", inline: "nearest" });
     }
-    return null;
   }
 
-  function nearBottom(container) {
-    if (!container) return true;
-    return container.scrollHeight - container.scrollTop - container.clientHeight < 80;
+  // Autoscroll toggle: explicit user control, persisted per-browser. Default on.
+  const AUTOSCROLL_KEY = "orch.autoscroll";
+  function autoscrollEnabled() {
+    const cb = document.getElementById("autoscroll-toggle");
+    return cb ? cb.checked : true;
   }
-
-  function scrollToBottom(container, behavior) {
-    if (!container) return;
-    try { container.scrollTo({ top: container.scrollHeight, behavior: behavior || "auto" }); }
-    catch { container.scrollTop = container.scrollHeight; }
+  function initAutoscrollToggle() {
+    const cb = document.getElementById("autoscroll-toggle");
+    if (!cb) return;
+    const saved = localStorage.getItem(AUTOSCROLL_KEY);
+    if (saved !== null) cb.checked = saved === "1";
+    cb.addEventListener("change", () => {
+      try { localStorage.setItem(AUTOSCROLL_KEY, cb.checked ? "1" : "0"); } catch {}
+      // Turning it on should immediately snap to the tail.
+      if (cb.checked) scrollChatToBottom("smooth");
+    });
   }
 
   function appendMessage(msg) {
     const list = document.getElementById("messages-list");
     if (!list) return;
-    // Capture "was user reading the tail?" BEFORE appending — once the new
-    // card lands, scrollHeight grows and the math no longer reflects user intent.
-    const container = getScrollContainer(list);
-    const stick = nearBottom(container);
+    // When autoscroll is on we always snap to the tail; when off we never do.
+    const stick = autoscrollEnabled();
     const card = document.createElement("div");
     card.className = "rounded p-3 msg-card";
     card.style.background = "var(--bg-elevated)";
@@ -84,7 +93,9 @@
     list.appendChild(card);
     lastMsgCount += 1;
     bumpCounter("msg-count", lastMsgCount);
-    if (stick) scrollToBottom(container, "smooth");
+    if (stick && typeof card.scrollIntoView === "function") {
+      card.scrollIntoView({ behavior: "smooth", block: "end", inline: "nearest" });
+    }
   }
 
   function chipStateClass(status) {
@@ -170,6 +181,28 @@
     }
   }
 
+  function addSkillBadge(nodeId, skillName) {
+    // Attach a skill badge to a node's swimlane chip. Idempotent — one badge
+    // per skill name per node, matching the server-rendered dedup.
+    if (!nodeId || !skillName) return;
+    const chip = document.querySelector('.activity-chip[data-node-id="' + nodeId + '"]');
+    if (!chip) return;  // chip not on screen yet; reload backfills from skills_by_node
+    let box = chip.querySelector(".chip-skills");
+    if (!box) {
+      box = document.createElement("div");
+      box.className = "chip-skills";
+      chip.appendChild(box);
+    }
+    const dup = Array.from(box.querySelectorAll(".skill-badge"))
+      .some((b) => b.dataset.skill === skillName);
+    if (dup) return;
+    const badge = document.createElement("span");
+    badge.className = "skill-badge";
+    badge.dataset.skill = skillName;
+    badge.textContent = "🧩 " + skillName;
+    box.appendChild(badge);
+  }
+
   function updateStageStatus(stageId, newStatus) {
     const tile = document.querySelector('.stage-tile[data-stage-id="' + stageId + '"]');
     if (!tile) return;
@@ -203,6 +236,9 @@
       case "node_status_changed":
         if (data.node_id && data.status) updateNodeChipStatus(data.node_id, data.status);
         return;
+      case "node_skill_used":
+        if (data.node_id && data.skill_name) addSkillBadge(data.node_id, data.skill_name);
+        return;
       case "stage_status_changed":
         if (data.stage_id && data.status) updateStageStatus(data.stage_id, data.status);
         return;
@@ -233,7 +269,8 @@
     // No `onmessage` handler: our server always sets an `event:` field via
     // sse_starlette, so events arrive on named listeners below.
     const named = ["snapshot", "message_added", "node_created", "node_status_changed",
-                   "run_finished", "run_resumed", "run_started", "done", "heartbeat"];
+                   "node_skill_used", "run_finished", "run_resumed", "run_started",
+                   "done", "heartbeat"];
     named.forEach((name) => {
       es.addEventListener(name, (e) => {
         let payload = {};
@@ -286,13 +323,11 @@
   }
 
   // On open, drop the user at the tail of the chat — usually what they came
-  // here for. Run after layout settles (rAF + microtask) so scrollHeight is final.
+  // here for. Run after layout settles (rAF) so positions are final.
   function initialScrollToBottom() {
-    const list = document.getElementById("messages-list");
-    if (!list) return;
-    const container = getScrollContainer(list);
-    requestAnimationFrame(() => scrollToBottom(container, "auto"));
+    requestAnimationFrame(() => scrollChatToBottom("auto"));
   }
+  initAutoscrollToggle();
   initialScrollToBottom();
 
   // create_run always inserts status='running'; non-running means terminal.
