@@ -43,7 +43,6 @@
 {% elif items %}
 <p class="text-xs muted mb-3">
   <span id="evo-count">{{ "evolutions.count_in_dir" | t(locale=locale, count=items|length, dir=evolutions_dir) }}</span>
-  <span id="evo-shown" class="ml-2 hidden"></span>
 </p>
 <form id="evo-bulk-form" method="post" action="/p/{{ project.slug }}/bulk/orchestrate" class="mb-2">
   <input type="hidden" name="kind" value="evolution">
@@ -55,28 +54,32 @@
     {{ "bulk.run_none" | t(locale=locale) }}
   </button>
 </form>
-<table id="evo-table" class="w-full bg-white rounded shadow text-sm">
+<table id="evo-table" class="w-full bg-white rounded shadow text-sm"
+       data-table-tools
+       data-tt-key="evolutions.{{ project.slug }}"
+       data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+       data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
   <thead class="text-left border-b">
     <tr>
       <th class="p-2 w-8"><input type="checkbox" id="evo-select-all" aria-label="select all visible"></th>
-      <th class="p-2">{{ "evolutions.col.agent" | t(locale=locale) }}</th>
-      <th class="p-2">{{ "evolutions.col.name" | t(locale=locale) }}</th>
-      <th class="p-2">{{ "evolutions.col.status" | t(locale=locale) }}</th>
+      <th class="p-2" data-sort-col="agent" data-sort-type="text">{{ "evolutions.col.agent" | t(locale=locale) }}</th>
+      <th class="p-2" data-sort-col="name" data-sort-type="text">{{ "evolutions.col.name" | t(locale=locale) }}</th>
+      <th class="p-2" data-sort-col="status" data-sort-type="status">{{ "evolutions.col.status" | t(locale=locale) }}</th>
       <th class="p-2">{{ "evolutions.col.conflict" | t(locale=locale) }}</th>
-      <th class="p-2">{{ "evolutions.col.title" | t(locale=locale) }}</th>
+      <th class="p-2" data-sort-col="title" data-sort-type="text">{{ "evolutions.col.title" | t(locale=locale) }}</th>
       <th class="p-2">{{ "evolutions.col.refs" | t(locale=locale) }}</th>
       <th class="p-2"></th>
     </tr>
-    <tr class="border-b bg-slate-50 text-xs" id="evo-filters">
+    <tr class="border-b bg-slate-50 text-xs" id="evo-filters" data-tt-filter-row>
       <th class="p-1"></th>
-      <th class="p-1"><input type="text" data-evo-filter="agent"
+      <th class="p-1"><input type="text" data-filter-col="agent"
             placeholder="{{ 'evolutions.filter.search' | t(locale=locale) }}"
             class="w-full border rounded p-1 text-xs font-mono"></th>
-      <th class="p-1"><input type="text" data-evo-filter="name"
+      <th class="p-1"><input type="text" data-filter-col="name"
             placeholder="{{ 'evolutions.filter.search' | t(locale=locale) }}"
             class="w-full border rounded p-1 text-xs font-mono"></th>
       <th class="p-1">
-        <select data-evo-filter="status" class="w-full border rounded p-1 text-xs font-mono">
+        <select data-filter-col="status" class="w-full border rounded p-1 text-xs font-mono">
           <option value="">{{ "evolutions.filter.opt.all" | t(locale=locale) }}</option>
           {% for opt in ['proposed', 'active', 'applied', 'archived', 'rejected'] %}
           <option value="{{ opt }}">{{ ('evolutions.status.' ~ opt) | t(locale=locale) }}</option>
@@ -84,17 +87,17 @@
         </select>
       </th>
       <th class="p-1">
-        <select data-evo-filter="conflict" class="w-full border rounded p-1 text-xs font-mono">
+        <select data-filter-col="conflict" class="w-full border rounded p-1 text-xs font-mono">
           <option value="">{{ "evolutions.filter.opt.all" | t(locale=locale) }}</option>
           <option value="1">{{ "evolutions.filter.opt.conflict_only" | t(locale=locale) }}</option>
           <option value="0">{{ "evolutions.filter.opt.no_conflict" | t(locale=locale) }}</option>
         </select>
       </th>
-      <th class="p-1"><input type="text" data-evo-filter="title"
+      <th class="p-1"><input type="text" data-filter-col="title"
             placeholder="{{ 'evolutions.filter.search' | t(locale=locale) }}"
             class="w-full border rounded p-1 text-xs font-mono"></th>
       <th class="p-1">
-        <select data-evo-filter="refs" class="w-full border rounded p-1 text-xs font-mono">
+        <select data-filter-col="refs" class="w-full border rounded p-1 text-xs font-mono">
           <option value="">{{ "evolutions.filter.opt.all" | t(locale=locale) }}</option>
           <option value="gh">{{ "evolutions.filter.opt.has_gh" | t(locale=locale) }}</option>
           <option value="run">{{ "evolutions.filter.opt.has_run" | t(locale=locale) }}</option>
@@ -102,7 +105,7 @@
         </select>
       </th>
       <th class="p-1 text-right">
-        <button type="button" id="evo-filter-reset"
+        <button type="button" id="evo-filter-reset" data-tt-reset
                 class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
           {{ "evolutions.filter.reset" | t(locale=locale) }}
         </button>
@@ -112,7 +115,7 @@
   <tbody>
   {% for it in items %}
   <tr class="border-b align-top"
-      data-evo-row
+      data-filter-row
       data-agent="{{ (it.agent_name or '')|lower }}"
       data-name="{{ (it.name or '')|lower }}"
       data-status="{{ it.status or 'proposed' }}"
@@ -177,88 +180,19 @@
   {% endfor %}
   </tbody>
 </table>
-<p id="evo-filter-empty" class="muted text-sm mt-3 hidden">{{ "evolutions.filter.empty" | t(locale=locale) }}</p>
 
 <script>
-(() => {
-  const STORAGE_KEY = 'evolutions.filters.{{ project.slug }}';
-  const FIELDS = ['agent', 'name', 'status', 'conflict', 'title', 'refs'];
-  const table = document.getElementById('evo-table');
-  const rows = Array.from(table.querySelectorAll('[data-evo-row]'));
-  const inputs = {};
-  FIELDS.forEach(f => {
-    inputs[f] = table.querySelector(`[data-evo-filter="${f}"]`);
-  });
-  const shownEl = document.getElementById('evo-shown');
-  const emptyEl = document.getElementById('evo-filter-empty');
-  const resetBtn = document.getElementById('evo-filter-reset');
-  const total = rows.length;
-  const SHOWN_TMPL = {{ ("evolutions.filter.shown_count" | t(locale=locale)) | tojson }};
+// Custom predicate for the "refs" filter column (gh / run / none — no jira here).
+window.tableToolsFilters = window.tableToolsFilters || {};
+window.tableToolsFilters.refs = function (row, value) {
+  if (value === "gh")  return row.dataset.hasGh === "1";
+  if (value === "run") return row.dataset.hasRun === "1";
+  if (value === "none") return !(row.dataset.hasGh === "1" || row.dataset.hasRun === "1");
+  return true;
+};
+</script>
 
-  const loadState = () => {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {}; }
-    catch { return {}; }
-  };
-  const saveState = () => {
-    const state = {};
-    FIELDS.forEach(f => { if (inputs[f] && inputs[f].value) state[f] = inputs[f].value; });
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-    catch { /* quota / privacy mode — silently ignore */ }
-  };
-
-  const matches = (row) => {
-    const v = (k) => (inputs[k] ? inputs[k].value : '').trim().toLowerCase();
-    const agent = v('agent'), name = v('name'), title = v('title');
-    if (agent && !row.dataset.agent.includes(agent)) return false;
-    if (name && !row.dataset.name.includes(name)) return false;
-    if (title && !row.dataset.title.includes(title)) return false;
-    const status = v('status');
-    if (status && row.dataset.status !== status) return false;
-    const conflict = v('conflict');
-    if (conflict && row.dataset.conflict !== conflict) return false;
-    const refs = v('refs');
-    if (refs === 'gh' && row.dataset.hasGh !== '1') return false;
-    if (refs === 'run' && row.dataset.hasRun !== '1') return false;
-    if (refs === 'none' && (row.dataset.hasGh === '1' || row.dataset.hasRun === '1')) return false;
-    return true;
-  };
-
-  const apply = () => {
-    let shown = 0;
-    rows.forEach(r => {
-      const ok = matches(r);
-      r.classList.toggle('hidden', !ok);
-      if (ok) shown++;
-    });
-    const hasFilter = FIELDS.some(f => inputs[f] && inputs[f].value);
-    if (hasFilter) {
-      shownEl.textContent = SHOWN_TMPL.replace('{shown}', shown).replace('{total}', total);
-      shownEl.classList.remove('hidden');
-    } else {
-      shownEl.classList.add('hidden');
-    }
-    emptyEl.classList.toggle('hidden', shown !== 0 || !hasFilter);
-    document.dispatchEvent(new CustomEvent('bulk:rows-changed', {detail: {table: 'evo'}}));
-  };
-
-  // Restore state, then wire change listeners
-  const saved = loadState();
-  FIELDS.forEach(f => {
-    if (inputs[f] && saved[f] != null) inputs[f].value = saved[f];
-  });
-  FIELDS.forEach(f => {
-    if (!inputs[f]) return;
-    const evt = inputs[f].tagName === 'SELECT' ? 'change' : 'input';
-    inputs[f].addEventListener(evt, () => { saveState(); apply(); });
-  });
-  resetBtn.addEventListener('click', () => {
-    FIELDS.forEach(f => { if (inputs[f]) inputs[f].value = ''; });
-    saveState();
-    apply();
-  });
-  apply();
-})();
-
+<script>
 // Bulk-select bar — checkboxes + "Run N selected" button. Sync with filter.
 (() => {
   const form = document.getElementById('evo-bulk-form');
