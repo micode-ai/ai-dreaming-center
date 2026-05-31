@@ -14,15 +14,31 @@
   tr.topic-row a.topic-link { display: block; color: inherit; text-decoration: none; }
   tr.topic-row:hover a.topic-link { color: rgb(37 99 235); }
 </style>
-<table class="data-table mb-6">
+<div data-tt-scope>
+  <div class="mb-2 flex items-center gap-2">
+    <input type="text" data-tt-search
+           placeholder="{{ 'table.search' | t(locale=locale) }}"
+           class="tt-search">
+    <button type="button" data-tt-reset
+            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+      {{ "table.reset" | t(locale=locale) }}
+    </button>
+  </div>
+<table class="data-table mb-6"
+       data-table-tools
+       data-tt-key="topics.{{ project.slug }}"
+       data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+       data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
   <thead><tr>
-    <th>{{ "kanban.col.title" | t(locale=locale) }}</th>
-    <th>{{ "kanban.col.module" | t(locale=locale) }}</th>
-    <th>{{ "kanban.col.agents" | t(locale=locale) }}</th>
+    <th data-sort-col="title" data-sort-type="text">{{ "kanban.col.title" | t(locale=locale) }}</th>
+    <th data-sort-col="module" data-sort-type="text">{{ "kanban.col.module" | t(locale=locale) }}</th>
+    <th data-sort-col="agents" data-sort-type="text">{{ "kanban.col.agents" | t(locale=locale) }}</th>
   </tr></thead>
   <tbody>
   {% for t in db_topics %}
-  <tr class="topic-row" data-href="/p/{{ project.slug }}/kanban#topic-{{ t.id }}">
+  <tr class="topic-row" data-filter-row
+      data-title="{{ (t.title or '')|lower }}"
+      data-href="/p/{{ project.slug }}/kanban#topic-{{ t.id }}">
     <td>
       <a class="topic-link" href="/p/{{ project.slug }}/kanban#topic-{{ t.id }}">{{ t.title }}</a>
       {% if t.question %}<div class="text-xs muted">{{ t.question }}</div>{% endif %}
@@ -34,6 +50,7 @@
   {% endfor %}
   </tbody>
 </table>
+</div>
 <script>
 (() => {
   document.querySelectorAll('tr.topic-row[data-href]').forEach(row => {
