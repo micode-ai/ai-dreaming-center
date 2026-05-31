@@ -11,9 +11,30 @@
      running_label: button text while command runs (already localized)
 
    Optional:
-     hint:          small caption shown next to the button #}
-{% macro scan_action_bar(action_url, running, label, running_label, hint='') %}
+     hint:          small caption shown next to the button
+     last_scan:     dict from db.get_last_command_session() or None #}
+{% macro scan_action_bar(action_url, running, label, running_label, hint='', last_scan=None) %}
 <div class="flex items-center justify-end mb-4 gap-3 flex-wrap">
+  {% if last_scan is not none %}
+  {% set _st = 'running' if running else last_scan.status %}
+  {% set _ts = last_scan.finished_at or last_scan.started_at %}
+  <span class="text-xs flex items-center gap-1.5" style="color: var(--text-faint);">
+    <span>{{ "scan.last.label" | t(locale=locale) }}:</span>
+    {% if _st == 'running' %}
+      <span style="color: var(--status-running, #38bdf8);">● {{ "scan.last.running" | t(locale=locale) }}</span>
+    {% elif _st == 'success' %}
+      <span style="color: var(--status-success, #34d399);">✓ {{ "scan.last.success" | t(locale=locale) }}</span>
+    {% elif _st == 'failed' %}
+      <span style="color: var(--status-failed, #f87171);"
+            {% if last_scan.error_message %}title="{{ last_scan.error_message }}"{% endif %}>✕ {{ "scan.last.failed" | t(locale=locale) }}</span>
+    {% else %}
+      <span>{{ "scan.last.never" | t(locale=locale) }}</span>
+    {% endif %}
+    {% if _ts %}
+    <time data-scan-ts="{{ _ts }}" title="{{ _ts[:19] }}">{{ _ts[:16] }}</time>
+    {% endif %}
+  </span>
+  {% endif %}
   {% if hint %}
   <span class="text-xs muted">{{ hint }}</span>
   {% endif %}
@@ -26,4 +47,30 @@
     </button>
   </form>
 </div>
+  <script>
+  (function () {
+    if (window.__scanRelInit) return;
+    window.__scanRelInit = true;
+    function rel(iso) {
+      var then = Date.parse(iso); if (isNaN(then)) return null;
+      var s = Math.round((then - Date.now()) / 1000);
+      var loc = document.documentElement.lang || "en";
+      var rtf = new Intl.RelativeTimeFormat(loc, { numeric: "auto" });
+      var abs = Math.abs(s);
+      if (abs < 60) return rtf.format(Math.round(s), "second");
+      if (abs < 3600) return rtf.format(Math.round(s / 60), "minute");
+      if (abs < 86400) return rtf.format(Math.round(s / 3600), "hour");
+      return rtf.format(Math.round(s / 86400), "day");
+    }
+    function paint() {
+      document.querySelectorAll("time[data-scan-ts]").forEach(function (el) {
+        var r = rel(el.getAttribute("data-scan-ts"));
+        if (r) el.textContent = r;
+      });
+    }
+    if (document.readyState === "loading")
+      document.addEventListener("DOMContentLoaded", paint);
+    else paint();
+  })();
+  </script>
 {% endmacro %}
