@@ -27,7 +27,7 @@
   }
 
   function filterValue(row, col, colIndex) {
-    if (col && row.dataset[col] != null) return row.dataset[col];
+    if (col && row.dataset[col] != null) return row.dataset[col].toLowerCase();
     var cell = colIndex >= 0 ? row.children[colIndex] : null;
     return cell ? cell.textContent.trim().toLowerCase() : "";
   }
@@ -220,7 +220,7 @@
     }
 
     // Optional reset button.
-    var resetBtn = (table.parentNode || document).querySelector("[data-tt-reset]");
+    var resetBtn = (table.closest("[data-tt-scope]") || table.parentNode || document).querySelector("[data-tt-reset]");
     if (resetBtn) {
       resetBtn.addEventListener("click", function () {
         state.filters = {}; state.search = "";
