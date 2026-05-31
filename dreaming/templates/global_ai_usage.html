@@ -122,24 +122,41 @@
   <div class="rounded-xl p-5" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
     <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">{{ "ai_usage.by_agent" | t(locale=locale) }}</h2>
     {% if summary.by_agent %}
-    <table class="w-full text-sm">
-      <thead class="text-xs uppercase tracking-wider" style="color: var(--text-faint);">
-        <tr>
-          <th class="text-left pb-2">{{ "ai_usage.col.agent" | t(locale=locale) }}</th>
-          <th class="text-right pb-2">{{ "ai_usage.col.runs" | t(locale=locale) }}</th>
-          <th class="text-right pb-2">{{ "ai_usage.col.tokens" | t(locale=locale) }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for a in summary.by_agent %}
-        <tr style="border-top:1px solid var(--border-subtle);">
-          <td class="py-2" style="color: var(--text-body);">{{ a.agent_name }}</td>
-          <td class="py-2 text-right" style="color: var(--text-faint);">{{ a.runs }}</td>
-          <td class="py-2 text-right font-semibold" style="color: var(--text-strong);">{{ num(a.total_tokens) }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div data-tt-scope>
+      <div class="mb-2 flex items-center gap-2">
+        <input type="text" data-tt-search
+               placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
+        <button type="button" data-tt-reset
+                class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+          {{ "table.reset" | t(locale=locale) }}
+        </button>
+      </div>
+      <table class="w-full text-sm"
+             data-table-tools
+             data-tt-key="g_ai_usage.by_agent"
+             data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+             data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
+        <thead class="text-xs uppercase tracking-wider" style="color: var(--text-faint);">
+          <tr>
+            <th class="text-left pb-2" data-sort-col="agent" data-sort-type="text">{{ "ai_usage.col.agent" | t(locale=locale) }}</th>
+            <th class="text-right pb-2" data-sort-col="runs" data-sort-type="num">{{ "ai_usage.col.runs" | t(locale=locale) }}</th>
+            <th class="text-right pb-2" data-sort-col="tokens" data-sort-type="num">{{ "ai_usage.col.tokens" | t(locale=locale) }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in summary.by_agent %}
+          <tr style="border-top:1px solid var(--border-subtle);"
+              data-filter-row
+              data-runs="{{ a.runs }}"
+              data-tokens="{{ a.total_tokens }}">
+            <td class="py-2" style="color: var(--text-body);">{{ a.agent_name }}</td>
+            <td class="py-2 text-right" style="color: var(--text-faint);">{{ a.runs }}</td>
+            <td class="py-2 text-right font-semibold" style="color: var(--text-strong);">{{ num(a.total_tokens) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
     {% else %}
     <p class="text-sm" style="color: var(--text-faint);">{{ "common.no_data" | t(locale=locale) }}</p>
     {% endif %}
@@ -151,38 +168,55 @@
   <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">{{ "ai_usage.top_projects" | t(locale=locale) }}</h2>
   {% if summary.by_project %}
   {% set max_total = summary.by_project[0].total_tokens or 1 %}
-  <table class="w-full text-sm">
-    <thead class="text-xs uppercase tracking-wider" style="color: var(--text-faint);">
-      <tr>
-        <th class="text-left pb-2">{{ "ai_usage.col.project" | t(locale=locale) }}</th>
-        <th class="text-right pb-2">{{ "ai_usage.col.events" | t(locale=locale) }}</th>
-        <th class="text-left pb-2 pl-4">{{ "ai_usage.col.tokens" | t(locale=locale) }}</th>
-        <th class="text-right pb-2 w-24">{{ "ai_usage.col.total" | t(locale=locale) }}</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in summary.by_project %}
-      <tr style="border-top:1px solid var(--border-subtle);">
-        <td class="py-2">
-          {% if row.slug %}
-          <a href="/p/{{ row.slug }}/ai-usage" class="font-mono text-xs" style="color: var(--brand-hover); text-decoration: underline;">{{ row.slug }}</a>
-          {% if row.label and row.label != row.slug %}<span class="ml-2 text-xs" style="color: var(--text-faint);">{{ row.label }}</span>{% endif %}
-          {% else %}<span style="color: var(--text-faint);">__unmapped__</span>{% endif %}
-        </td>
-        <td class="py-2 text-right" style="color: var(--text-faint);">{{ row.events or 0 }}</td>
-        <td class="py-2 pl-4">
-          <div class="flex items-center gap-2">
-            <div class="flex-1 rounded-full overflow-hidden" style="background: var(--bg-hover); height: 0.5rem;">
-              <div style="background: var(--brand); height: 0.5rem; width: {{ (100 * (row.total_tokens or 0) // max_total) }}%;"></div>
+  <div data-tt-scope>
+    <div class="mb-2 flex items-center gap-2">
+      <input type="text" data-tt-search
+             placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
+      <button type="button" data-tt-reset
+              class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+        {{ "table.reset" | t(locale=locale) }}
+      </button>
+    </div>
+    <table class="w-full text-sm"
+           data-table-tools
+           data-tt-key="g_ai_usage.top_projects"
+           data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+           data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
+      <thead class="text-xs uppercase tracking-wider" style="color: var(--text-faint);">
+        <tr>
+          <th class="text-left pb-2" data-sort-col="project" data-sort-type="text">{{ "ai_usage.col.project" | t(locale=locale) }}</th>
+          <th class="text-right pb-2" data-sort-col="events" data-sort-type="num">{{ "ai_usage.col.events" | t(locale=locale) }}</th>
+          <th class="text-left pb-2 pl-4">{{ "ai_usage.col.tokens" | t(locale=locale) }}</th>
+          <th class="text-right pb-2 w-24" data-sort-col="total" data-sort-type="num">{{ "ai_usage.col.total" | t(locale=locale) }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in summary.by_project %}
+        <tr style="border-top:1px solid var(--border-subtle);"
+            data-filter-row
+            data-events="{{ row.events or 0 }}"
+            data-total="{{ row.total_tokens or 0 }}">
+          <td class="py-2">
+            {% if row.slug %}
+            <a href="/p/{{ row.slug }}/ai-usage" class="font-mono text-xs" style="color: var(--brand-hover); text-decoration: underline;">{{ row.slug }}</a>
+            {% if row.label and row.label != row.slug %}<span class="ml-2 text-xs" style="color: var(--text-faint);">{{ row.label }}</span>{% endif %}
+            {% else %}<span style="color: var(--text-faint);">__unmapped__</span>{% endif %}
+          </td>
+          <td class="py-2 text-right" style="color: var(--text-faint);">{{ row.events or 0 }}</td>
+          <td class="py-2 pl-4">
+            <div class="flex items-center gap-2">
+              <div class="flex-1 rounded-full overflow-hidden" style="background: var(--bg-hover); height: 0.5rem;">
+                <div style="background: var(--brand); height: 0.5rem; width: {{ (100 * (row.total_tokens or 0) // max_total) }}%;"></div>
+              </div>
+              <span class="text-xs w-14 text-right" style="color: var(--text-faint);">{{ num(row.total_tokens) }}</span>
             </div>
-            <span class="text-xs w-14 text-right" style="color: var(--text-faint);">{{ num(row.total_tokens) }}</span>
-          </div>
-        </td>
-        <td class="py-2 text-right" style="color: var(--text-body);">{{ num(row.total_tokens) }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+          </td>
+          <td class="py-2 text-right" style="color: var(--text-body);">{{ num(row.total_tokens) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% else %}
   <p class="text-sm" style="color: var(--text-faint);">{{ "common.no_data" | t(locale=locale) }}</p>
   {% endif %}
@@ -191,28 +225,46 @@
 <div class="rounded-xl p-5 mb-6" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
   <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">{{ "ai_usage.top_sessions" | t(locale=locale) }}</h2>
   {% if summary.top_sessions %}
-  <table class="w-full text-sm">
-    <thead class="text-xs uppercase tracking-wider" style="color: var(--text-faint);">
-      <tr>
-        <th class="text-left pb-2">Session</th>
-        <th class="text-left pb-2">{{ "ai_usage.col.model" | t(locale=locale) }}</th>
-        <th class="text-right pb-2">{{ "ai_usage.col.duration" | t(locale=locale) }}</th>
-        <th class="text-right pb-2">{{ "ai_usage.col.events" | t(locale=locale) }}</th>
-        <th class="text-right pb-2">{{ "ai_usage.col.tokens" | t(locale=locale) }}</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for s in summary.top_sessions %}
-      <tr style="border-top:1px solid var(--border-subtle);">
-        <td class="py-2 font-mono text-xs" style="color: var(--text-faint);">{{ s.session_id[:8] }}…</td>
-        <td class="py-2 text-xs" style="color: var(--text-faint);">{{ s.model or '(unknown)' }}</td>
-        <td class="py-2 text-right" style="color: var(--text-faint);">{{ s.duration_minutes }} {{ "ai_usage.minutes" | t(locale=locale) }}</td>
-        <td class="py-2 text-right" style="color: var(--text-faint);">{{ s.events }}</td>
-        <td class="py-2 text-right font-semibold" style="color: var(--text-strong);">{{ num(s.total_tokens) }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div data-tt-scope>
+    <div class="mb-2 flex items-center gap-2">
+      <input type="text" data-tt-search
+             placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
+      <button type="button" data-tt-reset
+              class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+        {{ "table.reset" | t(locale=locale) }}
+      </button>
+    </div>
+    <table class="w-full text-sm"
+           data-table-tools
+           data-tt-key="g_ai_usage.top_sessions"
+           data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+           data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
+      <thead class="text-xs uppercase tracking-wider" style="color: var(--text-faint);">
+        <tr>
+          <th class="text-left pb-2" data-sort-col="session" data-sort-type="text">Session</th>
+          <th class="text-left pb-2" data-sort-col="model" data-sort-type="text">{{ "ai_usage.col.model" | t(locale=locale) }}</th>
+          <th class="text-right pb-2" data-sort-col="duration" data-sort-type="num">{{ "ai_usage.col.duration" | t(locale=locale) }}</th>
+          <th class="text-right pb-2" data-sort-col="events" data-sort-type="num">{{ "ai_usage.col.events" | t(locale=locale) }}</th>
+          <th class="text-right pb-2" data-sort-col="tokens" data-sort-type="num">{{ "ai_usage.col.tokens" | t(locale=locale) }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in summary.top_sessions %}
+        <tr style="border-top:1px solid var(--border-subtle);"
+            data-filter-row
+            data-duration="{{ s.duration_minutes }}"
+            data-events="{{ s.events }}"
+            data-tokens="{{ s.total_tokens }}">
+          <td class="py-2 font-mono text-xs" style="color: var(--text-faint);">{{ s.session_id[:8] }}…</td>
+          <td class="py-2 text-xs" style="color: var(--text-faint);">{{ s.model or '(unknown)' }}</td>
+          <td class="py-2 text-right" style="color: var(--text-faint);">{{ s.duration_minutes }} {{ "ai_usage.minutes" | t(locale=locale) }}</td>
+          <td class="py-2 text-right" style="color: var(--text-faint);">{{ s.events }}</td>
+          <td class="py-2 text-right font-semibold" style="color: var(--text-strong);">{{ num(s.total_tokens) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% else %}
   <p class="text-sm" style="color: var(--text-faint);">{{ "common.no_data" | t(locale=locale) }}</p>
   {% endif %}
