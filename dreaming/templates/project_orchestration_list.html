@@ -1,7 +1,7 @@
 {% extends "_project_layout.html" %}
 {% set active='orchestration' %}
 {% block project_content %}
-<link rel="stylesheet" href="/static/orchestration_swimlane.css?v=wave-a6">
+<link rel="stylesheet" href="/static/orchestration_swimlane.css?v=node-skills-1">
 {% if bulk_queue %}
 <div class="mb-3 p-3 rounded-lg text-sm"
      style="background: rgba(99,102,241,0.08); border:1px solid rgba(99,102,241,0.35);">
@@ -244,6 +244,11 @@
                      data-node-id="{{ n.id }}">
                   <span class="chip-action">{{ n.agent_name }}</span>
                   <span class="text-xs muted">{{ n.role }} · {{ n.status }}</span>
+                  <div class="chip-skills">
+                    {% for sk in skills_by_node.get(n.id, []) %}
+                    <span class="skill-badge" data-skill="{{ sk }}" title="{{ 'orchestration.skill_used' | t(locale=locale) }}: {{ sk }}">🧩 {{ sk }}</span>
+                    {% endfor %}
+                  </div>
                 </div>
               {% else %}
                 <span class="text-xs muted">{{ "orchestration.no_agents_yet" | t(locale=locale) }}</span>
@@ -274,7 +279,13 @@
       <span id="node-count" class="hidden">{{ selected_nodes|length }}</span>
       {% endif %}
 
-      <h3 class="font-semibold mb-2 mt-4 text-sm">{{ "orchestration.messages" | t(locale=locale) }} (<span id="msg-count">{{ selected_messages|length }}</span>)</h3>
+      <div class="flex items-center justify-between gap-3 flex-wrap mb-2 mt-4">
+        <h3 class="font-semibold text-sm">{{ "orchestration.messages" | t(locale=locale) }} (<span id="msg-count">{{ selected_messages|length }}</span>)</h3>
+        <label class="flex items-center gap-1.5 text-xs cursor-pointer select-none" style="color: var(--text-faint);">
+          <input type="checkbox" id="autoscroll-toggle" checked>
+          {{ "orchestration.autoscroll" | t(locale=locale) }}
+        </label>
+      </div>
       {% if selected_messages %}
       <div id="msg-filter-bar" class="hidden mb-2 flex items-center gap-2 text-xs">
         <span style="color: var(--text-faint);">{{ "orchestration.filter_node" | t(locale=locale) }}:</span>
@@ -351,7 +362,7 @@
       <p class="text-sm" style="color: var(--text-faint);">{{ "orchestration.no_messages" | t(locale=locale) }}</p>
       {% endif %}
     </div>
-    <script src="/static/orchestration_stream.js?v=autoscroll-1" defer></script>
+    <script src="/static/orchestration_stream.js?v=node-skills-2-autoscroll" defer></script>
     {% elif runs %}
     <div class="flex-1 flex flex-col items-center justify-center text-center px-6">
       <div class="text-sm" style="color: var(--text-muted);">{{ "orchestration.pick_run" | t(locale=locale) }}</div>

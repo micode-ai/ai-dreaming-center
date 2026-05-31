@@ -418,6 +418,37 @@ class SqliteDB:
         except Exception as e:
             log.warning("Failed to create ai_skill_invocations: %s", e)
 
+        # --- orchestration: per-node skill invocations (pipeline badges) ---
+        # One row per (assistant message, skill). PK on (message_id, skill_name)
+        # makes the tail's INSERT OR IGNORE idempotent across re-tails/backfills.
+        # node_id attributes the skill to its swimlane chip; run_id drives both
+        # the per-run badge query and the delete-run cleanup.
+        try:
+            await self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS orchestrator_node_skills (
+                    message_id TEXT NOT NULL,
+                    skill_name TEXT NOT NULL,
+                    node_id    TEXT NOT NULL,
+                    run_id     TEXT NOT NULL,
+                    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                    ts         TEXT NOT NULL,
+                    PRIMARY KEY (message_id, skill_name)
+                )
+                """
+            )
+            await self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_node_skills_node "
+                "ON orchestrator_node_skills (node_id)"
+            )
+            await self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_node_skills_run "
+                "ON orchestrator_node_skills (run_id)"
+            )
+            await self._conn.commit()
+        except Exception as e:
+            log.warning("Failed to create orchestrator_node_skills: %s", e)
+
     async def close(self) -> None:
         if self._conn:
             await self._conn.close()
@@ -434,6 +465,37 @@ class SqliteDB:
     async def fetch_all(self, sql: str, params: tuple = ()) -> list:
         async with self._conn.execute(sql, params) as cur:
             return list(await cur.fetchall())
+
+    # ── Orchestration node skills ─────────────────────────────────
+
+    async def add_node_skill(
+        self, *, message_id: str, skill_name: str, node_id: str,
+        run_id: str, project_id: int, ts: str,
+    ) -> bool:
+        """Record a Skill invocation against an orchestration node.
+
+        INSERT OR IGNORE on the (message_id, skill_name) PK — returns True only
+        when a new row was actually inserted, so callers can fire a one-shot
+        SSE badge event without re-emitting on re-tail/backfill replays.
+        """
+        before = self._conn.total_changes
+        await self._conn.execute(
+            "INSERT OR IGNORE INTO orchestrator_node_skills "
+            "(message_id, skill_name, node_id, run_id, project_id, ts) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (message_id, skill_name, node_id, run_id, project_id, ts),
+        )
+        await self._conn.commit()
+        return self._conn.total_changes > before
+
+    async def list_node_skills_for_run(self, run_id: str) -> list:
+        """Distinct (node_id, skill_name) for a run, ordered by first use."""
+        return await self.fetch_all(
+            "SELECT node_id, skill_name, MIN(ts) AS first_ts "
+            "FROM orchestrator_node_skills WHERE run_id=? "
+            "GROUP BY node_id, skill_name ORDER BY first_ts ASC",
+            (run_id,),
+        )
 
     # ── Sessions (project-scoped) ─────────────────────────────────
 
@@ -753,6 +815,9 @@ class SqliteDB:
         )
         await self._conn.execute(
             "DELETE FROM orchestrator_questions WHERE run_id=?", (run_id,),
+        )
+        await self._conn.execute(
+            "DELETE FROM orchestrator_node_skills WHERE run_id=?", (run_id,),
         )
         # orchestrator_tts_messages also has FK on orchestrator_runs(id).
         # Wrap in try/except — table is created by a migration that may not have

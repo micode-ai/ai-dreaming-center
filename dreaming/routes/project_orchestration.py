@@ -46,6 +46,7 @@ async def orchestration_list(request: Request, slug: str, run_id: str | None = N
     selected_messages: list = []
     selected_stages: list = []
     nodes_by_stage: dict[str, list] = {}
+    skills_by_node: dict[str, list] = {}
     if run_id:
         run_row = await hub.get_run(run_id)
         if run_row is not None and run_row["project_id"] == project.id:
@@ -56,6 +57,9 @@ async def orchestration_list(request: Request, slug: str, run_id: str | None = N
             for n in selected_nodes:
                 key = n.get("stage_id") or "_unassigned"
                 nodes_by_stage.setdefault(key, []).append(n)
+            # Skills each node invoked → swimlane chip badges.
+            for sk in await request.app.state.db.list_node_skills_for_run(run_id):
+                skills_by_node.setdefault(sk["node_id"], []).append(sk["skill_name"])
 
     from dreaming.services.bulk_orchestration import get_queue
     _bq = get_queue(request.app.state, project.id)
@@ -76,6 +80,7 @@ async def orchestration_list(request: Request, slug: str, run_id: str | None = N
             "selected_messages": selected_messages,
             "selected_stages": selected_stages,
             "nodes_by_stage": nodes_by_stage,
+            "skills_by_node": skills_by_node,
             "bulk_queue": bulk_queue_snap,
             "bulk_diag": bulk_diag,
             "bulk_pending": bulk_pending,

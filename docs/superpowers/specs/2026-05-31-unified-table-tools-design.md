@@ -35,8 +35,11 @@ reusable component and roll it out**, not to invent it.
 
 Other relevant facts:
 
-- The pattern appears in exactly one file (`grep td-th-sort|data-td-filter` → 29
-  hits, all in `project_findings.html`).
+- The pattern appears in exactly one file (`grep td-th-sort|data-td-filter`, all
+  hits in `project_findings.html`).
+- The `bulk:rows-changed` event has **two** existing consumers, not one:
+  `project_findings.html` and `project_evolutions.html`. The event-rename
+  migration (§Persistence) must update both before the old alias can be removed.
 - Server-side filtering exists only on `project_findings.py` and
   `project_ideas.py` (`selected_status` / `selected_module` query params).
 - Several routes cap rows server-side: `project_orchestration.py`
@@ -86,6 +89,10 @@ Mark headers:
 - Types: `text` (`localeCompare`), `num` (`parseFloat`), `date` (ISO strings,
   compared lexicographically — `YYYY-MM-DD` sorts correctly), `prio`
   (`critical>high>medium>low`), `status` (custom rank). Default `text`.
+  Note: `date` sorting is only correct over ISO `YYYY-MM-DD…` values. Columns that
+  render localized or relative timestamps MUST expose an ISO value via a
+  `data-<col>` row attribute (or `data-sort-value` on the cell); cell text alone
+  will not sort correctly.
 - **Sort-value resolution order** (this is what makes rollout cheap):
   1. `td[data-sort-value]` in the cell (explicit override),
   2. the row's `data-<col>` attribute (where `<col>` = the header's
@@ -147,7 +154,10 @@ For routes that cap rows (orchestration `limit=50`, session-log, dashboard,
 kanban, cascade-costs, questions, ai-radar):
 
 - **Default:** client-side enhancement over the rows already rendered. Where the
-  full dataset is small, raise/remove the cap so the client sees everything.
+  full dataset is small, raise/remove the cap so the client sees everything. The
+  implementation plan must **enumerate each capped route explicitly** and state
+  whether its cap is relaxed or left as-is — so no capped table is silently
+  skipped.
 - **Point-wise server-side** (`?sort=&q=` → SQL `ORDER BY`/`WHERE`): added only
   for a table that is genuinely large or paginated. Deferred out of the first
   wave. Such a table carries an explicit "filtering current page only" caption so

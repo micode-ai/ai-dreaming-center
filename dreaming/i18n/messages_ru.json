@@ -500,6 +500,8 @@
   "orchestration.delete_run": "Удалить запуск",
   "orchestration.messages": "Сообщения",
   "orchestration.filter_node": "Фильтр по узлу",
+  "orchestration.autoscroll": "Автоскролл",
+  "orchestration.skill_used": "Вызван скил",
   "tech_debt.parse_error": "Ошибка парсинга",
   "tech_debt.empty.title": "В {dir} нет markdown файлов",
   "tech_debt.empty.desc": "Tech-debt items пишет slash-команда {code} — спавнит claude, который сканит репо на TODO/FIXME/legacy/смелли и пишет каждую находку отдельным markdown'ом сюда. По расписанию запускается weekly (если включён cron), или можно дёрнуть прямо сейчас.",
