@@ -35,11 +35,15 @@ reusable component and roll it out**, not to invent it.
 
 Other relevant facts:
 
-- The pattern appears in exactly one file (`grep td-th-sort|data-td-filter`, all
-  hits in `project_findings.html`).
-- The `bulk:rows-changed` event has **two** existing consumers, not one:
-  `project_findings.html` and `project_evolutions.html`. The event-rename
-  migration (§Persistence) must update both before the old alias can be removed.
+- The full sort/filter machinery is inlined (under different attribute names) in
+  **three** templates: `project_findings.html` (`data-td-*`),
+  `project_ideas.html` (`data-ideas-*`), and `project_evolutions.html`
+  (`data-evo-*`). All three must be converted to the component and have their
+  inline JS deleted — a bare `data-table-tools` opt-in on these would run two
+  implementations concurrently.
+- The `bulk:rows-changed` event therefore has **three** existing consumers
+  (findings, ideas, evolutions). The component re-emits it for back-compat; the
+  alias may only be removed once all three are migrated.
 - Server-side filtering exists only on `project_findings.py` and
   `project_ideas.py` (`selected_status` / `selected_module` query params).
 - Several routes cap rows server-side: `project_orchestration.py`

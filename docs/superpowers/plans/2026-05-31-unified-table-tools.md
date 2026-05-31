@@ -83,6 +83,7 @@ loop here is adapted, and this adaptation is intentional:
 - **Sort value resolution:** `td[data-sort-value]` → row `data-<col>` → cell `textContent`.
 - **Filter value resolution:** row `data-<col>` → cell `textContent`.
 - **Sort types:** `text` | `num` | `date` (ISO `YYYY-MM-DD…`) | `prio` (critical>high>medium>low) | `status`. Default `text`.
+- **`status` caveat:** the rank map covers `running > open > in-progress > blocked > timeout > closed > dropped`. A `status` column whose values aren't in the map sorts them all equal (rank −1) — acceptable, but use `text` if a table's statuses are unrelated to this vocabulary.
 - **`date` caveat:** only correct over ISO strings. A column rendering localized/relative dates MUST supply an ISO `data-<col>` or `data-sort-value`.
 - **Global search:** `<input data-tt-search>` placed anywhere in the table's container; substring over all cell text of each row.
 - **Custom predicate:** `window.tableToolsFilters['refs'] = (rowEl, value) => bool`.
@@ -556,24 +557,95 @@ git commit -m "refactor(findings): use shared table-tools component (parity)"
 
 ---
 
-## Task 6: Migrate `project_evolutions.html` bulk event
+## Task 6: Convert `project_ideas.html` + `project_evolutions.html` (parity, like findings)
 
-**Files:**
-- Modify: `dreaming/templates/project_evolutions.html`
+**CRITICAL — these are NOT simple opt-ins.** Both templates already contain their
+**own complete inline filter/bulk implementations** (`data-ideas-filter`/
+`data-ideas-row`; `data-evo-filter`/`data-evo-row`), each with its own
+`localStorage` key, shown-count, empty-state, refs predicate, and bulk script.
+They must be converted **exactly like findings (Task 5)** — rewrite attributes to
+the new contract **AND delete the inline filter (and sort, if present) `<script>`/
+`<style>` blocks**. If you merely add `data-table-tools`, the component runs
+*concurrently* with the old code → double-filtering, fighting shown-counts,
+flickering. (These two are the other consumers in the three-template
+`bulk:rows-changed` inventory: findings + ideas + evolutions.)
 
-- [ ] **Step 1:** This template is a second consumer of `bulk:rows-changed`. The
-  component re-emits that event for back-compat, so the listener already works.
-  Confirm by reading the file: locate its `bulk:rows-changed` listener and verify
-  it does not depend on event `detail` shape. No code change needed unless it does.
+### Task 6a — `project_ideas.html`
 
-- [ ] **Step 2:** If/when this template also gets `data-table-tools` (Task 7),
-  ensure its bulk script listens to `bulk:rows-changed` (kept as alias). Note in
-  the commit that the alias is still required (do NOT remove the alias yet).
+**Files:** Modify `dreaming/templates/project_ideas.html`
 
-- [ ] **Step 3: Commit** (only if a change was needed)
+- [ ] **Step 1: Record before-behaviour** on `/p/<slug>/ideas` (filters: id, title,
+  status select, priority, refs select gh/run/jira/none; persistence; bulk).
+- [ ] **Step 2: Convert markup.** On `<table id="ideas-table">` add
+  `data-table-tools data-tt-key="ideas.{{ project.slug }}"` +
+  `data-tt-count-tmpl`/`data-tt-empty-text` (as Task 5 Step 2). Headers: add
+  `data-sort-col`/`data-sort-type` (id→`text`, title→`text`, status→`status`,
+  priority→`prio`) — note ideas currently has **no** sort, so this *adds* sorting
+  (a feature gain). Filter row → `data-tt-filter-row`; rename `data-ideas-filter`
+  → `data-filter-col`. Reset button `#ideas-filter-reset` → add `data-tt-reset`.
+  Rows: `data-ideas-row` → `data-filter-row`; keep `data-id/title/status/priority`
+  and `data-has-gh/run/jira`.
+- [ ] **Step 3: Replace inline JS.** Delete the inline filter IIFE (and any sort
+  IIFE/`<style>`). Add the refs predicate (identical to findings):
+
+```html
+<script>
+window.tableToolsFilters = window.tableToolsFilters || {};
+window.tableToolsFilters.refs = function (row, value) {
+  if (value === "gh")   return row.dataset.hasGh === "1";
+  if (value === "run")  return row.dataset.hasRun === "1";
+  if (value === "jira") return row.dataset.hasJira === "1";
+  if (value === "none") return !(row.dataset.hasGh === "1" || row.dataset.hasRun === "1" || row.dataset.hasJira === "1");
+  return true;
+};
+</script>
+```
+
+  **Keep** the ideas bulk-selection IIFE (it relies on `bulk:rows-changed`, which
+  the component re-emits).
+- [ ] **Step 4: Parity check** on `/p/<slug>/ideas` — all Step 1 behaviour plus the
+  new column sorting. Commit:
 
 ```bash
-git commit -am "chore(evolutions): confirm bulk event compatibility with table-tools"
+git commit -am "refactor(ideas): use shared table-tools component (parity + adds sort)"
+```
+
+### Task 6b — `project_evolutions.html`
+
+**Files:** Modify `dreaming/templates/project_evolutions.html`
+
+- [ ] **Step 1: Record before-behaviour** on `/p/<slug>/evolutions` (filters: agent,
+  name, status, conflict select 1/0, title, refs select gh/run/none; persistence;
+  bulk — note the danger-variant "apply force" for conflicts must still work).
+- [ ] **Step 2: Convert markup.** On `<table id="evo-table">` add
+  `data-table-tools data-tt-key="evolutions.{{ project.slug }}"` + count/empty.
+  Headers: `data-sort-col`/`data-sort-type` (agent→`text`, name→`text`,
+  status→`status`, title→`text`). Filter row → `data-tt-filter-row`; rename
+  `data-evo-filter` → `data-filter-col`. The **`conflict`** select (values `1`/`0`
+  matching `data-conflict`) is a **plain exact-match select — no predicate
+  needed**. Reset → `data-tt-reset`. Rows: `data-evo-row` → `data-filter-row`;
+  keep `data-conflict`, `data-has-gh/run`.
+- [ ] **Step 3: Replace inline JS.** Delete the inline filter IIFE. Add the
+  evolutions refs predicate (**gh/run/none — NO jira**):
+
+```html
+<script>
+window.tableToolsFilters = window.tableToolsFilters || {};
+window.tableToolsFilters.refs = function (row, value) {
+  if (value === "gh")  return row.dataset.hasGh === "1";
+  if (value === "run") return row.dataset.hasRun === "1";
+  if (value === "none") return !(row.dataset.hasGh === "1" || row.dataset.hasRun === "1");
+  return true;
+};
+</script>
+```
+
+  **Keep** the evolutions bulk-selection IIFE.
+- [ ] **Step 4: Parity check** on `/p/<slug>/evolutions` — Step 1 behaviour plus new
+  sorting; verify the conflict "apply force" danger modal still fires. Commit:
+
+```bash
+git commit -am "refactor(evolutions): use shared table-tools component (parity + adds sort)"
 ```
 
 ---
@@ -614,15 +686,19 @@ Apply the **data-attribute contract** to each template below. For each:
 
 **Target templates (one commit each):**
 
-- [ ] `project_ideas.html`
+> `project_ideas.html` and `project_evolutions.html` are **handled in Task 6**, not
+> here — do not add them to this list.
+
 - [ ] `project_plans.html`
-- [ ] `project_tech_debt.html` (Top-modules table)
+- [ ] `project_tech_debt.html` — has **two** tables: the "Top modules" table (worked
+  example above) **and** a second findings-like table earlier in the file. Convert
+  **both** (the smoke guard demands every `<table>` opt in).
 - [ ] `project_topics.html`
 - [ ] `project_notes.html`
-- [ ] `project_evolutions.html` (preserve bulk script; see Task 6)
 - [ ] `project_contracts.html`
 - [ ] `project_questions.html`
-- [ ] `project_orchestration_list.html` (the `.data-table` run list at `:407`)
+- [ ] `project_orchestration_list.html` (the `.data-table` run list at `:407` — note
+  there are **two** `.data-table` tables in this file; opt both in)
 
 For each: **manual check** sort + filter on that page before committing.
 
@@ -713,7 +789,10 @@ STATIC = ROOT / "dreaming" / "static"
 TEMPLATES = ROOT / "dreaming" / "templates"
 
 # Tables intentionally without sort/filter (justify each entry).
-ALLOWLIST: set[str] = set()  # e.g. {"_app_modal.html"}
+ALLOWLIST: set[str] = {
+    # Dead/unused template (run detail UI lives in project_orchestration_list.html).
+    "project_orchestration_detail.html",
+}
 
 def _check_assets() -> None:
     js = (STATIC / "table_tools.js").read_text(encoding="utf-8")
@@ -791,4 +870,5 @@ git commit -m "test(table-tools): static smoke guard for opt-in + assets"
 - **Idempotent:** the component guards with `table.__ttInit`; re-init is safe.
 - **Cyrillic files via Write/Edit only.** Run `check_i18n.py` after i18n edits.
 - **Commit per task**; keep the bulk `bulk:rows-changed` alias until a later,
-  separate cleanup once every consumer is confirmed migrated.
+  separate cleanup once **all three** original consumers (findings, ideas,
+  evolutions — Tasks 5 & 6) are confirmed migrated.
