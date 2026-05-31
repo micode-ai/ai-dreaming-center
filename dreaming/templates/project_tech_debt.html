@@ -37,11 +37,25 @@
 </div>
 
 <h2 class="font-semibold mt-6 mb-2">Top modules</h2>
-<table class="w-full bg-white rounded shadow text-sm">
-  <thead class="text-left border-b"><tr><th class="p-2">module</th><th class="p-2 text-right">count</th></tr></thead>
+<div data-tt-scope>
+  <div class="mb-2 flex items-center gap-2">
+    <input type="text" data-tt-search
+           placeholder="{{ 'table.search' | t(locale=locale) }}"
+           class="tt-search">
+    <button type="button" data-tt-reset
+            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+      {{ "table.reset" | t(locale=locale) }}
+    </button>
+  </div>
+<table class="w-full bg-white rounded shadow text-sm"
+       data-table-tools
+       data-tt-key="techdebt-mods.{{ project.slug }}"
+       data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+       data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
+  <thead class="text-left border-b"><tr><th class="p-2" data-sort-col="module" data-sort-type="text">module</th><th class="p-2 text-right" data-sort-col="count" data-sort-type="num">count</th></tr></thead>
   <tbody>
   {% for mod, n in by_module %}
-  <tr class="border-b">
+  <tr class="border-b" data-filter-row>
     <td class="p-2 font-mono text-xs">
       {% if mod and mod != '—' %}
       <a class="text-blue-600 hover:underline" href="/p/{{ project.slug }}/findings?module={{ mod | urlencode }}">{{ mod }}</a>
@@ -52,6 +66,7 @@
   {% endfor %}
   </tbody>
 </table>
+</div>
 
 <p class="text-xs muted mt-4">{% set _link %}<a class="text-blue-600 underline" href="/p/{{ project.slug }}/findings">findings</a>{% endset %}{{ "tech_debt.source_hint" | t(locale=locale, dir=td_dir, link=_link) | safe }}</p>
 {% endif %}
