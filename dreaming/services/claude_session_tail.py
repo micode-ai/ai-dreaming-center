@@ -241,6 +241,33 @@ def _extract_text_from_message(msg: dict[str, Any]) -> str:
     return "\n\n".join(parts).strip()
 
 
+def _extract_skill_names(msg: dict[str, Any]) -> list[str]:
+    """Distinct `Skill` tool_use names from an assistant message, in order.
+
+    A skill invocation is a content block `{"type":"tool_use","name":"Skill",
+    "input":{"skill":"<name>"}}`. De-duped per name within the message so one
+    badge is recorded even if the same skill is called twice in one turn.
+    """
+    if not isinstance(msg, dict):
+        return []
+    content = msg.get("content")
+    if not isinstance(content, list):
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for block in content:
+        if not isinstance(block, dict):
+            continue
+        if block.get("type") != "tool_use" or block.get("name") != "Skill":
+            continue
+        inp = block.get("input")
+        name = (inp.get("skill") or "").strip() if isinstance(inp, dict) else ""
+        if name and name not in seen:
+            seen.add(name)
+            out.append(name)
+    return out
+
+
 # ── Pure helpers exposed for tests / sub-agent watcher ──────────────────────
 
 
@@ -273,6 +300,41 @@ async def _hub_project_id(hub: OrchestrationHub, run_id: str) -> int | None:
         return None
 
 
+async def _record_node_skills(
+    hub: OrchestrationHub,
+    db: SqliteDB,
+    run_id: str,
+    node_id: str,
+    project_id: int,
+    obj: dict[str, Any],
+    message_key: str,
+) -> None:
+    """Persist any Skill invocations in this assistant message against the node.
+
+    Idempotent via `db.add_node_skill` (INSERT OR IGNORE on message+skill), so
+    catchup/backfill replays don't double-record. Emits a one-shot
+    `node_skill_used` SSE event per genuinely-new badge. Never raises — a skill
+    bookkeeping failure must not break message ingest.
+    """
+    msg = obj.get("message") or {}
+    names = _extract_skill_names(msg)
+    if not names:
+        return
+    ts = obj.get("timestamp") or datetime.now(timezone.utc).isoformat()
+    for name in names:
+        try:
+            inserted = await db.add_node_skill(
+                message_id=message_key, skill_name=name, node_id=node_id,
+                run_id=run_id, project_id=project_id, ts=ts,
+            )
+            if inserted:
+                await hub.append_event(run_id, "node_skill_used", {
+                    "run_id": run_id, "node_id": node_id, "skill_name": name,
+                })
+        except Exception as e:
+            log.warning("record_node_skill failed (%s): %s", name, e)
+
+
 async def _ingest_line(
     hub: OrchestrationHub,
     db: SqliteDB,
@@ -299,6 +361,16 @@ async def _ingest_line(
     uuid_ = obj.get("uuid")
     if uuid_ and uuid_ in seen:
         return 0
+    # Skill invocations live in assistant tool_use blocks. Record them against
+    # this node BEFORE the text/empty gates below so a Skill-only turn still
+    # lands a badge. Keyed by the stable jsonl uuid (falls back to the message
+    # id) so re-tails dedup. Side-channel — never affects the message return.
+    if t == "assistant":
+        message_key = uuid_ or ((obj.get("message") or {}).get("id"))
+        if message_key:
+            await _record_node_skills(
+                hub, db, run_id, node_id, project_id, obj, message_key,
+            )
     text = _extract_text_from_message(obj.get("message") or {})
     if not text:
         if uuid_:

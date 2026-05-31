@@ -37,25 +37,28 @@ RING_BUFFER_SIZE = 5000
 STDOUT_BUFFER_LIMIT = 16 * 1024 * 1024  # 16 MB
 
 # Permission grant for unattended sessions. We run claude with no TTY (-p /
-# --print), so it can never answer a permission prompt.
+# --print), so it can never answer a permission prompt — the spawn flag has to
+# pre-authorise everything the agent needs.
 #
-# Two constraints fight each other on CLI 2.1.150 (verified 2026-05-25):
-#  1. Claude Code specially protects the `.claude/` config dir: in the default
-#     non-interactive `dontAsk` mode the WRITE TOOL is denied for `.claude/**`
-#     (path-scoped allows and `acceptEdits` don't help). Self-study writes its
-#     note + evolution proposals under `.claude/agents/...`.
-#  2. `--permission-mode bypassPermissions` *would* lift that guard, but in our
-#     spawn context (uvicorn + create_subprocess_exec_compat, stdin=DEVNULL) it
-#     HANGS — claude produces zero stdout, so /live sits on "ожидание вывода".
+# USE `--permission-mode bypassPermissions`. Verified end-to-end on CLI 2.1.150
+# (2026-05-25), reproduced in the *actual* server context (SelectorEventLoop +
+# create_subprocess_exec_compat threaded pump + stdin=DEVNULL):
+#   bypass        → streams (first line ~0.9s), exits 0, Write to .claude/ SUCCEEDS.
+#   --allowedTools → claude falls into "don't ask mode" which auto-DENIES the
+#                    Write/Edit tools, every Bash command that writes a file or
+#                    hits the network, AND the curl report-back to
+#                    /api/session/finish. Sessions then stream but can NEVER
+#                    persist their learning note / evolution — self-study is a
+#                    silent no-op. (The old "write via node+Bash" workaround is
+#                    dead too: mutating Bash is denied in don't-ask mode.)
 #
-# Resolution: use `--allowedTools` (no bypass). The session streams normally
-# (no hang), and although the Write *tool* can't touch `.claude/`, Bash CAN —
-# the `.claude/` guard is on the Write tool, not on shell file writes. The
-# self-study / evolve commands write their files via `node`/Bash, which is fully
-# granted here. (If self-study ever can't persist, that command's prompt — not
-# this flag — is where to look.)
-_AGENT_TOOLS = "Bash Read Write Edit Glob Grep Task TodoWrite WebFetch WebSearch NotebookEdit Skill"
-_BYPASS_PERMISSION_FLAGS = ["--allowedTools", _AGENT_TOOLS]
+# DO NOT flip back to --allowedTools. The historical "bypass hangs / zero
+# stdout" claim was a misdiagnosis — a stale uvicorn --reload worker serving old
+# code, or a transient rate-limit/long-TTFT, mistaken for a flag problem during
+# repeated flip-flopping. It does not reproduce in-context. If a *future*
+# session ever produces no output, _read_stdout now surfaces a diagnostic and
+# persists error_message instead of leaving /live silent — look there, not here.
+_BYPASS_PERMISSION_FLAGS = ["--permission-mode", "bypassPermissions"]
 
 
 # Human-readable hints for the most common claude.exe exit codes. Appended
@@ -586,6 +589,8 @@ class ProcessManager:
             for q in dead_queues:
                 session.subscribers.remove(q)
 
+        produced = 0          # count of real stream-json lines the agent emitted
+        tail: list[str] = []  # last few lines, for the failure error_message
         try:
             while True:
                 try:
@@ -621,6 +626,10 @@ class ProcessManager:
 
                 for line in self._parse_stream_json(raw):
                     _emit(line)
+                    produced += 1
+                    tail.append(line)
+                    if len(tail) > 5:
+                        tail.pop(0)
         except Exception as e:
             log.error("stdout reader error for %s: %s", session.agent_name, e)
         finally:
@@ -635,6 +644,31 @@ class ProcessManager:
                 )
             except (asyncio.TimeoutError, Exception):
                 exit_code = session.process.returncode
+
+            # Never leave a failed session as a silent "Ожидание вывода…". When
+            # claude exits non-zero we surface WHY: a zero-output exit almost
+            # always means it died before doing any work (rate limit, auth/net
+            # error at startup, or a failing hook), so emit an actionable line
+            # and persist it to error_message. A failure WITH output records its
+            # last line so the sessions list shows the cause at a glance.
+            error_message: str | None = None
+            failed = exit_code not in (0, None)
+            if failed and produced == 0:
+                _emit(
+                    f"[error] Claude завершился (код {exit_code}), не выдав ни одной "
+                    f"строки вывода. Частые причины: исчерпан лимит запросов "
+                    f"(rate limit), сбой авторизации/сети при старте или ошибка hook. "
+                    f"Запустите ту же команду в терминале проекта, чтобы увидеть текст "
+                    f"ошибки."
+                )
+                error_message = (
+                    f"claude exited code={exit_code} with no output "
+                    f"(likely rate limit / startup / auth error)"
+                )
+            elif failed:
+                last = next((t for t in reversed(tail) if t.strip()), "")
+                error_message = f"claude exited code={exit_code}: {last}"[:500]
+
             if exit_code is not None:
                 hint = _EXIT_CODE_HINTS.get(exit_code, "")
                 tag = f"[exit] code={exit_code}" + (f" — {hint}" if hint else "")
@@ -645,7 +679,7 @@ class ProcessManager:
                     q.put_nowait(None)  # None = stream ended
                 except asyncio.QueueFull:
                     pass
-            await self._cleanup(session, exit_code=exit_code)
+            await self._cleanup(session, exit_code=exit_code, error_message=error_message)
 
     async def _watchdog(self, session: RunningSession, timeout_minutes: int) -> None:
         """Kill process after `timeout_minutes` of stdout silence.
@@ -654,16 +688,29 @@ class ProcessManager:
         что угодно (assistant, tool_use, tool_result subagent'а) — процесс
         живой. Убиваем только если ничего не приходило `timeout_minutes`.
         Если процесс ждёт ответа на AskUserQuestion (есть pending в
-        orchestrator_questions) — это не молчание, а валидное состояние,
-        счётчик тишины сбрасывается.
+        orchestrator_questions ЭТОГО проекта) — это не молчание, а валидное
+        состояние, счётчик тишины сбрасывается. Но есть жёсткий потолок общей
+        жизни сессии: даже с pending-вопросом сессия не может висеть вечно
+        (иначе одна забытая запись держала бы /live на «Ожидание вывода…»).
         """
         timeout_sec = timeout_minutes * 60
+        # Абсолютный потолок жизни: pending-вопрос продлевает тишину, но не
+        # бесконечно. После hard_cap убиваем независимо ни от чего.
+        hard_cap_sec = max(timeout_sec * 6, 3600)
         # Шаг проверки: либо минута, либо весь таймаут (чтобы маленькие
         # таймауты для тестов отрабатывали моментально).
         step = min(60.0, timeout_sec)
         try:
             while True:
                 await asyncio.sleep(step)
+                alive = time.time() - session.started_at
+                if alive >= hard_cap_sec:
+                    log.warning(
+                        "Session %s for %s alive %.0fs (>hard cap %.0fs) — killing",
+                        session.session_id, session.agent_name, alive, hard_cap_sec,
+                    )
+                    await self._kill_process(session)
+                    return
                 if await self._has_pending_question(session):
                     session.last_stdout_at = time.time()
                     continue
@@ -679,17 +726,21 @@ class ProcessManager:
             pass  # Normal — session finished before timeout
 
     async def _has_pending_question(self, session: RunningSession) -> bool:
-        """Best-effort: проверяем есть ли pending вопросы для этой сессии.
-        Грубо — любой pending в БД считаем «своим». Точная привязка
-        session ↔ run_id не сохранена в RunningSession, и нам это
-        достаточно: ложно-позитивный исход (не убивать когда мог бы)
-        безопаснее, чем ложно-негативный (убить ждущую сессию)."""
+        """Best-effort: есть ли pending-вопрос у сессий ЭТОГО проекта.
+
+        Раньше запрос был глобальным — любая забытая pending-запись в любом
+        проекте отключала silence-watchdog для ВСЕХ сессий, и /live навсегда
+        застревал на «Ожидание вывода…». Теперь скоупим по project_id: точной
+        привязки session ↔ run_id в RunningSession нет, но проект — достаточно
+        узкая граница (ложно-позитив = «не убить когда мог бы» безопаснее
+        ложно-негатива). Жёсткий потолок жизни в _watchdog ловит остальное."""
         if self.db is None:
             return False
         try:
             rows = await self.db.fetch_all(
-                "SELECT 1 FROM orchestrator_questions WHERE status='pending' LIMIT 1",
-                (),
+                "SELECT 1 FROM orchestrator_questions "
+                "WHERE status='pending' AND project_id=? LIMIT 1",
+                (session.project_id,),
             )
             return bool(rows)
         except Exception as e:
@@ -735,12 +786,19 @@ class ProcessManager:
         except ProcessLookupError:
             pass
 
-    async def _cleanup(self, session: RunningSession, exit_code: int | None = None) -> None:
+    async def _cleanup(
+        self,
+        session: RunningSession,
+        exit_code: int | None = None,
+        error_message: str | None = None,
+    ) -> None:
         """Remove session from running dict, cancel watchdog, sync DB.
 
         When the child process exits we update the session row's status
         immediately (mapped from `exit_code`), so the UI doesn't keep
         showing «В эфире» until the 5-minute reconcile cron catches up.
+        `error_message`, when set, is persisted so the sessions list explains
+        why a run failed instead of just showing a bare "failed".
         """
         key = session.key or session.agent_name
         if session._watchdog_task and not session._watchdog_task.done():
@@ -762,9 +820,10 @@ class ProcessManager:
         try:
             await self.db.execute(
                 "UPDATE agent_learning_sessions "
-                "SET status=?, finished_at=COALESCE(finished_at, ?) "
+                "SET status=?, finished_at=COALESCE(finished_at, ?), "
+                "    error_message=COALESCE(error_message, ?) "
                 "WHERE id=? AND status='running'",
-                (target_status, _now_iso(), session.session_id),
+                (target_status, _now_iso(), error_message, session.session_id),
             )
         except Exception as e:
             log.warning("update session %s status failed: %s", session.session_id, e)
