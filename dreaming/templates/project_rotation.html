@@ -36,47 +36,63 @@
   {% endif %}
 {% endif %}
 
-<table class="w-full bg-white rounded shadow text-sm">
-  <thead class="text-left border-b"><tr>
-    <th class="p-2">agent</th>
-    <th class="p-2">tier</th>
-    <th class="p-2">enabled</th>
-    <th class="p-2">last_studied</th>
-    <th class="p-2"></th>
-  </tr></thead>
-  <tbody>
-  {% for r in rotation %}
-  <tr class="border-b">
-    <td class="p-2 font-mono">{{ r.agent_name }}</td>
-    <td class="p-2">
-      <form method="post" action="/p/{{ project.slug }}/rotation/tier" class="inline">
-        <input type="hidden" name="agent_name" value="{{ r.agent_name }}">
-        <select name="tier" onchange="this.form.submit()" class="border rounded p-1 text-xs">
-          <option value="1" {% if r.tier==1 %}selected{% endif %}>P1</option>
-          <option value="2" {% if r.tier==2 %}selected{% endif %}>P2</option>
-          <option value="3" {% if r.tier==3 %}selected{% endif %}>P3</option>
-        </select>
-      </form>
-    </td>
-    <td class="p-2">
-      <form method="post" action="/p/{{ project.slug }}/rotation/toggle" class="inline">
-        <input type="hidden" name="agent_name" value="{{ r.agent_name }}">
-        <button class="text-xs px-2 py-1 border rounded">{{ "✓" if r.enabled else "—" }}</button>
-      </form>
-    </td>
-    <td class="p-2 text-xs muted">{{ r.last_studied_at or '—' }}</td>
-    <td class="p-2">
-      {% set running_key = project.slug ~ ":" ~ r.agent_name %}
-      {% if running_key in running_keys %}
-        <span class="text-xs text-amber-600">running…</span>
-      {% else %}
-        <form method="post" action="/p/{{ project.slug }}/rotation/start/{{ r.agent_name }}" class="inline">
-          <button class="text-xs bg-blue-600 text-white rounded px-2 py-1">Start session</button>
+<div data-tt-scope>
+  <div class="mb-2 flex items-center gap-2">
+    <input type="text" data-tt-search
+           placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
+    <button type="button" data-tt-reset
+            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+      {{ "table.reset" | t(locale=locale) }}
+    </button>
+  </div>
+  <table class="w-full bg-white rounded shadow text-sm"
+         data-table-tools
+         data-tt-key="rotation.{{ project.slug }}"
+         data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+         data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
+    <thead class="text-left border-b"><tr>
+      <th class="p-2" data-sort-col="agent" data-sort-type="text">agent</th>
+      <th class="p-2" data-sort-col="tier" data-sort-type="num">tier</th>
+      <th class="p-2">enabled</th>
+      <th class="p-2" data-sort-col="last_studied" data-sort-type="date">last_studied</th>
+      <th class="p-2"></th>
+    </tr></thead>
+    <tbody>
+    {% for r in rotation %}
+    <tr class="border-b" data-filter-row
+        data-tier="{{ r.tier }}"
+        data-last_studied="{{ r.last_studied_at or '' }}">
+      <td class="p-2 font-mono">{{ r.agent_name }}</td>
+      <td class="p-2">
+        <form method="post" action="/p/{{ project.slug }}/rotation/tier" class="inline">
+          <input type="hidden" name="agent_name" value="{{ r.agent_name }}">
+          <select name="tier" onchange="this.form.submit()" class="border rounded p-1 text-xs">
+            <option value="1" {% if r.tier==1 %}selected{% endif %}>P1</option>
+            <option value="2" {% if r.tier==2 %}selected{% endif %}>P2</option>
+            <option value="3" {% if r.tier==3 %}selected{% endif %}>P3</option>
+          </select>
         </form>
-      {% endif %}
-    </td>
-  </tr>
-  {% endfor %}
-  </tbody>
-</table>
+      </td>
+      <td class="p-2">
+        <form method="post" action="/p/{{ project.slug }}/rotation/toggle" class="inline">
+          <input type="hidden" name="agent_name" value="{{ r.agent_name }}">
+          <button class="text-xs px-2 py-1 border rounded">{{ "✓" if r.enabled else "—" }}</button>
+        </form>
+      </td>
+      <td class="p-2 text-xs muted">{{ r.last_studied_at or '—' }}</td>
+      <td class="p-2">
+        {% set running_key = project.slug ~ ":" ~ r.agent_name %}
+        {% if running_key in running_keys %}
+          <span class="text-xs text-amber-600">running…</span>
+        {% else %}
+          <form method="post" action="/p/{{ project.slug }}/rotation/start/{{ r.agent_name }}" class="inline">
+            <button class="text-xs bg-blue-600 text-white rounded px-2 py-1">Start session</button>
+          </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% endblock %}
