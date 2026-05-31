@@ -120,24 +120,41 @@
   <div class="rounded-xl p-5" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
     <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">{{ "ai_usage.by_agent" | t(locale=locale) }}</h2>
     {% if summary.by_agent %}
-    <table class="w-full text-sm">
-      <thead class="text-xs uppercase tracking-wider" style="color: var(--text-faint);">
-        <tr>
-          <th class="text-left pb-2">{{ "ai_usage.col.agent" | t(locale=locale) }}</th>
-          <th class="text-right pb-2">{{ "ai_usage.col.runs" | t(locale=locale) }}</th>
-          <th class="text-right pb-2">{{ "ai_usage.col.tokens" | t(locale=locale) }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for a in summary.by_agent %}
-        <tr style="border-top:1px solid var(--border-subtle);">
-          <td class="py-2" style="color: var(--text-body);">{{ a.agent_name }}</td>
-          <td class="py-2 text-right" style="color: var(--text-faint);">{{ a.runs }}</td>
-          <td class="py-2 text-right font-semibold" style="color: var(--text-strong);">{{ num(a.total_tokens) }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div data-tt-scope>
+      <div class="mb-2 flex items-center gap-2">
+        <input type="text" data-tt-search
+               placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
+        <button type="button" data-tt-reset
+                class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+          {{ "table.reset" | t(locale=locale) }}
+        </button>
+      </div>
+      <table class="w-full text-sm"
+             data-table-tools
+             data-tt-key="ai_usage.by_agent.{{ project.slug }}"
+             data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+             data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
+        <thead class="text-xs uppercase tracking-wider" style="color: var(--text-faint);">
+          <tr>
+            <th class="text-left pb-2" data-sort-col="agent" data-sort-type="text">{{ "ai_usage.col.agent" | t(locale=locale) }}</th>
+            <th class="text-right pb-2" data-sort-col="runs" data-sort-type="num">{{ "ai_usage.col.runs" | t(locale=locale) }}</th>
+            <th class="text-right pb-2" data-sort-col="tokens" data-sort-type="num">{{ "ai_usage.col.tokens" | t(locale=locale) }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in summary.by_agent %}
+          <tr style="border-top:1px solid var(--border-subtle);"
+              data-filter-row
+              data-runs="{{ a.runs }}"
+              data-tokens="{{ a.total_tokens }}">
+            <td class="py-2" style="color: var(--text-body);">{{ a.agent_name }}</td>
+            <td class="py-2 text-right" style="color: var(--text-faint);">{{ a.runs }}</td>
+            <td class="py-2 text-right font-semibold" style="color: var(--text-strong);">{{ num(a.total_tokens) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
     {% else %}
     <p class="text-sm" style="color: var(--text-faint);">{{ "common.no_data" | t(locale=locale) }}</p>
     {% endif %}
@@ -148,28 +165,46 @@
 <div class="rounded-xl p-5 mb-6" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
   <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">{{ "ai_usage.top_sessions" | t(locale=locale) }}</h2>
   {% if summary.top_sessions %}
-  <table class="w-full text-sm">
-    <thead class="text-xs uppercase tracking-wider" style="color: var(--text-faint);">
-      <tr>
-        <th class="text-left pb-2">Session</th>
-        <th class="text-left pb-2">{{ "ai_usage.col.model" | t(locale=locale) }}</th>
-        <th class="text-right pb-2">{{ "ai_usage.col.duration" | t(locale=locale) }}</th>
-        <th class="text-right pb-2">{{ "ai_usage.col.events" | t(locale=locale) }}</th>
-        <th class="text-right pb-2">{{ "ai_usage.col.tokens" | t(locale=locale) }}</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for s in summary.top_sessions %}
-      <tr style="border-top:1px solid var(--border-subtle);">
-        <td class="py-2 font-mono text-xs" style="color: var(--text-faint);">{{ s.session_id[:8] }}…</td>
-        <td class="py-2 text-xs" style="color: var(--text-faint);">{{ s.model or '(unknown)' }}</td>
-        <td class="py-2 text-right" style="color: var(--text-faint);">{{ s.duration_minutes }} {{ "ai_usage.minutes" | t(locale=locale) }}</td>
-        <td class="py-2 text-right" style="color: var(--text-faint);">{{ s.events }}</td>
-        <td class="py-2 text-right font-semibold" style="color: var(--text-strong);">{{ num(s.total_tokens) }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div data-tt-scope>
+    <div class="mb-2 flex items-center gap-2">
+      <input type="text" data-tt-search
+             placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
+      <button type="button" data-tt-reset
+              class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+        {{ "table.reset" | t(locale=locale) }}
+      </button>
+    </div>
+    <table class="w-full text-sm"
+           data-table-tools
+           data-tt-key="ai_usage.top_sessions.{{ project.slug }}"
+           data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+           data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
+      <thead class="text-xs uppercase tracking-wider" style="color: var(--text-faint);">
+        <tr>
+          <th class="text-left pb-2" data-sort-col="session" data-sort-type="text">Session</th>
+          <th class="text-left pb-2" data-sort-col="model" data-sort-type="text">{{ "ai_usage.col.model" | t(locale=locale) }}</th>
+          <th class="text-right pb-2" data-sort-col="duration" data-sort-type="num">{{ "ai_usage.col.duration" | t(locale=locale) }}</th>
+          <th class="text-right pb-2" data-sort-col="events" data-sort-type="num">{{ "ai_usage.col.events" | t(locale=locale) }}</th>
+          <th class="text-right pb-2" data-sort-col="tokens" data-sort-type="num">{{ "ai_usage.col.tokens" | t(locale=locale) }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in summary.top_sessions %}
+        <tr style="border-top:1px solid var(--border-subtle);"
+            data-filter-row
+            data-duration="{{ s.duration_minutes }}"
+            data-events="{{ s.events }}"
+            data-tokens="{{ s.total_tokens }}">
+          <td class="py-2 font-mono text-xs" style="color: var(--text-faint);">{{ s.session_id[:8] }}…</td>
+          <td class="py-2 text-xs" style="color: var(--text-faint);">{{ s.model or '(unknown)' }}</td>
+          <td class="py-2 text-right" style="color: var(--text-faint);">{{ s.duration_minutes }} {{ "ai_usage.minutes" | t(locale=locale) }}</td>
+          <td class="py-2 text-right" style="color: var(--text-faint);">{{ s.events }}</td>
+          <td class="py-2 text-right font-semibold" style="color: var(--text-strong);">{{ num(s.total_tokens) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% else %}
   <p class="text-sm" style="color: var(--text-faint);">{{ "common.no_data" | t(locale=locale) }}</p>
   {% endif %}
@@ -202,35 +237,53 @@
     </div>
   </div>
   {% if summary.learning.recent %}
-  <table class="w-full text-sm">
-    <thead class="text-xs uppercase tracking-wider" style="color: var(--text-faint);">
-      <tr>
-        <th class="text-left pb-2">{{ "p.col.agent" | t(locale=locale) }}</th>
-        <th class="text-left pb-2">{{ "p.col.topic" | t(locale=locale) }}</th>
-        <th class="text-left pb-2">{{ "p.col.status" | t(locale=locale) }}</th>
-        <th class="text-right pb-2">{{ "ai_usage.col.started_at" | t(locale=locale) }}</th>
-        <th class="text-right pb-2">{{ "ai_usage.col.duration_short" | t(locale=locale) }}</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for s in summary.learning.recent %}
-      <tr style="border-top:1px solid var(--border-subtle);">
-        <td class="py-2" style="color: var(--text-body);">{{ s.agent_name }}</td>
-        <td class="py-2 text-xs" style="color: var(--text-faint);">{{ s.topic or '—' }}</td>
-        <td class="py-2 text-xs">
-          {% if s.status == 'success' %}<span style="color: var(--status-success);">✓ {{ s.status }}</span>
-          {% elif s.status == 'no_gap' %}<span style="color: var(--status-running);">{{ s.status }}</span>
-          {% elif s.status == 'failed' %}<span style="color: var(--status-failed);">{{ s.status }}</span>
-          {% elif s.status == 'timeout' %}<span style="color: var(--status-timeout);">{{ s.status }}</span>
-          {% elif s.status == 'running' %}<span style="color: var(--brand-hover);">running</span>
-          {% else %}<span style="color: var(--text-faint);">{{ s.status or '—' }}</span>{% endif %}
-        </td>
-        <td class="py-2 text-right text-xs font-mono" style="color: var(--text-faint);">{{ (s.started_at or '')[:19] }}</td>
-        <td class="py-2 text-right" style="color: var(--text-faint);">{% if s.duration_minutes %}{{ s.duration_minutes }} {{ "ai_usage.minutes" | t(locale=locale) }}{% else %}—{% endif %}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div data-tt-scope>
+    <div class="mb-2 flex items-center gap-2">
+      <input type="text" data-tt-search
+             placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
+      <button type="button" data-tt-reset
+              class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+        {{ "table.reset" | t(locale=locale) }}
+      </button>
+    </div>
+    <table class="w-full text-sm"
+           data-table-tools
+           data-tt-key="ai_usage.learning.{{ project.slug }}"
+           data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
+           data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
+      <thead class="text-xs uppercase tracking-wider" style="color: var(--text-faint);">
+        <tr>
+          <th class="text-left pb-2" data-sort-col="agent" data-sort-type="text">{{ "p.col.agent" | t(locale=locale) }}</th>
+          <th class="text-left pb-2" data-sort-col="topic" data-sort-type="text">{{ "p.col.topic" | t(locale=locale) }}</th>
+          <th class="text-left pb-2" data-sort-col="status" data-sort-type="status">{{ "p.col.status" | t(locale=locale) }}</th>
+          <th class="text-right pb-2" data-sort-col="started" data-sort-type="date">{{ "ai_usage.col.started_at" | t(locale=locale) }}</th>
+          <th class="text-right pb-2" data-sort-col="duration" data-sort-type="num">{{ "ai_usage.col.duration_short" | t(locale=locale) }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in summary.learning.recent %}
+        <tr style="border-top:1px solid var(--border-subtle);"
+            data-filter-row
+            data-status="{{ s.status or '' }}"
+            data-started="{{ (s.started_at or '')[:19] }}"
+            data-duration="{{ s.duration_minutes or 0 }}">
+          <td class="py-2" style="color: var(--text-body);">{{ s.agent_name }}</td>
+          <td class="py-2 text-xs" style="color: var(--text-faint);">{{ s.topic or '—' }}</td>
+          <td class="py-2 text-xs">
+            {% if s.status == 'success' %}<span style="color: var(--status-success);">✓ {{ s.status }}</span>
+            {% elif s.status == 'no_gap' %}<span style="color: var(--status-running);">{{ s.status }}</span>
+            {% elif s.status == 'failed' %}<span style="color: var(--status-failed);">{{ s.status }}</span>
+            {% elif s.status == 'timeout' %}<span style="color: var(--status-timeout);">{{ s.status }}</span>
+            {% elif s.status == 'running' %}<span style="color: var(--brand-hover);">running</span>
+            {% else %}<span style="color: var(--text-faint);">{{ s.status or '—' }}</span>{% endif %}
+          </td>
+          <td class="py-2 text-right text-xs font-mono" style="color: var(--text-faint);">{{ (s.started_at or '')[:19] }}</td>
+          <td class="py-2 text-right" style="color: var(--text-faint);">{% if s.duration_minutes %}{{ s.duration_minutes }} {{ "ai_usage.minutes" | t(locale=locale) }}{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% endif %}
 </div>
 
