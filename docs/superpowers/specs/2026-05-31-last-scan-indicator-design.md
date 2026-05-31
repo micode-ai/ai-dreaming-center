@@ -34,8 +34,9 @@ project + command name. **No schema change is needed.**
 
 The shared partial `_scan_action_bar.html` exposes the macro
 `scan_action_bar(action_url, running, label, running_label, hint='')` and is used
-by findings, ideas, wiki, and wiki-health. Both findings and ideas already compute
-`scan_running` (whether the command is currently in `pm.list_running()`).
+by findings, ideas, and wiki (wiki-health has its own inline button and does not
+use the macro). Both findings and ideas already compute `scan_running` (whether
+the command is currently in `pm.list_running()`).
 
 ## Design
 
@@ -80,7 +81,7 @@ status for the "is it running right now" determination — the DB row may still 
   `product-idea-scan`.
 - **`_scan_action_bar.html`** — add an OPTIONAL macro parameter
   `last_scan=None`. When provided, render the badge + `<time>` element. When
-  omitted (wiki / wiki-health callers), render exactly as today — **backward
+  omitted (the wiki caller), render exactly as today — **backward
   compatible**. The tiny `Intl.RelativeTimeFormat` script lives with this partial
   (guarded so multiple includes don't double-bind).
 - **i18n** — `scan.last.*` keys (`never`, `running`, plus status labels if not
