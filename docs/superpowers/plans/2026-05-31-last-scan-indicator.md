@@ -56,6 +56,10 @@ async def amain() -> int:
     tmp = tempfile.mkdtemp()
     db = SqliteDB(os.path.join(tmp, "t.db"))
     await db.connect()           # adjust to the real init method if different
+    # agent_learning_sessions.project_id has an FK to projects(id) and connect()
+    # turns foreign_keys ON — disable it for this isolated helper test so we can
+    # insert sessions without first seeding a projects row.
+    await db.execute("PRAGMA foreign_keys=OFF")
     pid = 1
     agent = "cmd:acct:tech-debt-scan"
     # None when no row
@@ -148,8 +152,10 @@ git commit -m "i18n(scan): last-scan indicator keys"
 
 - [ ] **Step 2:** Inside the macro, BEFORE the `<form>`, add the indicator block. The effective status is `running` (the live `scan_running` already passed as the `running` param) else the DB row's status. Use `finished_at` for finished runs, else `started_at`.
 
+**Guard on `last_scan is not none` ONLY** — NOT `or running`. The `wiki` page also calls this macro (without `with context`, so `locale` is out of scope there) and passes its own `running` flag; guarding on `running` would render the `locale`-using block on wiki and raise `UndefinedError`. The findings/ideas routes always pass `last_scan` (which is the running DB row while a scan is in flight, status `running`), so the live-running state is still covered.
+
 ```html
-  {% if last_scan is not none or running %}
+  {% if last_scan is not none %}
   {% set _st = 'running' if running else (last_scan.status if last_scan else None) %}
   {% set _ts = (last_scan.finished_at or last_scan.started_at) if last_scan else None %}
   <span class="text-xs flex items-center gap-1.5" style="color: var(--text-faint);">
@@ -265,5 +271,6 @@ git commit -m "feat(scan): pass last_scan into findings & ideas action bars"
 ## Notes for the worker
 - **DRY:** indicator lives once in the shared macro. **YAGNI:** no scan history, no re-run control, no progress.
 - Don't touch the per-item `orchestration_run` refs link — unrelated.
-- The `with context` import change is required ONLY for findings/ideas (they render the badge). Leave `wiki.html`'s plain import alone.
+- The `with context` import change is required ONLY for findings/ideas (they render the badge). Leave `wiki.html`'s plain import alone. The macro guard is `last_scan is not none` precisely so wiki (which never passes `last_scan`) never enters the `locale`-using block even while its lint scan is running.
+- Pre-existing quirk (out of scope): on the IDEAS page the `scan_action_bar` call sits inside `{% elif items %}`, so on an empty ideas dir the bar — and thus the indicator — won't render until there's at least one idea. Findings renders the bar regardless. Don't restructure this; just be aware "never run" won't show on an empty ideas page.
 - Status colors reuse existing `--status-*` CSS vars with hex fallbacks.
