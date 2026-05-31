@@ -17,7 +17,7 @@ async def orchestration_list(request: Request, slug: str, run_id: str | None = N
     project = request.state.project
     hub = request.app.state.orchestration_hub
     pm = request.app.state.process_manager
-    runs = await hub.list_runs(project.id, limit=50)
+    runs = await hub.list_runs(project.id, limit=50)  # table-tools filters client-side over this capped set (most-recent 50); see docs/superpowers/plans re: table-tools
     # Mark each running row "stale" if no live claude process matches its
     # external_id — this is what the auto-reconcile checks too.
     # Both prefixes are recognised — `orchestrator-` for new runs,

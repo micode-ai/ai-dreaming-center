@@ -59,6 +59,7 @@ async def ai_radar_index(
         status=status or None,
         source_key=source or None,
         since_days=since_days,
+        # table-tools filters client-side over this capped set (default limit=200 in list_radar_findings); see docs/superpowers/plans re: table-tools
     )
     source_counts = await db.radar_source_counts(since_days=7)
     locale = request.cookies.get(
