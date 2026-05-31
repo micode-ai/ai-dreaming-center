@@ -560,5 +560,9 @@
   "radar.link.original": "↗ оригинал",
   "radar.btn.speak": "🔊 Рассказать кратко голосом",
   "radar.btn.speak_stop": "⏹ Стоп",
-  "radar.speak.unsupported": "Браузер не поддерживает озвучку (Web Speech API)."
+  "radar.speak.unsupported": "Браузер не поддерживает озвучку (Web Speech API).",
+  "table.search": "Поиск…",
+  "table.reset": "Сбросить",
+  "table.shown_count": "{shown} из {total}",
+  "table.empty": "Ничего не найдено по фильтрам."
 }

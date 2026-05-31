@@ -560,5 +560,9 @@
   "radar.link.original": "↗ original",
   "radar.btn.speak": "🔊 Tell it briefly (voice)",
   "radar.btn.speak_stop": "⏹ Stop",
-  "radar.speak.unsupported": "Your browser doesn't support speech (Web Speech API)."
+  "radar.speak.unsupported": "Your browser doesn't support speech (Web Speech API).",
+  "table.search": "Search…",
+  "table.reset": "Reset",
+  "table.shown_count": "{shown} of {total}",
+  "table.empty": "Nothing matches your filters."
 }
