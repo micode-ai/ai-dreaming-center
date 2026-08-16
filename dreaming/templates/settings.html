@@ -1,25 +1,29 @@
 {% extends "base.html" %}
 {% set active = 'g_settings' %}
 {% block content %}
-<h1 class="text-2xl font-bold mb-4" style="color: var(--text-strong);">{{ "settings.title" | t(locale=locale) }}</h1>
+<header class="page-header">
+  <div class="page-header__titles">
+    <h1 class="page-header__title">{{ "settings.title" | t(locale=locale) }}</h1>
+  </div>
+</header>
 <p class="muted mb-4">{{ "settings.global_hint" | t(locale=locale) }}</p>
 
 <form method="post" action="/settings" class="space-y-6 max-w-3xl">
 {% for group_name, keys in groups %}
-  <fieldset class="bg-white p-4 rounded shadow">
-    <legend class="text-sm font-semibold px-2">{{ group_name }}</legend>
+  <fieldset class="card">
+    <legend class="text-sm font-semibold px-2 strong">{{ group_name }}</legend>
     <div class="space-y-2">
     {% for k in keys %}
       {% set v = current.get(k, '') %}
-      <label class="block">
-        <span class="text-xs font-mono text-slate-600">{{ k }}</span>
+      <label class="field">
+        <span class="field__label font-mono">{{ k }}</span>
         {% if v is sameas true or v is sameas false %}
           <input type="hidden" name="{{ k }}" value="false">
           <input type="checkbox" name="{{ k }}" value="true" {% if v %}checked{% endif %}
                  class="ml-2 align-middle">
         {% else %}
           <input name="{{ k }}" value="{{ v }}"
-                 class="block w-full border rounded p-1 font-mono text-xs"
+                 class="field__control font-mono text-xs"
                  {% if 'token' in k or 'api_key' in k %}type="password" autocomplete="off"{% endif %}>
         {% endif %}
       </label>
@@ -27,6 +31,6 @@
     </div>
   </fieldset>
 {% endfor %}
-  <button class="bg-blue-600 text-white rounded px-4 py-2">Save</button>
+  <button class="btn btn-primary">Save</button>
 </form>
 {% endblock %}
