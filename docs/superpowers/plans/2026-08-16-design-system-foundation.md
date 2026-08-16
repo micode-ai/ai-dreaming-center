@@ -25,6 +25,8 @@ These apply to **every** task. They are not repeated per task.
 - **Cyrillic content is written via the Write/Edit tool (UTF-8).** PowerShell `Set-Content` defaults to UTF-16 LE and breaks the parser (CLAUDE.md).
 - **User-facing strings keep `{{ "key" | t(locale=locale) }}`.** Migration must not change any string, key, `data-*` attribute, `hx-*` attribute, form `action`, or `data-confirm` payload. This wave changes appearance only. `scripts/check_i18n.py` must stay green.
 - **Dynamic `style="{{ … }}"` stays.** 5 occurrences (bar widths and similar) are legitimate and exempt from the linter.
+- **Per-file counts written in prose in this plan are approximate; the linter is authoritative.** The prose figures (e.g. "`project_ai_usage.html` (92 inline styles)") were taken from a line-oriented grep, so a line carrying two `style=` attributes was counted once. `check_css_tokens.py` counts attributes, and reports one or two more for such files. Only the two totals — **464** colour utilities and **491** static inline styles — are exact gates. A per-file disagreement of one or two is expected and is not a sign you miscounted.
+- **Do not introduce single-quoted `style='…'` attributes.** The linter only matches double-quoted ones, so a single-quoted attribute would escape both the counter and the exemption check. There are none in the tree today, and migration should be removing these attributes, not adding them.
 
 ### Canonical replacement table
 
