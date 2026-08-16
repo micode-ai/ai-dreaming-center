@@ -1,7 +1,9 @@
 /* ============================================================
-   AI Dreaming Center — dark design tokens & base styles
-   (ported visuals from agent-learning-center; preserves existing
-   class names: .pill-nav, .pill, .badge-*, .metric, .data-table)
+   AI Dreaming Center — base element styles.
+   Holds: html/body, code/pre/font-mono, .muted, focus rules, form
+   elements, scrollbars, the sidebar shell, .md-content, and the
+   temporary !important compatibility block (Task 17 removes it
+   once every template has migrated onto components.css classes).
    ============================================================ */
 
 html { scroll-behavior: smooth; }
