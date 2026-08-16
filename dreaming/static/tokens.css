@@ -134,19 +134,27 @@
   --kanban-well-bg: rgba(21, 28, 44, 0.5);  /* column well, ported exactly */
 
   /* ---------- Evolutions rubric-coverage tiles ----------
-     Four alpha-tinted status backgrounds ported exactly from the pre-
-     migration inline styles; no existing -soft/-border pair matches these
-     alpha values or hues (emerald-400 / amber-500 / red-400 / gray-400), so
-     new tokens rather than an approximation. Foreground text moves to the
-     existing status tokens instead (see components.css .rubric-tile*) --
-     the originals were light-theme hexes (#047857 / #92400e / #b91c1c /
-     #475569) that failed WCAG AA against this dark composite; see task-11
-     report for the contrast arithmetic. */
-  --rubric-auto-soft: rgba(52, 211, 153, 0.10);
+     Three of the four tinted backgrounds ported exactly from the pre-
+     migration inline styles turned out to be byte-identical rgba values to
+     tokens that already exist above (queue-item / stale-orphans tints
+     defined for the Orchestration list, Task 7): auto = --queue-dispatched-bg,
+     review = --timeout-soft-dim, reject = --queue-failed-bg. Reused instead
+     of duplicated -- see components.css .rubric-tile* for where they're
+     consumed by something that is not a queue or a timeout banner; the
+     alpha tint outlived its original name and is just "emerald/amber/red at
+     10% over the card" now. --rubric-incomplete-soft is the one genuinely
+     new background (gray-400 at 10%, no existing match). All four -border
+     tokens are also genuinely new: every existing border of this hue sits
+     at alpha 0.35 (--queue-dispatched-border, --queue-failed-border), while
+     these rubric tiles were 0.30 in the original inline styles -- preserved
+     exactly rather than snapped onto the nearest existing alpha, per the
+     "colour is not licensed to shift" rule. Foreground text moves to the
+     existing status tokens instead of the four hardcoded light-theme hexes
+     (#047857 / #92400e / #b91c1c / #475569) the originals used, which
+     failed WCAG AA against this dark composite; see task-11 report for the
+     contrast arithmetic. */
   --rubric-auto-border: rgba(52, 211, 153, 0.30);
-  --rubric-review-soft: rgba(245, 158, 11, 0.10);
   --rubric-review-border: rgba(245, 158, 11, 0.30);
-  --rubric-reject-soft: rgba(248, 113, 113, 0.10);
   --rubric-reject-border: rgba(248, 113, 113, 0.30);
   --rubric-incomplete-soft: rgba(156, 163, 175, 0.10);
   --rubric-incomplete-border: rgba(156, 163, 175, 0.30);

@@ -356,9 +356,13 @@
    padding move into CSS.
    ============================================================ */
 .rubric-tile { border-radius: var(--radius-sm); padding: var(--space-2); text-align: center; }
-.rubric-tile-auto       { background: var(--rubric-auto-soft);       border: 1px solid var(--rubric-auto-border); }
-.rubric-tile-review     { background: var(--rubric-review-soft);     border: 1px solid var(--rubric-review-border); }
-.rubric-tile-reject     { background: var(--rubric-reject-soft);     border: 1px solid var(--rubric-reject-border); }
+/* auto/review/reject backgrounds reuse existing queue/timeout tint tokens
+   (byte-identical rgba values -- see tokens.css); only the border alpha
+   (0.30, vs those tokens' own 0.35 borders) and the incomplete tile's tint
+   are genuinely new. */
+.rubric-tile-auto       { background: var(--queue-dispatched-bg); border: 1px solid var(--rubric-auto-border); }
+.rubric-tile-review     { background: var(--timeout-soft-dim);    border: 1px solid var(--rubric-review-border); }
+.rubric-tile-reject     { background: var(--queue-failed-bg);     border: 1px solid var(--rubric-reject-border); }
 .rubric-tile-incomplete { background: var(--rubric-incomplete-soft); border: 1px solid var(--rubric-incomplete-border); }
 .rubric-tile-auto       .rubric-tile__value { color: var(--status-success); }
 .rubric-tile-review     .rubric-tile__value { color: var(--status-timeout); }
