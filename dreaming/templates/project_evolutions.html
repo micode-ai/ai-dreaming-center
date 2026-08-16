@@ -3,43 +3,43 @@
 {% set active='evolutions' %}
 {% block project_content %}
 {% if rubric_stats and rubric_stats.total %}
-<div class="rounded-lg p-4 mb-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+<div class="card mb-4">
   <div class="flex items-center justify-between mb-3">
     <div>
-      <div class="text-xs uppercase tracking-wide" style="color: var(--text-faint);">{{ "evolutions.rubric.title" | t(locale=locale) }}</div>
-      <div class="text-xs mt-0.5" style="color: var(--text-muted);">{{ "evolutions.rubric.subtitle" | t(locale=locale) }}</div>
+      <div class="text-xs uppercase tracking-wide faint">{{ "evolutions.rubric.title" | t(locale=locale) }}</div>
+      <div class="text-xs mt-0.5 muted">{{ "evolutions.rubric.subtitle" | t(locale=locale) }}</div>
     </div>
-    <div class="text-xs" style="color: var(--text-faint);">
+    <div class="text-xs faint">
       {{ "evolutions.rubric.coverage" | t(locale=locale, with_rubric=rubric_stats.with_rubric, total=rubric_stats.total) }}
     </div>
   </div>
   <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-    <div class="rounded p-2 text-center" style="background: rgba(52,211,153,.10); border:1px solid rgba(52,211,153,.30);">
-      <div class="text-lg font-bold" style="color: #047857;">{{ rubric_stats.auto }}</div>
-      <div class="text-xs uppercase tracking-wide" style="color: var(--text-muted);">{{ "evolutions.rubric.auto" | t(locale=locale) }}</div>
+    <div class="rubric-tile rubric-tile-auto">
+      <div class="text-lg font-bold rubric-tile__value">{{ rubric_stats.auto }}</div>
+      <div class="text-xs uppercase tracking-wide muted">{{ "evolutions.rubric.auto" | t(locale=locale) }}</div>
     </div>
-    <div class="rounded p-2 text-center" style="background: rgba(245,158,11,.10); border:1px solid rgba(245,158,11,.30);">
-      <div class="text-lg font-bold" style="color: #92400e;">{{ rubric_stats.review }}</div>
-      <div class="text-xs uppercase tracking-wide" style="color: var(--text-muted);">{{ "evolutions.rubric.review" | t(locale=locale) }}</div>
+    <div class="rubric-tile rubric-tile-review">
+      <div class="text-lg font-bold rubric-tile__value">{{ rubric_stats.review }}</div>
+      <div class="text-xs uppercase tracking-wide muted">{{ "evolutions.rubric.review" | t(locale=locale) }}</div>
     </div>
-    <div class="rounded p-2 text-center" style="background: rgba(248,113,113,.10); border:1px solid rgba(248,113,113,.30);">
-      <div class="text-lg font-bold" style="color: #b91c1c;">{{ rubric_stats.reject }}</div>
-      <div class="text-xs uppercase tracking-wide" style="color: var(--text-muted);">{{ "evolutions.rubric.reject" | t(locale=locale) }}</div>
+    <div class="rubric-tile rubric-tile-reject">
+      <div class="text-lg font-bold rubric-tile__value">{{ rubric_stats.reject }}</div>
+      <div class="text-xs uppercase tracking-wide muted">{{ "evolutions.rubric.reject" | t(locale=locale) }}</div>
     </div>
-    <div class="rounded p-2 text-center" style="background: rgba(156,163,175,.10); border:1px solid rgba(156,163,175,.30);">
-      <div class="text-lg font-bold" style="color: #475569;">{{ rubric_stats.incomplete }}</div>
-      <div class="text-xs uppercase tracking-wide" style="color: var(--text-muted);">{{ "evolutions.rubric.incomplete" | t(locale=locale) }}</div>
+    <div class="rubric-tile rubric-tile-incomplete">
+      <div class="text-lg font-bold rubric-tile__value">{{ rubric_stats.incomplete }}</div>
+      <div class="text-xs uppercase tracking-wide muted">{{ "evolutions.rubric.incomplete" | t(locale=locale) }}</div>
     </div>
   </div>
   {% if rubric_stats.with_rubric == 0 %}
-  <div class="text-xs mt-3" style="color: var(--text-faint);">{{ "evolutions.rubric.no_data_hint" | t(locale=locale) }}</div>
+  <div class="text-xs mt-3 faint">{{ "evolutions.rubric.no_data_hint" | t(locale=locale) }}</div>
   {% endif %}
 </div>
 {% endif %}
 {% if not exists %}
 {{ autoconfig_banner(project, "evolutions_dir", evolutions_dir, "Evolutions (_context)") }}
 {% elif error %}
-<p class="text-sm text-red-700">{{ "common.error" | t(locale=locale) }}: <code>{{ error }}</code></p>
+<p class="text-sm text-danger">{{ "common.error" | t(locale=locale) }}: <code>{{ error }}</code></p>
 {% elif items %}
 <p class="text-xs muted mb-3">
   <span id="evo-count">{{ "evolutions.count_in_dir" | t(locale=locale, count=items|length, dir=evolutions_dir) }}</span>
@@ -50,35 +50,35 @@
           data-bulk-confirm-tmpl="{{ 'bulk.confirm' | t(locale=locale, n='__N__') }}"
           data-bulk-label-none="{{ 'bulk.run_none' | t(locale=locale) }}"
           data-bulk-label-tmpl="{{ 'bulk.run_selected' | t(locale=locale, n='__N__') }}"
-          class="text-xs px-3 py-1.5 rounded border border-purple-500 text-purple-700 disabled:opacity-50 disabled:cursor-not-allowed">
+          class="btn btn-sm">
     {{ "bulk.run_none" | t(locale=locale) }}
   </button>
 </form>
-<table id="evo-table" class="w-full bg-white rounded shadow text-sm"
+<table id="evo-table" class="data-table is-dense"
        data-table-tools
        data-tt-key="evolutions.{{ project.slug }}"
        data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
        data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
-  <thead class="text-left border-b">
+  <thead>
     <tr>
-      <th class="p-2 w-8"><input type="checkbox" id="evo-select-all" aria-label="select all visible"></th>
-      <th class="p-2" data-sort-col="agent" data-sort-type="text">{{ "evolutions.col.agent" | t(locale=locale) }}</th>
-      <th class="p-2" data-sort-col="name" data-sort-type="text">{{ "evolutions.col.name" | t(locale=locale) }}</th>
-      <th class="p-2" data-sort-col="status" data-sort-type="status">{{ "evolutions.col.status" | t(locale=locale) }}</th>
-      <th class="p-2">{{ "evolutions.col.conflict" | t(locale=locale) }}</th>
-      <th class="p-2" data-sort-col="title" data-sort-type="text">{{ "evolutions.col.title" | t(locale=locale) }}</th>
-      <th class="p-2">{{ "evolutions.col.refs" | t(locale=locale) }}</th>
-      <th class="p-2"></th>
+      <th class="w-8"><input type="checkbox" id="evo-select-all" aria-label="select all visible"></th>
+      <th data-sort-col="agent" data-sort-type="text">{{ "evolutions.col.agent" | t(locale=locale) }}</th>
+      <th data-sort-col="name" data-sort-type="text">{{ "evolutions.col.name" | t(locale=locale) }}</th>
+      <th data-sort-col="status" data-sort-type="status">{{ "evolutions.col.status" | t(locale=locale) }}</th>
+      <th>{{ "evolutions.col.conflict" | t(locale=locale) }}</th>
+      <th data-sort-col="title" data-sort-type="text">{{ "evolutions.col.title" | t(locale=locale) }}</th>
+      <th>{{ "evolutions.col.refs" | t(locale=locale) }}</th>
+      <th></th>
     </tr>
-    <tr class="border-b bg-slate-50 text-xs" id="evo-filters" data-tt-filter-row>
-      <th class="p-1"></th>
-      <th class="p-1"><input type="text" data-filter-col="agent"
+    <tr id="evo-filters" data-tt-filter-row>
+      <th></th>
+      <th><input type="text" data-filter-col="agent"
             placeholder="{{ 'evolutions.filter.search' | t(locale=locale) }}"
             class="w-full border rounded p-1 text-xs font-mono"></th>
-      <th class="p-1"><input type="text" data-filter-col="name"
+      <th><input type="text" data-filter-col="name"
             placeholder="{{ 'evolutions.filter.search' | t(locale=locale) }}"
             class="w-full border rounded p-1 text-xs font-mono"></th>
-      <th class="p-1">
+      <th>
         <select data-filter-col="status" class="w-full border rounded p-1 text-xs font-mono">
           <option value="">{{ "evolutions.filter.opt.all" | t(locale=locale) }}</option>
           {% for opt in ['proposed', 'active', 'applied', 'archived', 'rejected'] %}
@@ -86,17 +86,17 @@
           {% endfor %}
         </select>
       </th>
-      <th class="p-1">
+      <th>
         <select data-filter-col="conflict" class="w-full border rounded p-1 text-xs font-mono">
           <option value="">{{ "evolutions.filter.opt.all" | t(locale=locale) }}</option>
           <option value="1">{{ "evolutions.filter.opt.conflict_only" | t(locale=locale) }}</option>
           <option value="0">{{ "evolutions.filter.opt.no_conflict" | t(locale=locale) }}</option>
         </select>
       </th>
-      <th class="p-1"><input type="text" data-filter-col="title"
+      <th><input type="text" data-filter-col="title"
             placeholder="{{ 'evolutions.filter.search' | t(locale=locale) }}"
             class="w-full border rounded p-1 text-xs font-mono"></th>
-      <th class="p-1">
+      <th>
         <select data-filter-col="refs" class="w-full border rounded p-1 text-xs font-mono">
           <option value="">{{ "evolutions.filter.opt.all" | t(locale=locale) }}</option>
           <option value="gh">{{ "evolutions.filter.opt.has_gh" | t(locale=locale) }}</option>
@@ -104,9 +104,8 @@
           <option value="none">{{ "evolutions.filter.opt.no_refs" | t(locale=locale) }}</option>
         </select>
       </th>
-      <th class="p-1 text-right">
-        <button type="button" id="evo-filter-reset" data-tt-reset
-                class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+      <th class="text-right">
+        <button type="button" id="evo-filter-reset" data-tt-reset class="btn btn-sm">
           {{ "evolutions.filter.reset" | t(locale=locale) }}
         </button>
       </th>
@@ -114,7 +113,7 @@
   </thead>
   <tbody>
   {% for it in items %}
-  <tr class="border-b align-top"
+  <tr class="align-top"
       data-filter-row
       data-agent="{{ (it.agent_name or '')|lower }}"
       data-name="{{ (it.name or '')|lower }}"
@@ -123,17 +122,17 @@
       data-title="{{ (it.title or '')|lower }}"
       data-has-gh="{{ '1' if it.github_issue else '0' }}"
       data-has-run="{{ '1' if it.orchestration_run else '0' }}">
-    <td class="p-2"><input type="checkbox" form="evo-bulk-form" name="selected"
+    <td><input type="checkbox" form="evo-bulk-form" name="selected"
         value="{{ it.relative_path }}" data-bulk-cb aria-label="select {{ it.name }}"></td>
-    <td class="p-2 font-mono text-xs">{{ it.agent_name }}</td>
-    <td class="p-2 font-mono text-xs">
-      <a class="text-blue-600 underline cursor-pointer"
+    <td class="font-mono text-xs">{{ it.agent_name }}</td>
+    <td class="font-mono text-xs">
+      <a class="text-brand-hover underline cursor-pointer"
          href="#"
          data-evo-path="{{ it.relative_path }}"
          data-evo-name="{{ it.name }}"
          onclick="openEvolution(this); return false;">{{ it.name }}</a>
     </td>
-    <td class="p-2 text-xs">
+    <td class="text-xs">
       <form method="post" action="/p/{{ project.slug }}/evolutions/status" class="inline">
         <input type="hidden" name="path" value="{{ it.relative_path }}">
         <select name="status" onchange="this.form.submit()" class="border rounded p-1 text-xs font-mono">
@@ -144,19 +143,19 @@
         </select>
       </form>
     </td>
-    <td class="p-2">{{ "⚠" if it.has_conflict else "" }}</td>
-    <td class="p-2 text-xs">{{ it.title or '' }}</td>
-    <td class="p-2 text-xs font-mono">
-      {% if it.github_issue %}<a class="text-blue-600 underline" target="_blank" href="{{ it.github_issue }}">GH</a>{% endif %}
-      {% if it.orchestration_run %}<a class="text-purple-600 underline ml-1" href="/p/{{ project.slug }}/orchestration/{{ it.orchestration_run }}">run</a>{% endif %}
+    <td>{{ "⚠" if it.has_conflict else "" }}</td>
+    <td class="text-xs">{{ it.title or '' }}</td>
+    <td class="text-xs font-mono">
+      {% if it.github_issue %}<a class="text-brand-hover underline" target="_blank" href="{{ it.github_issue }}">GH</a>{% endif %}
+      {% if it.orchestration_run %}<a class="text-cache underline ml-1" href="/p/{{ project.slug }}/orchestration/{{ it.orchestration_run }}">run</a>{% endif %}
     </td>
-    <td class="p-2 text-xs whitespace-nowrap">
+    <td class="text-xs whitespace-nowrap">
       <form method="post" action="/p/{{ project.slug }}/evolutions/apply" class="inline"
             data-confirm="{% if it.has_conflict %}{{ 'evolutions.confirm_apply_force' | t(locale=locale, name=it.agent_name) }}{% else %}{{ 'evolutions.confirm_apply' | t(locale=locale, name=it.agent_name) }}{% endif %}"
             {% if it.has_conflict %}data-confirm-variant="danger" data-confirm-ok-label="{{ 'evolutions.btn.apply_force' | t(locale=locale) }}"{% endif %}>
         <input type="hidden" name="path" value="{{ it.relative_path }}">
         {% if it.has_conflict %}<input type="hidden" name="force" value="1">{% endif %}
-        <button class="text-xs px-2 py-1 border rounded {% if it.has_conflict %}border-red-500 text-red-700 bg-red-50{% else %}border-purple-500 text-purple-700{% endif %}">
+        <button class="btn btn-sm{% if it.has_conflict %} btn-danger{% endif %}">
           {% if it.has_conflict %}{{ "evolutions.btn.apply_force" | t(locale=locale) }}{% else %}{{ "evolutions.btn.apply" | t(locale=locale) }}{% endif %}
         </button>
       </form>
@@ -164,13 +163,13 @@
       <form method="post" action="/p/{{ project.slug }}/evolutions/github" class="inline ml-1"
             data-confirm="{{ 'evolutions.confirm_gh' | t(locale=locale) }}">
         <input type="hidden" name="path" value="{{ it.relative_path }}">
-        <button class="text-xs px-2 py-1 border border-slate-500 text-slate-700 rounded">→ GH</button>
+        <button class="btn btn-sm">→ GH</button>
       </form>
       {% endif %}
       <form method="post" action="/p/{{ project.slug }}/evolutions/delete" class="inline ml-1"
             data-confirm="{{ 'evolutions.confirm_delete' | t(locale=locale, path=it.relative_path) }}" data-confirm-variant="danger">
         <input type="hidden" name="path" value="{{ it.relative_path }}">
-        <button class="text-xs px-2 py-1 border rounded text-red-600">del</button>
+        <button class="btn btn-sm btn-danger">del</button>
       </form>
       <a class="text-xs muted underline ml-1"
          href="/p/{{ project.slug }}/evolutions/raw?path={{ it.relative_path | urlencode }}"
@@ -231,14 +230,14 @@ window.tableToolsFilters.refs = function (row, value) {
 {% include "_markdown_partial.html" %}
 
 <dialog id="evo-modal" class="note-modal">
-  <header class="flex items-baseline justify-between p-3 border-b bg-slate-50">
-    <h2 id="evo-modal-title" class="text-sm font-mono text-slate-700"></h2>
+  <header class="flex items-baseline justify-between p-3 divider-b bg-elevated">
+    <h2 id="evo-modal-title" class="text-sm font-mono"></h2>
     <div class="flex gap-2">
-      <a id="evo-modal-raw" class="text-xs text-blue-600 underline" target="_blank" rel="noopener">raw</a>
-      <button onclick="closeEvolution()" class="text-slate-500 hover:text-slate-900 text-xl leading-none">×</button>
+      <a id="evo-modal-raw" class="text-xs text-brand-hover underline" target="_blank" rel="noopener">raw</a>
+      <button onclick="closeEvolution()" class="modal-close text-xl leading-none">×</button>
     </div>
   </header>
-  <div id="evo-modal-body" class="markdown-body overflow-auto" style="max-height: 80vh; min-height: 200px;"></div>
+  <div id="evo-modal-body" class="markdown-body note-modal__body"></div>
 </dialog>
 
 <script>
@@ -255,7 +254,7 @@ window.tableToolsFilters.refs = function (row, value) {
     const rawUrl = `/p/${slug}/evolutions/raw?path=${encodeURIComponent(path)}`;
     title.textContent = name + " — " + path;
     rawLink.href = rawUrl;
-    body.innerHTML = '<p class="muted" style="padding: 1.5rem;">{{ "evolutions.modal_loading" | t(locale=locale) }}</p>';
+    body.innerHTML = '<p class="muted p-6">{{ "evolutions.modal_loading" | t(locale=locale) }}</p>';
     modal.showModal();
     try {
       const r = await fetch(rawUrl);
@@ -263,7 +262,7 @@ window.tableToolsFilters.refs = function (row, value) {
       const text = await r.text();
       window.dcRenderMarkdown(body, text);
     } catch (e) {
-      body.innerHTML = '<p class="text-red-700 font-mono text-xs" style="padding: 1.5rem;">{{ "common.error" | t(locale=locale) }}: ' + (e.message || e) + '</p>';
+      body.innerHTML = '<p class="text-danger font-mono text-xs p-6">{{ "common.error" | t(locale=locale) }}: ' + (e.message || e) + '</p>';
     }
   };
   window.closeEvolution = function() { modal.close(); };

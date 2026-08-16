@@ -158,6 +158,7 @@
 .badge-running { background: var(--status-running-soft); color: var(--status-running); }
 .badge-live    { background: var(--status-live-soft);    color: var(--status-live); }
 .badge-neutral { background: var(--bg-hover); color: var(--text-muted); }
+.badge-brand   { background: var(--brand-soft); color: var(--brand-fg); }
 
 /* ---------- Live dot ---------- */
 .dot { display: inline-block; width: var(--space-2); height: var(--space-2); border-radius: var(--radius-pill); background: currentColor; }
@@ -192,6 +193,16 @@
 .metric.metric-timeout .metric__value { color: var(--status-timeout); }
 .metric.metric-running .metric__value { color: var(--status-running); }
 
+/* Some KPI tiles use a status-coloured left accent bar purely for visual
+   rhythm across a row while the big number itself is a plain count, not a
+   status (project_cascade_costs.html's "Total tokens" / "Avg cost per run").
+   .metric-neutral opts the value out of the modifier's colour without
+   touching the shared rules other .metric consumers rely on -- a fourth
+   class keeps this selector's specificity above the three-class rules
+   above regardless of source order. */
+.metric.metric-running.metric-neutral .metric__value,
+.metric.metric-timeout.metric-neutral .metric__value { color: var(--text-strong); }
+
 /* ---------- Tables ---------- */
 .data-table {
   width: 100%; background: var(--bg-card);
@@ -214,6 +225,15 @@
 .data-table.is-dense { font-size: var(--row-font-dense); }
 .data-table.is-dense thead th,
 .data-table.is-dense tbody td { padding: var(--row-pad-y-dense) var(--row-pad-x-dense); }
+
+/* A table_tools filter row lives in a second <thead><tr> alongside the label
+   row (project_evolutions.html). Its th cells hold form controls, not
+   column labels, so the label row's uppercase/letter-spacing/weight must
+   not cascade onto placeholder/option text. Colour needs no reset here --
+   input/select already set their own explicit color in app.css. */
+.data-table thead tr[data-tt-filter-row] th {
+  text-transform: none; letter-spacing: normal; font-weight: 400;
+}
 
 /* ============================================================
    Orchestration list (project_orchestration_list.html): a handful of
@@ -325,6 +345,26 @@
 .dot-tier2 { background: var(--cache-fg); }
 .dot-faint { background: var(--text-faint); }
 
+/* ============================================================
+   Evolutions rubric-coverage tiles (project_evolutions.html): four small
+   status-tinted stat boxes above the evolutions table. Background/border
+   are exact-preserved alpha tints (see tokens.css); the big-number colour
+   moves from a hardcoded light-theme hex to the matching dark-theme status
+   token -- see task-11 report for the contrast arithmetic that motivated
+   the swap. Font-size/weight stay as Tailwind utilities on the value div
+   (text-lg font-bold); only colour and the tile's own bg/border/radius/
+   padding move into CSS.
+   ============================================================ */
+.rubric-tile { border-radius: var(--radius-sm); padding: var(--space-2); text-align: center; }
+.rubric-tile-auto       { background: var(--rubric-auto-soft);       border: 1px solid var(--rubric-auto-border); }
+.rubric-tile-review     { background: var(--rubric-review-soft);     border: 1px solid var(--rubric-review-border); }
+.rubric-tile-reject     { background: var(--rubric-reject-soft);     border: 1px solid var(--rubric-reject-border); }
+.rubric-tile-incomplete { background: var(--rubric-incomplete-soft); border: 1px solid var(--rubric-incomplete-border); }
+.rubric-tile-auto       .rubric-tile__value { color: var(--status-success); }
+.rubric-tile-review     .rubric-tile__value { color: var(--status-timeout); }
+.rubric-tile-reject     .rubric-tile__value { color: var(--status-failed); }
+.rubric-tile-incomplete .rubric-tile__value { color: var(--text-muted); }
+
 /* ---------- Modal dialog ---------- */
 dialog.note-modal {
   padding: 0; max-width: 56rem; width: calc(100% - 2rem);
@@ -332,3 +372,12 @@ dialog.note-modal {
   background: var(--bg-card); color: var(--text-body); box-shadow: var(--shadow-modal);
 }
 dialog.note-modal::backdrop { background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(2px); }
+
+/* note-modal header close glyph ("×") and scrollable raw/markdown body -- an
+   identical pair of static inline styles repeats verbatim in
+   project_notes.html and project_wiki.html's own note-modal instances
+   (grepped before adding); project_evolutions.html is simply the first of
+   the three migrated, so this is the shared shape those two can reuse. */
+.modal-close { color: var(--text-muted); background: none; border: none; cursor: pointer; }
+.modal-close:hover { color: var(--text-strong); }
+.note-modal__body { max-height: 80vh; min-height: 12.5rem; overflow: auto; }
