@@ -180,6 +180,10 @@
 .metric.metric-info::before    { background: var(--brand); }
 .metric__label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); font-weight: 500; }
 .metric__value { margin-top: var(--space-1); font-size: 1.75rem; font-weight: 600; letter-spacing: -0.02em; color: var(--text-strong); font-variant-numeric: tabular-nums; }
+.metric.metric-success .metric__value { color: var(--status-success); }
+.metric.metric-failed  .metric__value { color: var(--status-failed); }
+.metric.metric-timeout .metric__value { color: var(--status-timeout); }
+.metric.metric-running .metric__value { color: var(--status-running); }
 
 /* ---------- Tables ---------- */
 .data-table {
