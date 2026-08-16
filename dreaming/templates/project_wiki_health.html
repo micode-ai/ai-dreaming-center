@@ -6,16 +6,15 @@
 {% block project_content %}
 
 {% if error %}
-<div class="rounded-lg p-4 mb-4 text-sm" style="background: rgba(245, 158, 11, 0.10); border:1px solid rgba(245, 158, 11, 0.35); color: var(--status-timeout);">
-  ⚠ {{ error }}
+<div class="banner banner-warn">
+  <div class="banner__body">⚠ {{ error }}</div>
 </div>
 {% endif %}
 
 <div class="flex items-center justify-end mb-4">
   <form method="post" action="/p/{{ project.slug }}/wiki-health/generate">
     <button type="submit"
-            class="text-xs rounded px-3 py-1.5 disabled:opacity-50"
-            style="background: var(--brand); color: white; border:1px solid var(--brand-hover);"
+            class="btn btn-primary"
             {% if wiki_health_running %}disabled title="{{ 'wiki_health.generate.running' | t(locale=locale) }}"{% endif %}>
       {% if wiki_health_running %}{{ "wiki_health.generate.running" | t(locale=locale) }}{% else %}{{ "wiki_health.generate.button" | t(locale=locale) }}{% endif %}
     </button>
@@ -24,40 +23,40 @@
 
 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
   <div class="metric metric-success">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "wiki_health.modules_covered" | t(locale=locale) }}</div>
-    <div class="text-2xl font-semibold mt-1" style="color: var(--status-success);">{{ snapshot.covered or 0 }}</div>
+    <div class="metric__label">{{ "wiki_health.modules_covered" | t(locale=locale) }}</div>
+    <div class="metric__value">{{ snapshot.covered or 0 }}</div>
   </div>
   <div class="metric metric-info">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">Learning-notes</div>
-    <div class="text-2xl font-semibold mt-1" style="color: var(--text-strong);">{{ snapshot.learning_notes or 0 }}</div>
+    <div class="metric__label">Learning-notes</div>
+    <div class="metric__value">{{ snapshot.learning_notes or 0 }}</div>
   </div>
-  <div class="metric metric-running">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "wiki_health.trends_points" | t(locale=locale) }}</div>
-    <div class="text-2xl font-semibold mt-1" style="color: var(--text-strong);">{{ series|length }}</div>
+  <div class="metric metric-running metric-neutral">
+    <div class="metric__label">{{ "wiki_health.trends_points" | t(locale=locale) }}</div>
+    <div class="metric__value">{{ series|length }}</div>
   </div>
   <div class="metric metric-timeout">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "wiki_health.last_snapshot" | t(locale=locale) }}</div>
-    <div class="text-sm font-mono mt-2" style="color: var(--text-body);">{{ latest.date if latest else '—' }}</div>
+    <div class="metric__label">{{ "wiki_health.last_snapshot" | t(locale=locale) }}</div>
+    <div class="text-sm font-mono mt-2">{{ latest.date if latest else '—' }}</div>
   </div>
 </div>
 
 {% if series %}
-<div class="rounded-lg p-4 mb-4" style="background: var(--bg-card); border:1px solid var(--border-subtle); box-shadow: var(--shadow-card);">
-  <div class="text-sm font-semibold mb-2" style="color: var(--text-strong);">{{ "wiki_health.trends_title" | t(locale=locale) }}</div>
-  <div style="height: 320px;"><canvas id="wh-chart"></canvas></div>
+<div class="card card--shadow mb-4">
+  <div class="text-sm font-semibold mb-2 strong">{{ "wiki_health.trends_title" | t(locale=locale) }}</div>
+  <div class="chart-box"><canvas id="wh-chart"></canvas></div>
 </div>
 
-<h2 class="text-sm font-semibold mb-2" style="color: var(--text-strong);">{{ "wiki_health.snapshots" | t(locale=locale) }}</h2>
+<h2 class="section-title">{{ "wiki_health.snapshots" | t(locale=locale) }}</h2>
 <div data-tt-scope>
-  <div class="mb-2 flex items-center gap-2">
+  <div class="toolbar">
     <input type="text" data-tt-search
            placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
     <button type="button" data-tt-reset
-            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+            class="btn btn-sm">
       {{ "table.reset" | t(locale=locale) }}
     </button>
   </div>
-  <table class="data-table"
+  <table class="data-table is-dense"
          data-table-tools
          data-tt-key="wiki_health.{{ project.slug }}"
          data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
@@ -78,7 +77,7 @@
         data-covered="{{ s.metrics.covered if s.metrics.covered is not none else '' }}"
         data-learning_notes="{{ s.metrics.learning_notes if s.metrics.learning_notes is not none else '' }}"
         data-uncovered_p1p2="{{ s.metrics.uncovered_p1p2 if s.metrics.uncovered_p1p2 is not none else '' }}">
-      <td class="font-mono text-xs">{{ s.date }}</td>
+      <td class="num">{{ s.date }}</td>
       <td class="text-xs">{{ s.label }}</td>
       <td class="text-right">{{ s.metrics.covered_pct if s.metrics.covered_pct is not none else '—' }}</td>
       <td class="text-right">{{ s.metrics.covered if s.metrics.covered is not none else '—' }}</td>
