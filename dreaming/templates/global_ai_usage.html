@@ -5,13 +5,15 @@
 {% endblock %}
 {% block content %}
 
-<header class="mb-5 flex items-baseline gap-3 flex-wrap">
-  <h1 class="text-2xl font-semibold tracking-tight" style="color: var(--text-strong);">{{ "ai_usage.title" | t(locale=locale) }}</h1>
-  <span class="text-sm" style="color: var(--text-faint);">{{ "ai_usage.subtitle_global" | t(locale=locale, n=summary.events_total or 0) }}</span>
+<header class="page-header">
+  <div class="page-header__titles">
+    <h1 class="page-header__title">{{ "ai_usage.title" | t(locale=locale) }}</h1>
+    <span class="text-sm faint">{{ "ai_usage.subtitle_global" | t(locale=locale, n=summary.events_total or 0) }}</span>
+  </div>
 </header>
 
 {% if summary.error %}
-<p style="color: var(--status-failed);" class="text-sm">{{ "common.error" | t(locale=locale) }}: <code>{{ summary.error }}</code></p>
+<p class="text-sm text-danger">{{ "common.error" | t(locale=locale) }}: <code>{{ summary.error }}</code></p>
 {% else %}
 
 {% macro num(n) -%}
@@ -26,13 +28,11 @@
 {% set f = summary.filters %}
 {% set k = summary.kpi %}
 
-<div class="rounded-lg p-3 mb-5 flex flex-wrap items-center gap-3"
-     style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+<div class="card mb-5 flex flex-wrap items-center gap-3">
   <div class="flex items-center gap-1">
     {% for p_, lbl_key in [('today','ai_usage.preset.today'), ('7d','ai_usage.preset.7d'), ('30d','ai_usage.preset.30d'), ('all','ai_usage.preset.all')] %}
     <a href="?preset={{ p_ }}{% if f.model %}&model={{ f.model }}{% endif %}"
-       class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-       style="{% if f.preset == p_ %}background: var(--brand); color:#fff; border:1px solid var(--brand);{% else %}background: var(--bg-card); color: var(--text-muted); border:1px solid var(--border-subtle);{% endif %}">
+       class="filter-tab{% if f.preset == p_ %} is-active{% endif %}">
       {{ lbl_key | t(locale=locale) }}
     </a>
     {% endfor %}
@@ -40,8 +40,8 @@
 
   <form method="get" class="flex items-center gap-2 ml-2" onchange="this.submit()">
     <input type="hidden" name="preset" value="{{ f.preset }}">
-    <label class="text-xs" style="color: var(--text-muted);">{{ "ai_usage.model_label" | t(locale=locale) }}</label>
-    <select name="model" class="rounded-lg px-2 py-1.5 text-xs" style="min-width: 220px;">
+    <label class="text-xs muted">{{ "ai_usage.model_label" | t(locale=locale) }}</label>
+    <select name="model" class="rounded-lg px-2 py-1.5 text-xs min-w-[220px]">
       <option value="">{{ "ai_usage.all_models" | t(locale=locale) }}</option>
       {% for m in summary.models_catalog %}
       <option value="{{ m }}" {% if f.model == m %}selected{% endif %}>{{ m }}</option>
@@ -49,231 +49,228 @@
     </select>
   </form>
 
-  <div class="ml-auto text-xs font-mono" style="color: var(--text-faint);">
+  <div class="ml-auto text-xs font-mono faint">
     {{ f.start }} → {{ f.end }}{% if f.model %} · model={{ f.model }}{% endif %}
   </div>
 </div>
 
 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-  <div class="rounded-xl p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-    <p class="text-xs uppercase tracking-wider mb-1" style="color: var(--text-faint);">{{ "ai_usage.kpi.total" | t(locale=locale) }}</p>
-    <p class="text-2xl font-bold" style="color: var(--text-strong);">{{ num(k.grand_total) }}</p>
-    <p class="text-xs mt-1" style="color: var(--text-faint);">{{ "ai_usage.kpi.events_sessions" | t(locale=locale, e=k.events, s=k.sessions) }}</p>
+  <div class="card">
+    <p class="text-xs uppercase tracking-wider mb-1 faint">{{ "ai_usage.kpi.total" | t(locale=locale) }}</p>
+    <p class="text-2xl font-bold strong num">{{ num(k.grand_total) }}</p>
+    <p class="text-xs mt-1 faint">{{ "ai_usage.kpi.events_sessions" | t(locale=locale, e=k.events, s=k.sessions) }}</p>
   </div>
-  <div class="rounded-xl p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-    <p class="text-xs uppercase tracking-wider mb-1" style="color: var(--text-faint);">{{ "ai_usage.kpi.input_output" | t(locale=locale) }}</p>
-    <p class="text-sm" style="color: var(--text-body);">
-      <span style="color: var(--status-success);">↑</span> {{ num(k.input) }}
-      <span style="color: var(--text-faint);" class="mx-1">·</span>
-      <span style="color: var(--status-running);">↓</span> {{ num(k.output) }}
+  <div class="card">
+    <p class="text-xs uppercase tracking-wider mb-1 faint">{{ "ai_usage.kpi.input_output" | t(locale=locale) }}</p>
+    <p class="text-sm num">
+      <span class="text-success">↑</span> {{ num(k.input) }}
+      <span class="mx-1 faint">·</span>
+      <span class="text-running">↓</span> {{ num(k.output) }}
     </p>
-    <p class="text-xs mt-2" style="color: var(--text-faint);">{{ "ai_usage.kpi.avg_per_session" | t(locale=locale, n=num(k.avg_per_session)) }}</p>
+    <p class="text-xs mt-2 faint">{{ "ai_usage.kpi.avg_per_session" | t(locale=locale, n=num(k.avg_per_session)) }}</p>
   </div>
-  <div class="rounded-xl p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-    <p class="text-xs uppercase tracking-wider mb-1" style="color: var(--text-faint);">{{ "ai_usage.kpi.cache" | t(locale=locale) }}</p>
-    <p class="text-sm" style="color: var(--text-body);">
-      <span style="color: #a78bfa;">⇣</span> {{ num(k.cache_read) }}
-      <span style="color: var(--text-faint);" class="mx-1">·</span>
-      <span style="color: var(--status-timeout);">⇡</span> {{ num(k.cache_creation) }}
+  <div class="card">
+    <p class="text-xs uppercase tracking-wider mb-1 faint">{{ "ai_usage.kpi.cache" | t(locale=locale) }}</p>
+    <p class="text-sm num">
+      <span class="text-cache">⇣</span> {{ num(k.cache_read) }}
+      <span class="mx-1 faint">·</span>
+      <span class="text-warn">⇡</span> {{ num(k.cache_creation) }}
     </p>
-    <p class="text-xs mt-2" style="color: var(--text-faint);">{{ "ai_usage.kpi.cache_hit" | t(locale=locale) }}: <span style="color: #c4b5fd;">{{ k.cache_hit_pct }}%</span></p>
+    <p class="text-xs mt-2 faint">{{ "ai_usage.kpi.cache_hit" | t(locale=locale) }}: <span class="text-cache-dim num">{{ k.cache_hit_pct }}%</span></p>
   </div>
-  <div class="rounded-xl p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-    <p class="text-xs uppercase tracking-wider mb-1" style="color: var(--text-faint);">{{ "ai_usage.kpi.subagents" | t(locale=locale) }}</p>
-    <p class="text-2xl font-bold" style="color: var(--text-strong);">{{ k.sidechain_share_pct }}%</p>
-    <p class="text-xs mt-1" style="color: var(--text-faint);">{{ "ai_usage.kpi.in_sidechain" | t(locale=locale, n=num(k.sidechain_total)) }}</p>
+  <div class="card">
+    <p class="text-xs uppercase tracking-wider mb-1 faint">{{ "ai_usage.kpi.subagents" | t(locale=locale) }}</p>
+    <p class="text-2xl font-bold strong num">{{ k.sidechain_share_pct }}%</p>
+    <p class="text-xs mt-1 faint">{{ "ai_usage.kpi.in_sidechain" | t(locale=locale, n=num(k.sidechain_total)) }}</p>
   </div>
 </div>
 
-<div class="rounded-xl p-5 mb-6" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-  <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">{{ "ai_usage.daily_title" | t(locale=locale, preset=f.preset) }}</h2>
-  <div style="height: 18rem;"><canvas id="dailyChart"></canvas></div>
+<div class="card mb-6">
+  <h2 class="section-title">{{ "ai_usage.daily_title" | t(locale=locale, preset=f.preset) }}</h2>
+  <div class="h-72"><canvas id="dailyChart"></canvas></div>
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-  <div class="rounded-xl p-5 lg:col-span-2" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-    <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">{{ "ai_usage.by_model" | t(locale=locale) }}</h2>
+  <div class="card lg:col-span-2">
+    <h2 class="section-title">{{ "ai_usage.by_model" | t(locale=locale) }}</h2>
     {% if summary.by_model %}
-    <div style="height: 16rem;"><canvas id="modelChart"></canvas></div>
+    <div class="h-64"><canvas id="modelChart"></canvas></div>
     {% else %}
-    <p class="text-sm" style="color: var(--text-faint);">{{ "common.no_data" | t(locale=locale) }}</p>
+    <p class="text-sm faint">{{ "common.no_data" | t(locale=locale) }}</p>
     {% endif %}
   </div>
-  <div class="rounded-xl p-5" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-    <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">{{ "ai_usage.main_vs_sub" | t(locale=locale) }}</h2>
-    <div style="height: 16rem;" class="flex items-center justify-center"><canvas id="sidechainChart"></canvas></div>
+  <div class="card">
+    <h2 class="section-title">{{ "ai_usage.main_vs_sub" | t(locale=locale) }}</h2>
+    <div class="h-64 flex items-center justify-center"><canvas id="sidechainChart"></canvas></div>
     <div class="flex items-center justify-between text-xs mt-3">
-      <span style="color: var(--status-success);">Main · {{ num(summary.main_sub.main) }}</span>
-      <span style="color: var(--status-timeout);">Subagents · {{ num(summary.main_sub.sub) }}</span>
+      <span class="text-success num">Main · {{ num(summary.main_sub.main) }}</span>
+      <span class="text-warn num">Subagents · {{ num(summary.main_sub.sub) }}</span>
     </div>
   </div>
 </div>
 
 {# 3b. Skills (calls) / Agents (tokens) breakdown #}
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-  <div class="rounded-xl p-5" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-    <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">{{ "ai_usage.by_skill" | t(locale=locale) }}</h2>
+  <div class="card">
+    <h2 class="section-title">{{ "ai_usage.by_skill" | t(locale=locale) }}</h2>
     {% if summary.by_skill %}
-    <div style="height: 16rem;"><canvas id="skillChart"></canvas></div>
+    <div class="h-64"><canvas id="skillChart"></canvas></div>
     {% else %}
-    <p class="text-sm" style="color: var(--text-faint);">{{ "common.no_data" | t(locale=locale) }}</p>
+    <p class="text-sm faint">{{ "common.no_data" | t(locale=locale) }}</p>
     {% endif %}
   </div>
-  <div class="rounded-xl p-5" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-    <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">{{ "ai_usage.by_agent" | t(locale=locale) }}</h2>
+  <div class="card">
+    <h2 class="section-title">{{ "ai_usage.by_agent" | t(locale=locale) }}</h2>
     {% if summary.by_agent %}
     <div data-tt-scope>
-      <div class="mb-2 flex items-center gap-2">
+      <div class="toolbar">
         <input type="text" data-tt-search
                placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
         <button type="button" data-tt-reset
-                class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+                class="btn btn-sm">
           {{ "table.reset" | t(locale=locale) }}
         </button>
       </div>
-      <table class="w-full text-sm"
+      <table class="data-table is-dense"
              data-table-tools
              data-tt-key="g_ai_usage.by_agent"
              data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
              data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
-        <thead class="text-xs uppercase tracking-wider" style="color: var(--text-faint);">
+        <thead>
           <tr>
-            <th class="text-left pb-2" data-sort-col="agent" data-sort-type="text">{{ "ai_usage.col.agent" | t(locale=locale) }}</th>
-            <th class="text-right pb-2" data-sort-col="runs" data-sort-type="num">{{ "ai_usage.col.runs" | t(locale=locale) }}</th>
-            <th class="text-right pb-2" data-sort-col="tokens" data-sort-type="num">{{ "ai_usage.col.tokens" | t(locale=locale) }}</th>
+            <th data-sort-col="agent" data-sort-type="text">{{ "ai_usage.col.agent" | t(locale=locale) }}</th>
+            <th data-sort-col="runs" data-sort-type="num">{{ "ai_usage.col.runs" | t(locale=locale) }}</th>
+            <th data-sort-col="tokens" data-sort-type="num">{{ "ai_usage.col.tokens" | t(locale=locale) }}</th>
           </tr>
         </thead>
         <tbody>
           {% for a in summary.by_agent %}
-          <tr style="border-top:1px solid var(--border-subtle);"
-              data-filter-row
+          <tr data-filter-row
               data-runs="{{ a.runs }}"
               data-tokens="{{ a.total_tokens }}">
-            <td class="py-2" style="color: var(--text-body);">{{ a.agent_name }}</td>
-            <td class="py-2 text-right" style="color: var(--text-faint);">{{ a.runs }}</td>
-            <td class="py-2 text-right font-semibold" style="color: var(--text-strong);">{{ num(a.total_tokens) }}</td>
+            <td>{{ a.agent_name }}</td>
+            <td class="text-right num faint">{{ a.runs }}</td>
+            <td class="text-right font-semibold num strong">{{ num(a.total_tokens) }}</td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
     {% else %}
-    <p class="text-sm" style="color: var(--text-faint);">{{ "common.no_data" | t(locale=locale) }}</p>
+    <p class="text-sm faint">{{ "common.no_data" | t(locale=locale) }}</p>
     {% endif %}
   </div>
 </div>
 
 {# Top projects table — unique to the global view #}
-<div class="rounded-xl p-5 mb-6" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-  <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">{{ "ai_usage.top_projects" | t(locale=locale) }}</h2>
+<div class="card mb-6">
+  <h2 class="section-title">{{ "ai_usage.top_projects" | t(locale=locale) }}</h2>
   {% if summary.by_project %}
   {% set max_total = summary.by_project[0].total_tokens or 1 %}
   <div data-tt-scope>
-    <div class="mb-2 flex items-center gap-2">
+    <div class="toolbar">
       <input type="text" data-tt-search
              placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
       <button type="button" data-tt-reset
-              class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+              class="btn btn-sm">
         {{ "table.reset" | t(locale=locale) }}
       </button>
     </div>
-    <table class="w-full text-sm"
+    <table class="data-table is-dense"
            data-table-tools
            data-tt-key="g_ai_usage.top_projects"
            data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
            data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
-      <thead class="text-xs uppercase tracking-wider" style="color: var(--text-faint);">
+      <thead>
         <tr>
-          <th class="text-left pb-2" data-sort-col="project" data-sort-type="text">{{ "ai_usage.col.project" | t(locale=locale) }}</th>
-          <th class="text-right pb-2" data-sort-col="events" data-sort-type="num">{{ "ai_usage.col.events" | t(locale=locale) }}</th>
-          <th class="text-left pb-2 pl-4">{{ "ai_usage.col.tokens" | t(locale=locale) }}</th>
-          <th class="text-right pb-2 w-24" data-sort-col="total" data-sort-type="num">{{ "ai_usage.col.total" | t(locale=locale) }}</th>
+          <th data-sort-col="project" data-sort-type="text">{{ "ai_usage.col.project" | t(locale=locale) }}</th>
+          <th data-sort-col="events" data-sort-type="num">{{ "ai_usage.col.events" | t(locale=locale) }}</th>
+          <th>{{ "ai_usage.col.tokens" | t(locale=locale) }}</th>
+          <th class="w-24" data-sort-col="total" data-sort-type="num">{{ "ai_usage.col.total" | t(locale=locale) }}</th>
         </tr>
       </thead>
       <tbody>
         {% for row in summary.by_project %}
-        <tr style="border-top:1px solid var(--border-subtle);"
-            data-filter-row
+        <tr data-filter-row
             data-events="{{ row.events or 0 }}"
             data-total="{{ row.total_tokens or 0 }}">
-          <td class="py-2">
+          <td>
             {% if row.slug %}
-            <a href="/p/{{ row.slug }}/ai-usage" class="font-mono text-xs" style="color: var(--brand-hover); text-decoration: underline;">{{ row.slug }}</a>
-            {% if row.label and row.label != row.slug %}<span class="ml-2 text-xs" style="color: var(--text-faint);">{{ row.label }}</span>{% endif %}
-            {% else %}<span style="color: var(--text-faint);">__unmapped__</span>{% endif %}
+            <a href="/p/{{ row.slug }}/ai-usage" class="font-mono text-xs text-brand-hover underline">{{ row.slug }}</a>
+            {% if row.label and row.label != row.slug %}<span class="ml-2 text-xs faint">{{ row.label }}</span>{% endif %}
+            {% else %}<span class="faint">__unmapped__</span>{% endif %}
           </td>
-          <td class="py-2 text-right" style="color: var(--text-faint);">{{ row.events or 0 }}</td>
-          <td class="py-2 pl-4">
+          <td class="text-right num faint">{{ row.events or 0 }}</td>
+          <td>
             <div class="flex items-center gap-2">
-              <div class="flex-1 rounded-full overflow-hidden" style="background: var(--bg-hover); height: 0.5rem;">
-                <div style="background: var(--brand); height: 0.5rem; width: {{ (100 * (row.total_tokens or 0) // max_total) }}%;"></div>
+              <div class="meter-track">
+                <div class="meter-fill" style="width: {{ (100 * (row.total_tokens or 0) // max_total) }}%;"></div>
               </div>
-              <span class="text-xs w-14 text-right" style="color: var(--text-faint);">{{ num(row.total_tokens) }}</span>
+              <span class="text-xs w-14 text-right num faint">{{ num(row.total_tokens) }}</span>
             </div>
           </td>
-          <td class="py-2 text-right" style="color: var(--text-body);">{{ num(row.total_tokens) }}</td>
+          <td class="text-right num">{{ num(row.total_tokens) }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
   {% else %}
-  <p class="text-sm" style="color: var(--text-faint);">{{ "common.no_data" | t(locale=locale) }}</p>
+  <p class="text-sm faint">{{ "common.no_data" | t(locale=locale) }}</p>
   {% endif %}
 </div>
 
-<div class="rounded-xl p-5 mb-6" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-  <h2 class="text-sm font-semibold mb-4" style="color: var(--text-strong);">{{ "ai_usage.top_sessions" | t(locale=locale) }}</h2>
+<div class="card mb-6">
+  <h2 class="section-title">{{ "ai_usage.top_sessions" | t(locale=locale) }}</h2>
   {% if summary.top_sessions %}
   <div data-tt-scope>
-    <div class="mb-2 flex items-center gap-2">
+    <div class="toolbar">
       <input type="text" data-tt-search
              placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
       <button type="button" data-tt-reset
-              class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+              class="btn btn-sm">
         {{ "table.reset" | t(locale=locale) }}
       </button>
     </div>
-    <table class="w-full text-sm"
+    <table class="data-table is-dense"
            data-table-tools
            data-tt-key="g_ai_usage.top_sessions"
            data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
            data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
-      <thead class="text-xs uppercase tracking-wider" style="color: var(--text-faint);">
+      <thead>
         <tr>
-          <th class="text-left pb-2" data-sort-col="session" data-sort-type="text">Session</th>
-          <th class="text-left pb-2" data-sort-col="model" data-sort-type="text">{{ "ai_usage.col.model" | t(locale=locale) }}</th>
-          <th class="text-right pb-2" data-sort-col="duration" data-sort-type="num">{{ "ai_usage.col.duration" | t(locale=locale) }}</th>
-          <th class="text-right pb-2" data-sort-col="events" data-sort-type="num">{{ "ai_usage.col.events" | t(locale=locale) }}</th>
-          <th class="text-right pb-2" data-sort-col="tokens" data-sort-type="num">{{ "ai_usage.col.tokens" | t(locale=locale) }}</th>
+          <th data-sort-col="session" data-sort-type="text">Session</th>
+          <th data-sort-col="model" data-sort-type="text">{{ "ai_usage.col.model" | t(locale=locale) }}</th>
+          <th data-sort-col="duration" data-sort-type="num">{{ "ai_usage.col.duration" | t(locale=locale) }}</th>
+          <th data-sort-col="events" data-sort-type="num">{{ "ai_usage.col.events" | t(locale=locale) }}</th>
+          <th data-sort-col="tokens" data-sort-type="num">{{ "ai_usage.col.tokens" | t(locale=locale) }}</th>
         </tr>
       </thead>
       <tbody>
         {% for s in summary.top_sessions %}
-        <tr style="border-top:1px solid var(--border-subtle);"
-            data-filter-row
+        <tr data-filter-row
             data-duration="{{ s.duration_minutes }}"
             data-events="{{ s.events }}"
             data-tokens="{{ s.total_tokens }}">
-          <td class="py-2 font-mono text-xs" style="color: var(--text-faint);">{{ s.session_id[:8] }}…</td>
-          <td class="py-2 text-xs" style="color: var(--text-faint);">{{ s.model or '(unknown)' }}</td>
-          <td class="py-2 text-right" style="color: var(--text-faint);">{{ s.duration_minutes }} {{ "ai_usage.minutes" | t(locale=locale) }}</td>
-          <td class="py-2 text-right" style="color: var(--text-faint);">{{ s.events }}</td>
-          <td class="py-2 text-right font-semibold" style="color: var(--text-strong);">{{ num(s.total_tokens) }}</td>
+          <td class="num faint">{{ s.session_id[:8] }}…</td>
+          <td class="text-xs faint">{{ s.model or '(unknown)' }}</td>
+          <td class="text-right num faint">{{ s.duration_minutes }} {{ "ai_usage.minutes" | t(locale=locale) }}</td>
+          <td class="text-right num faint">{{ s.events }}</td>
+          <td class="text-right font-semibold num strong">{{ num(s.total_tokens) }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
   {% else %}
-  <p class="text-sm" style="color: var(--text-faint);">{{ "common.no_data" | t(locale=locale) }}</p>
+  <p class="text-sm faint">{{ "common.no_data" | t(locale=locale) }}</p>
   {% endif %}
 </div>
 
-<div class="flex items-center gap-4 mb-5 text-xs" style="color: var(--text-faint);">
+<div class="flex items-center gap-4 mb-5 text-xs faint">
   <span>{{ "ai_usage.context_for_global" | t(locale=locale) }}</span>
-  <span><span class="font-mono">7d</span> · {{ "{:,}".format(summary.last_7d.total_tokens or 0) }}</span>
-  <span><span class="font-mono">30d</span> · {{ "{:,}".format(summary.last_30d.total_tokens or 0) }}</span>
+  <span class="num"><span class="font-mono">7d</span> · {{ "{:,}".format(summary.last_7d.total_tokens or 0) }}</span>
+  <span class="num"><span class="font-mono">30d</span> · {{ "{:,}".format(summary.last_30d.total_tokens or 0) }}</span>
 </div>
 
 <script>

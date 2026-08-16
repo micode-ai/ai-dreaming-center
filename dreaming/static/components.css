@@ -229,6 +229,11 @@
    these colours here, parallel to app.css's .muted / .faint */
 .text-brand-hover { color: var(--brand-hover); }
 .text-warn { color: var(--status-timeout); }
+.text-success { color: var(--status-success); }
+.text-running { color: var(--status-running); }
+.text-danger { color: var(--status-failed); }
+.text-cache { color: var(--cache-fg); }
+.text-cache-dim { color: var(--cache-fg-dim); }
 .bg-elevated { background: var(--bg-elevated); }
 .divider-b { border-bottom: 1px solid var(--border-subtle); }
 .divider-t { border-top: 1px solid var(--border-subtle); }
@@ -256,6 +261,38 @@
 .queue-item-default    { background: var(--bg-elevated);         color: var(--text-muted);     border: 1px solid var(--border-subtle); }
 .queue-item__status { opacity: 0.6; }
 .queue-item__error  { opacity: 0.85; }
+
+/* ============================================================
+   AI-usage dashboards (project_ai_usage.html / global_ai_usage.html):
+   preset/date-range tabs, weekly stat tiles, and a proportional-width
+   usage meter. No existing component covers these shapes without
+   restructuring the toolbar or adding an accent bar that was never
+   there, so they get their own small classes.
+   ============================================================ */
+
+/* Preset/date-range filter tab: a segmented control where each item
+   keeps its own border+background (unlike .pill-nav's shared frame),
+   matching the exact bg-card/border-subtle vs brand/brand-on pair the
+   original inline conditional used. */
+.filter-tab {
+  display: inline-flex; align-items: center;
+  padding: var(--space-1) var(--space-3); border-radius: var(--radius-lg);
+  font-size: var(--text-xs); font-weight: 500; white-space: nowrap;
+  background: var(--bg-card); color: var(--text-muted);
+  border: 1px solid var(--border-subtle); text-decoration: none;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.filter-tab.is-active { background: var(--brand); border-color: var(--brand); color: var(--brand-on); }
+
+/* Weekly learning-stat tile: flatter than .metric (no left accent bar,
+   no border, no shadow) -- the original was a plain bg-hover chip. */
+.stat-chip { background: var(--bg-hover); border-radius: var(--radius); padding: var(--space-3); }
+
+/* Proportional usage meter (top-projects token bar). The fill's
+   style="width: {{ ... }}%" stays inline -- it is dynamic per-row data.
+   Only its colour and height move here. */
+.meter-track { flex: 1 1 auto; height: 0.5rem; border-radius: var(--radius-pill); overflow: hidden; background: var(--bg-hover); }
+.meter-fill { height: 100%; background: var(--brand); }
 
 /* ---------- Modal dialog ---------- */
 dialog.note-modal {

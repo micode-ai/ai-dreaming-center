@@ -52,6 +52,12 @@
   --status-cancelled: #fb923c;   /* cancelled / stopped pills */
   --skill-fg: #d8b4fe;           /* skill badges under activity chips */
 
+  /* ---------- AI-usage dashboards: cache accent (Tailwind violet-400 /
+     violet-300, exact-preserved -- distinct hue from --skill-fg's purple-300,
+     so snapping to it would be a visible colour change, not scale reuse) --- */
+  --cache-fg: #a78bfa;      /* cache-read glyph; matches the Chart.js dataset colour */
+  --cache-fg-dim: #c4b5fd;  /* cache-hit % figure, one step lighter */
+
   /* ---------- Shadows ---------- */
   --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.35), 0 1px 3px 0 rgba(0, 0, 0, 0.25);
   --shadow-card-hover: 0 6px 18px -8px rgba(0, 0, 0, 0.55), 0 2px 4px rgba(0, 0, 0, 0.35);
