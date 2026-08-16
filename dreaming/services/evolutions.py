@@ -64,7 +64,7 @@ def list_evolutions(evolutions_dir: str) -> list[EvolutionItem]:
             agent_name=agent_name,
             title=fm.get("title") or f.stem,
             status=fm.get("status") or "active",
-            has_conflict=bool(fm.get("conflict")),
+            has_conflict=fm.get("conflict", "").strip().lower() in ("true", "1", "yes"),
             relative_path=rel,
             github_issue=(str(fm.get("github_issue") or "") or None),
             orchestration_run=(str(fm.get("orchestration_run") or "") or None),

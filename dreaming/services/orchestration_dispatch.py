@@ -43,6 +43,14 @@ questions during this run. Hard rules:
         -H "Content-Type: application/json" \\
         -d '{"status":"completed"}'
    On failure use `{"status":"failed","error_message":"..."}`.
+5. **Never destroy untracked files under `.claude/`.** Do NOT run
+   `git stash -u` / `git stash --include-untracked`, `git clean -fd`, or any
+   command that removes untracked files, when it would sweep away paths under
+   `.claude/agents/` (especially `_context/` and `learning-notes/`) — those are
+   self-study evolution proposals, not stray edits. If you must stash to get a
+   clean tree, stash tracked changes only (plain `git stash`, no `-u`), and
+   pop it back before finishing. If untracked files under `.claude/` are in
+   your way, leave them alone.
 
 Env: DREAMING_API_URL, DREAMING_PROJECT_SLUG, DREAMING_RUN_ID,
 LEARNING_SESSION_ID, LEARNING_AGENT_NAME are set.

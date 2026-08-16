@@ -1,0 +1,9 @@
+# AI Dreaming Center self-study output — evolution proposals (`_context/`) and
+# learning notes written by `/self-study` rotation sessions. Kept OUT of git on
+# purpose: they are local, ephemeral scratch that the Dreaming Center reads from
+# disk. Ignoring them also protects the files from being swept away by
+# orchestration agents running `git stash -u` / `git clean -fd`, which skip
+# git-ignored paths. Do NOT remove these entries without reading
+# docs on the evolutions flow first.
+_context/
+learning-notes/
