@@ -181,7 +181,9 @@ def main() -> int:
         for line in hex_bad:
             print("  " + line)
         failed = True
-    else:
+    elif COMPONENTS.exists():
+        # Only claim OK for a file actually read. Before Task 4 creates it,
+        # _hex_in_components has already printed its SKIP notice.
         print("OK components.css: no hex literals")
 
     utilities, inline = _scan_templates()
@@ -639,9 +641,6 @@ depend on them. Surfaces and borders are retuned toward visual direction A."
 
 .btn-sm { min-height: var(--control-h-sm); font-size: var(--text-sm); padding: 0 var(--space-2); }
 
-/* Forms are laid out inline all over the app; keep them from breaking button rows. */
-form.inline { display: inline; }
-
 /* ---------- Toolbar (search + reset + count above a table) ---------- */
 .toolbar { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-2); }
 .toolbar__spacer { flex: 1 1 auto; }
@@ -853,6 +852,7 @@ The shell establishes `.page-header` for all 32 templates that extend `_project_
 - Modify: `dreaming/templates/base.html` (flash banner, lines 54-60)
 - Modify: `dreaming/templates/_project_layout.html` (whole file)
 - Modify: `dreaming/templates/_sidebar.html`
+- Modify: `dreaming/static/app.css` (sidebar active-item colours → tokens, Step 4)
 
 **Interfaces:**
 - Consumes: `.banner`, `.page-header*` from Task 4.
@@ -910,6 +910,15 @@ Replace the whole file with:
 
 Apply the canonical replacement table from Global Constraints. The sidebar's own `.app-sidebar__*` classes stay — they live in `app.css` and are already tokenized. Only remove inline `style="…"` attributes and colour utilities, replacing each with the sidebar class that already covers it (or a `.btn`/`.badge` where the element is genuinely a button or badge).
 
+Then, in `dreaming/static/app.css`, replace the two hardcoded hexes in the sidebar's active-item rules with the tokens that already hold those values:
+
+```css
+.app-sidebar__nav-link.is-active { background: var(--brand-soft); color: var(--brand-fg); }
+.app-sidebar__nav-link.is-active svg { opacity: 1; color: var(--brand-hover); }
+```
+
+(`--brand-fg` is defined in Task 3 and this is its first consumer. `app.css` is not covered by the linter's no-hex rule, so this is a deliberate tidy-up in the task that already owns the shell, not a linter requirement.)
+
 - [ ] **Step 5: Verify**
 
 Run: `python scripts/check_css_tokens.py`
@@ -922,12 +931,15 @@ In a browser, open `http://localhost:8086/p/<slug>/` and check: the sidebar rend
 - [ ] **Step 6: Commit**
 
 ```bash
-git add dreaming/templates/base.html dreaming/templates/_project_layout.html dreaming/templates/_sidebar.html
+git add dreaming/templates/base.html dreaming/templates/_project_layout.html dreaming/templates/_sidebar.html dreaming/static/app.css
 git commit -m "refactor(design): migrate the shell to the component layer
 
 base.html flash banner -> .banner-info, _project_layout.html header ->
 .page-header, _sidebar.html off inline styles. Establishes the page-header
-shape the 32 templates extending _project_layout inherit."
+shape the 32 templates extending _project_layout inherit.
+
+app.css sidebar active-item colours move to --brand-fg / --brand-hover,
+removing the last hardcoded hexes from the shell."
 ```
 
 ---
@@ -982,7 +994,7 @@ so the markup is just `<div class="metric__value">{{ stats.success or 0 }}</div>
 - `<h2 class="font-semibold text-slate-900 mb-2">` → `<h2 class="section-title">` (both occurrences, lines 86 and 164).
 - The search/reset wrapper `<div class="mb-2 flex items-center gap-2">` → `<div class="toolbar">`; the reset button → `class="btn btn-sm"`.
 - `<table class="data-table" …>` → `<table class="data-table is-dense" …>` — this table is scanned, not read.
-- The `started_at` cell: `class="text-xs muted whitespace-nowrap"` → `class="num dim whitespace-nowrap"`; add `.dim { color: var(--text-muted); }` to `components.css`.
+- The `started_at` cell: `class="text-xs muted whitespace-nowrap"` → `class="num muted whitespace-nowrap"`. Reuse the existing `.muted` from `app.css` — do **not** add a second class with the same declaration.
 - The `log` link → `class="btn btn-sm"`; `Stop`/`Force-close` → `class="btn btn-sm btn-warn"`; `Delete` → `class="btn btn-sm btn-danger"`.
 - Leave every `data-*`, `data-confirm`, `action`, and `| t(…)` call byte-for-byte unchanged.
 
@@ -1012,8 +1024,9 @@ git add dreaming/templates/project_dashboard.html dreaming/static/components.css
 git commit -m "refactor(design): migrate project_dashboard.html to the component layer
 
 Fixes the light bg-amber-50 banners that rendered as white boxes on the dark
-app. Sessions table moves to is-dense with mono timestamps. Adds metric__value
-status colours and .dim to components.css so the template carries no colour."
+app. Sessions table moves to is-dense with mono timestamps. Adds the four
+metric__value status colours to components.css so the template carries no
+colour of its own."
 ```
 
 ---
@@ -1258,7 +1271,7 @@ Apply the canonical replacement table. Every table here is scanned, so all eight
 - `project_ideas.html` is a `table_tools` consumer (`data-ideas-*`) — preserve every data attribute.
 - `project_topics.html` contains `bg-amber-*` blocks — those become `.banner-warn` and are part of the known light-island bug.
 - Each page's `{% else %}` / no-rows branch becomes `.empty-state`.
-- `project_ideas.html` has uncommitted working-tree changes at the time of writing — rebase or reconcile before editing, do not clobber them.
+- `project_ideas.html` gained a `created` column (sortable date header, `YYYY-MM-DD` filter input, `data-created` row attribute) in commit `d01ea48`, which is already in this branch. Migrate that column like any other: the header keeps `data-sort-col="created" data-sort-type="date"`, the filter input keeps `data-filter-col="created"`, and the cell becomes `class="num muted"`.
 
 - [ ] **Step 3: Verify**
 
@@ -1485,7 +1498,7 @@ static inline styles across all 51 templates, down from 464 and 491."
 The `!important` overrides existed only to retro-fit a dark theme onto light-theme utilities. With zero such utilities left, they are dead weight — and while they remain, a new light utility would be silently absorbed instead of caught.
 
 **Files:**
-- Modify: `dreaming/static/app.css` (delete the compatibility block, currently lines 317-366)
+- Modify: `dreaming/static/app.css` (delete the compatibility block — find it by its comment anchor, not by line number: Tasks 3 and 4 remove ~90 lines above it)
 - Modify: `docs/superpowers/plans/2026-08-16-design-system-foundation.md` (tick the boxes)
 
 **Interfaces:**
@@ -1572,4 +1585,4 @@ All 51 templates are assigned exactly once: Task 5 (3), 6 (1), 7 (1), 8 (1), 9 (
 
 **Placeholder scan:** no TBD/TODO; every step names exact files, exact commands, and exact expected output. Migration tasks carry file-specific notes rather than "similar to Task N", and the shared replacement table lives in Global Constraints, which every task inherits by definition.
 
-**Type/name consistency:** class names used in Tasks 5–16 (`.page-header__title`, `.banner__body`, `.btn-warn`, `.card--flush`, `.list-rows`, `.num`, `.dim`, `.metric__value`, `.data-table.is-dense`, `.toolbar__count`, `.field-row`, `.empty-state__title`) all trace to definitions in Task 4 — except `.dim` and the four `.metric.metric-* .metric__value` rules, which Task 6 Steps 3 and 5 add explicitly to `components.css` as part of that task. Token names used in Task 4 all trace to Task 3.
+**Type/name consistency:** class names used in Tasks 5–16 (`.page-header__title`, `.banner__body`, `.btn-warn`, `.card--flush`, `.list-rows`, `.num`, `.metric__value`, `.data-table.is-dense`, `.toolbar__count`, `.field-row`, `.empty-state__title`) all trace to definitions in Task 4 — except the four `.metric.metric-* .metric__value` rules, which Task 6 Step 3 adds explicitly to `components.css` as part of that task. `.muted` predates this wave and lives in `app.css`. Token names used in Task 4 all trace to Task 3.
