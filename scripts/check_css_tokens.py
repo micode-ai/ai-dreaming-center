@@ -106,13 +106,37 @@ TW_VARIANTS = (
     "odd:", "even:", "print:", "motion-safe:", "motion-reduce:",
 )
 
+STYLE_BLOCK = re.compile(r"<style\b[^>]*>(.*?)</style>", re.DOTALL | re.IGNORECASE)
+
+SCRIPT_BLOCK = re.compile(r"<script\b[^>]*>(.*?)</script>", re.DOTALL | re.IGNORECASE)
+STATIC = ROOT / "dreaming" / "static"
+
 
 def _defined_classes() -> set[str]:
     names: set[str] = set()
     for path in CSS_SOURCES:
         if path.exists():
             names |= set(CLASS_DEF.findall(path.read_text(encoding="utf-8")))
+    # Templates may carry their own <style> blocks; those are real definitions.
+    for tpl in TEMPLATES.rglob("*.html"):
+        for block in STYLE_BLOCK.findall(tpl.read_text(encoding="utf-8")):
+            names |= set(CLASS_DEF.findall(block))
     return names
+
+
+def _js_referenced() -> str:
+    """Everything JavaScript in this project, concatenated.
+
+    A class whose only job is to be found by querySelector is correct code, not
+    a missing rule. Matching against this blob is deliberately crude: a false
+    positive costs nothing, while a false negative would flag working code.
+    """
+    parts: list[str] = []
+    for tpl in TEMPLATES.rglob("*.html"):
+        parts.extend(SCRIPT_BLOCK.findall(tpl.read_text(encoding="utf-8")))
+    for js in STATIC.glob("*.js"):
+        parts.append(js.read_text(encoding="utf-8"))
+    return "\n".join(parts)
 
 
 def _is_tailwind(token: str) -> bool:
@@ -126,7 +150,7 @@ def _is_tailwind(token: str) -> bool:
     return head in TW_ROOTS
 
 
-def _undefined_classes(defined: set[str]) -> dict[str, set[str]]:
+def _undefined_classes(defined: set[str], js_blob: str) -> dict[str, set[str]]:
     offenders: dict[str, set[str]] = {}
     for tpl in sorted(TEMPLATES.rglob("*.html")):
         rel = tpl.relative_to(TEMPLATES).as_posix()
@@ -135,6 +159,8 @@ def _undefined_classes(defined: set[str]) -> dict[str, set[str]]:
                 continue  # class list is built by Jinja; not statically knowable
             for token in attr.split():
                 if token in defined or _is_tailwind(token):
+                    continue
+                if re.search(rf"\b{re.escape(token)}\b", js_blob):
                     continue
                 offenders.setdefault(rel, set()).add(token)
     return offenders
@@ -198,7 +224,7 @@ def main() -> int:
     if _report("Static inline style= in templates", inline):
         failed = True
 
-    undefined = _undefined_classes(_defined_classes())
+    undefined = _undefined_classes(_defined_classes(), _js_referenced())
     if undefined:
         total = sum(len(v) for v in undefined.values())
         print(f"Classes referenced but never defined: {total}")
