@@ -1281,6 +1281,161 @@ kept as-is; only their colour and height moved into component classes."
 
 ---
 
+### Task 9A: Teach the linter to catch undefined classes — added mid-wave
+
+**Why this task exists.** Task 9 shipped nine references to a `.strong` class that was never defined. Every verification passed: the colour check saw no palette utility, the compile check saw valid Jinja, the preservation check saw the attributes survive. **A class name is just a string to all three.** With eight migration tasks left, each free to invent component classes, this gap will recur — and it fails silently, which is the worst way to fail.
+
+**Files:**
+- Modify: `scripts/check_css_tokens.py`
+
+**Interfaces:**
+- Consumes: nothing new.
+- Produces: a fourth assertion in the same CLI. Tasks 10-16 gain a check that catches a class they reference but forget to define.
+
+- [ ] **Step 1: Add the assertion**
+
+Append to `scripts/check_css_tokens.py`. The rule: a class token in a template must either be defined in this project's own CSS, or be Tailwind-shaped. Anything else is very likely a class someone meant to write and did not.
+
+```python
+# ---------------------------------------------------------------- assertion 4
+# Every class a template references must be defined in this project's CSS or be
+# a Tailwind utility. The wave's own failure mode was nine references to a
+# `.strong` that existed nowhere: the colour check passed (no palette utility),
+# the compile check passed (valid Jinja), the preservation check passed
+# (attributes survived). A class name is just a string to all of them.
+
+CSS_SOURCES = [
+    ROOT / "dreaming" / "static" / "app.css",
+    ROOT / "dreaming" / "static" / "components.css",
+    ROOT / "dreaming" / "static" / "table_tools.css",
+    ROOT / "dreaming" / "static" / "orchestration_swimlane.css",
+]
+
+CLASS_ATTR = re.compile(r'class\s*=\s*"([^"]*)"')
+CLASS_DEF = re.compile(r"\.(-?[A-Za-z_][\w-]*)")
+
+# Tailwind utilities that stand alone, with no value suffix.
+TW_EXACT = {
+    "flex", "grid", "block", "inline", "inline-block", "inline-flex", "hidden",
+    "table", "contents", "relative", "absolute", "fixed", "sticky", "static",
+    "truncate", "italic", "underline", "uppercase", "lowercase", "capitalize",
+    "container", "border", "rounded", "shadow", "ring", "outline", "transition",
+    "transform", "resize", "invisible", "visible", "antialiased", "sr-only",
+    "overflow-auto", "overflow-hidden", "overflow-x-auto", "overflow-y-auto",
+}
+
+# Roots Tailwind owns; a token is Tailwind-shaped if it starts with one of
+# these followed by "-".
+TW_ROOTS = (
+    "p", "px", "py", "pt", "pb", "pl", "pr", "m", "mx", "my", "mt", "mb", "ml",
+    "mr", "w", "h", "min", "max", "text", "bg", "border", "rounded", "shadow",
+    "gap", "space", "grid", "col", "row", "items", "justify", "self", "place",
+    "flex", "order", "opacity", "z", "top", "bottom", "left", "right", "inset",
+    "overflow", "whitespace", "break", "font", "leading", "tracking", "list",
+    "divide", "ring", "cursor", "select", "transition", "duration", "ease",
+    "translate", "scale", "rotate", "animate", "aspect", "object", "align",
+    "from", "to", "via", "fill", "stroke", "backdrop", "filter", "blur",
+)
+
+TW_VARIANTS = (
+    "sm:", "md:", "lg:", "xl:", "2xl:", "hover:", "focus:", "focus-visible:",
+    "active:", "disabled:", "group-hover:", "dark:", "first:", "last:",
+    "odd:", "even:", "print:", "motion-safe:", "motion-reduce:",
+)
+
+
+def _defined_classes() -> set[str]:
+    names: set[str] = set()
+    for path in CSS_SOURCES:
+        if path.exists():
+            names |= set(CLASS_DEF.findall(path.read_text(encoding="utf-8")))
+    return names
+
+
+def _is_tailwind(token: str) -> bool:
+    for variant in TW_VARIANTS:
+        if token.startswith(variant):
+            token = token[len(variant):]
+            break
+    if token in TW_EXACT:
+        return True
+    head = token.split("-", 1)[0]
+    return head in TW_ROOTS
+
+
+def _undefined_classes(defined: set[str]) -> dict[str, set[str]]:
+    offenders: dict[str, set[str]] = {}
+    for tpl in sorted(TEMPLATES.rglob("*.html")):
+        rel = tpl.relative_to(TEMPLATES).as_posix()
+        for attr in CLASS_ATTR.findall(tpl.read_text(encoding="utf-8")):
+            if "{{" in attr or "{%" in attr:
+                continue  # class list is built by Jinja; not statically knowable
+            for token in attr.split():
+                if token in defined or _is_tailwind(token):
+                    continue
+                offenders.setdefault(rel, set()).add(token)
+    return offenders
+```
+
+Wire it into `main()` after the inline-style report, before the final verdict:
+
+```python
+    undefined = _undefined_classes(_defined_classes())
+    if undefined:
+        total = sum(len(v) for v in undefined.values())
+        print(f"Classes referenced but never defined: {total}")
+        for name, tokens in sorted(undefined.items()):
+            print(f"  {name}: {', '.join(sorted(tokens))}")
+        failed = True
+    else:
+        print("OK every referenced class is defined or a Tailwind utility")
+```
+
+- [ ] **Step 2: Prove it catches the real bug**
+
+Temporarily remove the `.strong` rule from `app.css`, run the linter, confirm it names `.strong` in both AI-usage templates, then restore it:
+
+```bash
+python -c "import pathlib; p=pathlib.Path('dreaming/static/app.css'); t=p.read_text(encoding='utf-8'); p.write_text(t.replace('.strong { color: var(--text-strong); }\n', ''), encoding='utf-8')"
+python scripts/check_css_tokens.py
+git checkout -- dreaming/static/app.css
+```
+
+Expected: the middle command lists `strong` under both `project_ai_usage.html` and `global_ai_usage.html`. **A check that cannot fail is not a check** — if it stays silent, the wiring is wrong.
+
+- [ ] **Step 3: Run it against the real tree and triage**
+
+```bash
+python scripts/check_css_tokens.py
+```
+
+The colour and inline-style totals must be unchanged at **356 / 250** — this task touches no template or stylesheet.
+
+The new assertion will very likely report tokens on unmigrated templates. **Read every one before deciding what to do.** Two outcomes are legitimate:
+
+- A genuinely undefined class → a real bug this check was built to find. Report it; do not fix it here, since unmigrated templates belong to later tasks.
+- A Tailwind utility whose root is missing from `TW_ROOTS`, or a standalone utility missing from `TW_EXACT` → widen the list and re-run.
+
+Do **not** widen the lists to silence a token you have not identified. The whole value of this check is that it fails loudly on the unknown; an over-broad allowlist turns it back into the silence it was built to replace. List every token you allowlisted and why.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add scripts/check_css_tokens.py
+git commit -m "chore(design): fail when a template references an undefined class
+
+Task 9 shipped nine references to a .strong that existed in no stylesheet.
+The colour check saw no palette utility, the compile check saw valid Jinja, and
+the preservation check saw the attributes survive -- a class name is just a
+string to all three, so the emphasis silently vanished.
+
+A class token now has to be defined in this project's own CSS or be
+Tailwind-shaped. Jinja-built class lists are skipped, being unknowable
+statically."
+```
+
+---
+
 ### Task 10: Migrate review, kanban, and the loop-template view
 
 **Files:**
