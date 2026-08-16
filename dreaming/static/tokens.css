@@ -1,0 +1,94 @@
+/* ============================================================
+   tokens.css — the single source of truth for how the app looks.
+   ONLY :root lives here. No selectors, no components, no rules.
+   Changing the app's visual direction means editing this file
+   and nothing else.
+   ============================================================ */
+
+:root {
+  /* ---------- Surfaces (retuned: direction A) ---------- */
+  --bg-app: #0a0e17;
+  --bg-card: #10151f;
+  --bg-sidebar: #080b12;
+  --bg-elevated: #141a26;
+  --bg-hover: #161c28;
+
+  /* ---------- Borders (quieter than before) ---------- */
+  --border-subtle: #1d2534;
+  --border-muted: #2a3444;
+
+  /* ---------- Text ---------- */
+  --text-strong: #f1f5f9;
+  --text-body: #dbe3ec;
+  --text-muted: #8b9bb0;
+  --text-faint: #5f6e83;
+
+  /* ---------- Brand ---------- */
+  --brand: #6366f1;
+  --brand-hover: #818cf8;
+  --brand-soft: rgba(99, 102, 241, 0.14);
+  --brand-strong: #4f46e5;
+  --brand-fg: #c7d2fe;   /* text/icon on --brand-soft */
+  --brand-on: #ffffff;   /* text on solid --brand */
+
+  /* ---------- Status: text / soft background / border ---------- */
+  --status-success: #4ade80;
+  --status-success-soft: rgba(34, 197, 94, 0.18);
+  --status-success-border: rgba(34, 197, 94, 0.35);
+  --status-failed: #f87171;
+  --status-failed-soft: rgba(239, 68, 68, 0.14);
+  --status-failed-strong: rgba(239, 68, 68, 0.24);
+  --status-failed-border: rgba(239, 68, 68, 0.35);
+  --status-timeout: #fbbf24;
+  --status-timeout-soft: rgba(245, 158, 11, 0.14);
+  --status-timeout-strong: rgba(245, 158, 11, 0.24);
+  --status-timeout-border: rgba(245, 158, 11, 0.35);
+  --status-running: #60a5fa;
+  --status-running-soft: rgba(59, 130, 246, 0.16);
+  --status-running-border: rgba(59, 130, 246, 0.35);
+  --status-live: #34d399;
+  --status-live-soft: rgba(16, 185, 129, 0.18);
+
+  /* ---------- Shadows ---------- */
+  --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.35), 0 1px 3px 0 rgba(0, 0, 0, 0.25);
+  --shadow-card-hover: 0 6px 18px -8px rgba(0, 0, 0, 0.55), 0 2px 4px rgba(0, 0, 0, 0.35);
+  --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+  --ring: 0 0 0 2px var(--brand-soft), 0 0 0 4px var(--brand);
+
+  /* ---------- Spacing scale (one ramp, no more mb-5 next to mb-6) ---------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
+  /* ---------- Radii ---------- */
+  --radius-sm: 0.4375rem;
+  --radius: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-pill: 9999px;
+
+  /* ---------- Typography ---------- */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --text-xs: 0.6875rem;
+  --text-sm: 0.75rem;
+  --text-base: 0.8125rem;
+  --text-md: 0.875rem;
+  --text-lg: 1rem;
+  --text-h2: 1.0625rem;
+  --text-h1: 1.375rem;
+
+  /* ---------- Table density (direction B for scanned tables) ---------- */
+  --row-pad-y: 0.6rem;
+  --row-pad-x: 0.75rem;
+  --row-font: 0.8125rem;
+  --row-pad-y-dense: 0.35rem;
+  --row-pad-x-dense: 0.6rem;
+  --row-font-dense: 0.78125rem;
+
+  /* ---------- Controls ---------- */
+  --control-h: 2rem;
+  --control-h-sm: 1.625rem;
+}
