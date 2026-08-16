@@ -58,7 +58,7 @@
   <tbody>
   {% for mod, n in by_module %}
   <tr data-filter-row>
-    <td class="font-mono text-xs">
+    <td class="num">
       {% if mod and mod != '—' %}
       <a class="text-brand-hover hover:underline" href="/p/{{ project.slug }}/findings?module={{ mod | urlencode }}">{{ mod }}</a>
       {% else %}{{ mod }}{% endif %}

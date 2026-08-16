@@ -321,6 +321,13 @@
    Only its colour and height move here. */
 .meter-track { flex: 1 1 auto; height: 0.5rem; border-radius: var(--radius-pill); overflow: hidden; background: var(--bg-hover); }
 .meter-fill { height: 100%; background: var(--brand); }
+/* .is-fixed: project_plans.html's done/todo ratio bar has a fixed w-32
+   width (set by the template) rather than flex-growing to fill a toolbar
+   row -- .is-success recolours the fill for that same "done" ratio bar
+   (was bg-green-500). Modifiers on the one meter primitive rather than a
+   second track/fill pair. */
+.meter-track.is-fixed { flex: none; }
+.meter-fill.is-success { background: var(--status-success); }
 
 /* ============================================================
    Kanban plan board (project_kanban.html): the recessed column well,
@@ -368,15 +375,6 @@
 .rubric-tile-review     .rubric-tile__value { color: var(--status-timeout); }
 .rubric-tile-reject     .rubric-tile__value { color: var(--status-failed); }
 .rubric-tile-incomplete .rubric-tile__value { color: var(--text-muted); }
-
-/* ============================================================
-   Plan progress bar (project_plans.html's done/todo ratio): a bounded-
-   width meter, distinct from .meter-track (Task 9), which flex-grows to
-   fill a toolbar row. This one must NOT carry flex, so the template's own
-   w-32 utility sizes it directly.
-   ============================================================ */
-.progress-track { height: 0.5rem; border-radius: var(--radius-pill); overflow: hidden; background: var(--bg-hover); }
-.progress-fill { height: 100%; background: var(--status-success); }
 
 /* ============================================================
    Detail views (Task 13): project_wiki_health.html's chart card and

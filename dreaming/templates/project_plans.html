@@ -54,8 +54,8 @@
     </td>
     <td>
       <div class="flex items-center gap-2">
-        <div class="progress-track w-32">
-          <div class="progress-fill" style="width:{{ it.progress_pct }}%"></div>
+        <div class="meter-track is-fixed w-32">
+          <div class="meter-fill is-success" style="width:{{ it.progress_pct }}%"></div>
         </div>
         <span class="text-xs muted">{{ it.done }}/{{ it.done + it.todo }}</span>
       </div>

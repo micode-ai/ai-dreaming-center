@@ -58,8 +58,8 @@
     <span class="font-bold ml-1">{{ item.done }}/{{ item.done + item.todo }}</span>
     ({{ item.progress_pct }}%)
   </p>
-  <div class="progress-track mt-1">
-    <div class="progress-fill" style="width:{{ item.progress_pct }}%"></div>
+  <div class="meter-track is-fixed mt-1">
+    <div class="meter-fill is-success" style="width:{{ item.progress_pct }}%"></div>
   </div>
 </div>
 

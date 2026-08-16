@@ -39,7 +39,7 @@
   <tr data-filter-row
       data-status="{{ it.status or 'draft' }}"
       data-review="{{ (it.last_review_at or '')[:10] }}">
-    <td class="font-mono text-xs">
+    <td class="num">
       <a class="text-brand-hover underline" href="/p/{{ project.slug }}/contracts/view?path={{ it.relative_path | urlencode }}">{{ it.name }}</a>
     </td>
     <td class="text-xs">{{ it.kind }}</td>
