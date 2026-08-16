@@ -912,12 +912,12 @@ Replace the whole file with:
 ```html
 {% extends "base.html" %}
 {% block content %}
-<div class="page-header">
+<header class="page-header">
   <div class="page-header__titles">
     <h1 class="page-header__title">{{ project.label }}</h1>
     <span class="page-header__slug">{{ project.slug }}</span>
   </div>
-</div>
+</header>
 {% block project_content %}{% endblock %}
 {% endblock %}
 ```
@@ -926,14 +926,26 @@ Replace the whole file with:
 
 Apply the canonical replacement table from Global Constraints. The sidebar's own `.app-sidebar__*` classes stay — they live in `app.css` and are already tokenized. Only remove inline `style="…"` attributes and colour utilities, replacing each with the sidebar class that already covers it (or a `.btn`/`.badge` where the element is genuinely a button or badge).
 
-Then, in `dreaming/static/app.css`, replace the two hardcoded hexes in the sidebar's active-item rules with the tokens that already hold those values:
+Then, in `dreaming/static/app.css`, replace the two hardcoded hexes in the sidebar's active-item rules with tokens. `--brand-fg` (`#c7d2fe`, Task 3) already holds the text colour exactly. The icon colour `#a5b4fc` has **no** existing token — add one to `tokens.css` in the Brand group rather than reaching for `--brand-hover`, which is `#818cf8` and visibly darker:
+
+```css
+  --brand-fg-dim: #a5b4fc;   /* active icon: one step down from --brand-fg */
+```
 
 ```css
 .app-sidebar__nav-link.is-active { background: var(--brand-soft); color: var(--brand-fg); }
-.app-sidebar__nav-link.is-active svg { opacity: 1; color: var(--brand-hover); }
+.app-sidebar__nav-link.is-active svg { opacity: 1; color: var(--brand-fg-dim); }
 ```
 
-(`--brand-fg` is defined in Task 3 and this is its first consumer. `app.css` is not covered by the linter's no-hex rule, so this is a deliberate tidy-up in the task that already owns the shell, not a linter requirement.)
+Also add a `.faint` utility next to the existing `.muted` in `app.css`, since migration keeps meeting text that was `--text-faint` and there is no class for it:
+
+```css
+.faint { color: var(--text-faint); }
+```
+
+Use it for the sidebar's "pick a project" hint, which is `--text-faint` today — `.muted` is a different, lighter grey and would drift the colour.
+
+(`app.css` is not covered by the linter's no-hex rule, so this is a deliberate tidy-up in the task that already owns the shell, not a linter requirement.)
 
 - [ ] **Step 5: Verify**
 
@@ -942,7 +954,9 @@ Expected: `base.html`, `_project_layout.html`, `_sidebar.html` no longer appear 
 
 Run: `python scripts/smoke_templates_render.py` — expected exit 0.
 
-In a browser, open `http://localhost:8086/p/<slug>/` and check: the sidebar renders with its icons and active-item highlight, the project title and slug sit on one baseline, and a flash message (trigger one by saving a setting) renders as a dark indigo banner, not a light box.
+In a browser, open `http://localhost:8086/p/<slug>/` and check: the sidebar renders with its icons and active-item highlight, and the project title and slug sit on one baseline.
+
+**Do not try to verify the flash banner here.** `base.html`'s `{% if flash %}` block is unreachable: `dreaming/lib/flash.py` sets a cookie, `read_flash` is called by nothing, no route puts `flash` in a template context, and `main.py` registers no context processor. Flash messages are consumed entirely client-side by `_app_modal.html`. The block is migrated for consistency, not because it renders. Its `.banner-info` styling is blue rather than the brand indigo the original markup used — correct for the class, whose real consumers from Task 6 onward are the `bg-sky-50` informational banners, and moot for a block that cannot render.
 
 - [ ] **Step 6: Commit**
 
