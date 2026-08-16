@@ -3,11 +3,11 @@
 {% block project_content %}
 <link rel="stylesheet" href="/static/orchestration_swimlane.css?v=node-skills-1">
 {% if bulk_queue %}
-<div class="mb-3 p-3 rounded-lg text-sm"
-     style="background: rgba(99,102,241,0.08); border:1px solid rgba(99,102,241,0.35);">
+<div class="banner banner-brand">
+  <div class="banner__body">
   <div class="flex items-center justify-between gap-3 mb-2">
     <div class="flex items-center gap-2 flex-wrap">
-      <span class="text-xs font-semibold uppercase tracking-wider" style="color: var(--brand-hover);">{{ "bulk.queue.title" | t(locale=locale) }}</span>
+      <span class="text-xs font-semibold uppercase tracking-wider text-brand-hover">{{ "bulk.queue.title" | t(locale=locale) }}</span>
       {% if bulk_pending > 0 %}
       <span class="badge badge-running"><span class="dot dot-pulse"></span>{{ "bulk.queue.pending" | t(locale=locale, n=bulk_pending) }}</span>
       {% else %}
@@ -32,92 +32,86 @@
     <div class="flex items-center gap-2">
       {% if bulk_pending > 0 and not bulk_diag.dispatching %}
       <form method="post" action="/p/{{ project.slug }}/bulk/kick" class="inline">
-        <button class="text-xs px-2 py-1 border border-amber-400 rounded text-amber-700 hover:bg-amber-50">{{ "bulk.queue.kick" | t(locale=locale) }}</button>
+        <button class="btn btn-sm btn-warn">{{ "bulk.queue.kick" | t(locale=locale) }}</button>
       </form>
       {% endif %}
       {% if bulk_failed > 0 %}
       <form method="post" action="/p/{{ project.slug }}/bulk/retry-failed" class="inline">
-        <button class="text-xs px-2 py-1 border border-blue-400 rounded text-blue-700 hover:bg-blue-50">{{ "bulk.queue.retry" | t(locale=locale, n=bulk_failed) }}</button>
+        <button class="btn btn-sm">{{ "bulk.queue.retry" | t(locale=locale, n=bulk_failed) }}</button>
       </form>
       <form method="post" action="/p/{{ project.slug }}/bulk/retry-failed" class="inline"
             data-confirm="{{ 'bulk.queue.retry_force_confirm' | t(locale=locale) }}"
             data-confirm-variant="danger"
             data-confirm-ok-label="{{ 'bulk.queue.retry_force_ok' | t(locale=locale) }}">
         <input type="hidden" name="force" value="1">
-        <button class="text-xs px-2 py-1 border border-red-400 rounded text-red-700 hover:bg-red-50">{{ "bulk.queue.retry_force" | t(locale=locale, n=bulk_failed) }}</button>
+        <button class="btn btn-sm btn-danger">{{ "bulk.queue.retry_force" | t(locale=locale, n=bulk_failed) }}</button>
       </form>
       {% endif %}
       {% if bulk_queue and bulk_pending == 0 and bulk_failed == 0 %}
       <form method="post" action="/p/{{ project.slug }}/bulk/clear" class="inline">
-        <button class="text-xs px-2 py-1 border border-slate-400 rounded text-slate-600 hover:bg-slate-100">{{ "bulk.queue.dismiss" | t(locale=locale) }}</button>
+        <button class="btn btn-sm">{{ "bulk.queue.dismiss" | t(locale=locale) }}</button>
       </form>
       {% elif bulk_queue %}
       {% set has_done = bulk_diag.dispatched > 0 or bulk_failed > 0 %}
       {% if has_done %}
       <form method="post" action="/p/{{ project.slug }}/bulk/clear" class="inline">
         <input type="hidden" name="only" value="done">
-        <button class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">{{ "bulk.queue.dismiss_done" | t(locale=locale) }}</button>
+        <button class="btn btn-sm">{{ "bulk.queue.dismiss_done" | t(locale=locale) }}</button>
       </form>
       {% endif %}
       <form method="post" action="/p/{{ project.slug }}/bulk/clear"
             data-confirm="{{ 'bulk.queue.clear_confirm' | t(locale=locale) }}"
             data-confirm-variant="danger"
             data-confirm-ok-label="{{ 'bulk.queue.clear_ok' | t(locale=locale) }}">
-        <button class="text-xs px-2 py-1 border border-slate-400 rounded text-slate-600 hover:bg-slate-100">{{ "bulk.queue.clear" | t(locale=locale) }}</button>
+        <button class="btn btn-sm">{{ "bulk.queue.clear" | t(locale=locale) }}</button>
       </form>
       {% endif %}
     </div>
   </div>
   <div class="flex flex-col gap-1.5">
     {% for it in bulk_queue %}
-    <div class="text-xs font-mono px-2 py-1 rounded flex items-baseline gap-2"
-          {% if it.status == 'pending' %}style="background: rgba(245,158,11,0.10); color: var(--status-timeout); border:1px solid rgba(245,158,11,0.35);"
-          {% elif it.status == 'dispatched' %}style="background: rgba(52,211,153,0.10); color: #059669; border:1px solid rgba(52,211,153,0.35);"
-          {% elif it.status == 'failed' %}style="background: rgba(248,113,113,0.10); color: #b91c1c; border:1px solid rgba(248,113,113,0.35);"
-          {% else %}style="background: var(--bg-elevated); color: var(--text-muted); border:1px solid var(--border-subtle);"
-          {% endif %}>
+    <div class="queue-item{% if it.status == 'pending' %} queue-item-pending{% elif it.status == 'dispatched' %} queue-item-dispatched{% elif it.status == 'failed' %} queue-item-failed{% else %} queue-item-default{% endif %}">
       <span>{% if it.kind == 'finding' %}🐛{% elif it.kind == 'idea' %}💡{% elif it.kind == 'evolution' %}🧬{% endif %}</span>
-      <span class="truncate" style="max-width: 22rem;" title="{{ it.identifier }}">
+      <span class="truncate max-w-[22rem]" title="{{ it.identifier }}">
         {% if it.run_id %}<a class="underline" href="/p/{{ project.slug }}/orchestration?run_id={{ it.run_id }}">{{ it.identifier }}</a>{% else %}{{ it.identifier }}{% endif %}
       </span>
-      <span style="opacity:.6;">· {{ it.status }}</span>
-      {% if it.error %}<span class="truncate flex-1" style="opacity:.85;" title="{{ it.error }}">— {{ it.error }}</span>{% endif %}
+      <span class="queue-item__status">· {{ it.status }}</span>
+      {% if it.error %}<span class="truncate flex-1 queue-item__error" title="{{ it.error }}">— {{ it.error }}</span>{% endif %}
     </div>
     {% endfor %}
+  </div>
   </div>
 </div>
 {% endif %}
 {% if stale_running %}
-<div class="mb-3 p-3 rounded-lg flex items-center justify-between text-sm"
-     style="background: rgba(245, 158, 11, 0.10); border:1px solid rgba(245, 158, 11, 0.35); color: var(--status-timeout);">
-  <span>
+<div class="banner banner-warn-dim banner--inline justify-between">
+  <span class="text-warn">
     {{ "orchestration.stale_warning" | t(locale=locale, n=stale_running, code='<code>running</code>', plural=("s" if stale_running != 1 else "")) | safe }}
   </span>
   <form method="post" action="/p/{{ project.slug }}/orchestration/force-close-stale"
         data-confirm="Mark all running orchestration runs for this project as cancelled?" data-confirm-variant="danger">
-    <button class="text-xs rounded px-3 py-1" style="background: var(--status-timeout); color: #1a1004;">
+    <button class="btn btn-warn">
       Force-close all stale
     </button>
   </form>
 </div>
 {% endif %}
 
-<div class="grid gap-3" style="grid-template-columns: 17rem 1fr 21rem;">
+<div class="grid gap-3 grid-cols-[17rem_1fr_21rem]">
   <!-- LEFT: runs sidebar -->
-  <aside class="rounded-lg overflow-hidden flex flex-col" style="background: var(--bg-card); border:1px solid var(--border-subtle); max-height: 78vh;">
-    <div class="px-3 py-2.5 flex items-center justify-between" style="border-bottom:1px solid var(--border-subtle);">
-      <span class="text-xs font-semibold uppercase tracking-wider" style="color: var(--text-faint);">{{ "orchestration.runs_title" | t(locale=locale) }}</span>
+  <aside class="card card--flush flex flex-col max-h-[78vh]">
+    <div class="px-3 py-2.5 flex items-center justify-between divider-b">
+      <span class="text-xs font-semibold uppercase tracking-wider faint">{{ "orchestration.runs_title" | t(locale=locale) }}</span>
       <button type="button" onclick="document.getElementById('orch-goal').focus(); document.getElementById('start-form').scrollIntoView({behavior:'smooth', block:'nearest'});"
-              class="text-xs rounded px-2.5 py-1" style="background: var(--brand); color:#fff;">{{ "orchestration.new_chat" | t(locale=locale) }}</button>
+              class="btn btn-sm btn-primary">{{ "orchestration.new_chat" | t(locale=locale) }}</button>
     </div>
     <div class="flex-1 overflow-y-auto" id="runs-list">
       {% for r in runs %}
       <a href="/p/{{ project.slug }}/orchestration?run_id={{ r.id }}"
          {% if r.id == selected_run_id %}id="run-link-selected"{% endif %}
-         class="block px-3 py-2.5 transition-colors{% if r.id == selected_run_id %} is-selected{% endif %}"
-         style="border-bottom:1px solid var(--border-subtle);{% if r.id == selected_run_id %} background: rgba(99,102,241,0.10);{% endif %}">
+         class="run-row block px-3 py-2.5 transition-colors{% if r.id == selected_run_id %} is-selected{% endif %}">
         <div class="flex items-center justify-between gap-2 mb-1">
-          <code class="font-mono text-xs truncate" style="color: var(--text-muted);">{{ r.id[:8] }}</code>
+          <code class="text-xs truncate num muted">{{ r.id[:8] }}</code>
           {% if r.status == 'running' %}
             <span class="badge badge-running"><span class="dot dot-pulse"></span>running</span>
           {% elif r.status == 'completed' %}
@@ -130,11 +124,11 @@
             <span class="badge badge-neutral">{{ r.status }}</span>
           {% endif %}
         </div>
-        <div class="text-xs leading-tight line-clamp-2" style="color: var(--text-body);">{{ (r.goal or '')[:120] }}</div>
-        <div class="text-[11px] mt-1 font-mono" style="color: var(--text-faint);">{{ (r.started_at or '')[:19] }}</div>
+        <div class="text-xs leading-tight line-clamp-2">{{ (r.goal or '')[:120] }}</div>
+        <div class="text-[11px] mt-1 num faint">{{ (r.started_at or '')[:19] }}</div>
       </a>
       {% else %}
-      <div class="px-3 py-6 text-center text-sm" style="color: var(--text-faint);">{{ "orchestration.no_dialogs" | t(locale=locale) }}</div>
+      <div class="px-3 py-6 text-center text-sm faint">{{ "orchestration.no_dialogs" | t(locale=locale) }}</div>
       {% endfor %}
     </div>
   </aside>
@@ -160,8 +154,7 @@
   {% endif %}
 
   <!-- CENTER: runs canvas -->
-  <section class="rounded-lg flex flex-col"
-           style="background: var(--bg-card); border:1px solid var(--border-subtle); min-height: 78vh; padding: 16px; overflow-y: auto;">
+  <section class="card flex flex-col min-h-[78vh] overflow-y-auto">
     {% if selected_run %}
     <div id="orch-detail"
          data-slug="{{ project.slug }}"
@@ -171,15 +164,15 @@
          data-node-count="{{ selected_nodes|length }}">
       <header class="mb-3 flex items-start justify-between gap-3 flex-wrap">
         <div class="min-w-0 flex-1">
-          <div class="text-xs flex items-center gap-2 flex-wrap" style="color: var(--text-faint);">
-            <span class="font-mono">{{ selected_run.id[:8] }}…</span>
+          <div class="text-xs flex items-center gap-2 flex-wrap faint">
+            <span class="num">{{ selected_run.id[:8] }}…</span>
             <span id="run-status" class="status-pill status-{{ selected_run.status }}">{{ selected_run.status }}</span>
             <span>started {{ (selected_run.started_at or '')[:19] }}</span>
             {% if selected_run.finished_at %}<span>· finished {{ (selected_run.finished_at or '')[:19] }}</span>{% endif %}
           </div>
           <details class="mt-2">
-            <summary class="text-xs cursor-pointer" style="color: var(--text-muted);">{{ "orchestration.goal_label" | t(locale=locale) }} ({{ (selected_run.goal or '')|length }} ch)</summary>
-            <pre class="text-xs whitespace-pre-wrap mt-1 p-2 rounded" style="background: var(--bg-elevated); color: var(--text-body); max-height: 12rem; overflow-y: auto;">{{ selected_run.goal }}</pre>
+            <summary class="text-xs cursor-pointer muted">{{ "orchestration.goal_label" | t(locale=locale) }} ({{ (selected_run.goal or '')|length }} ch)</summary>
+            <pre class="text-xs whitespace-pre-wrap mt-1 p-2 goal-preview bg-elevated">{{ selected_run.goal }}</pre>
           </details>
         </div>
         <span id="sse-indicator" class="sse-indicator polling" title="{{ 'orchestration.sse_status' | t(locale=locale) }}">…</span>
@@ -188,23 +181,23 @@
       <div class="flex gap-2 flex-wrap mb-3">
         {% if selected_run.status == 'running' %}
         <form method="post" action="/p/{{ project.slug }}/orchestration/{{ selected_run.id }}/finish" class="inline">
-          <button class="text-xs px-3 py-1 rounded" style="background: var(--brand); color: #fff;">{{ "orchestration.mark_completed" | t(locale=locale) }}</button>
+          <button class="btn btn-primary">{{ "orchestration.mark_completed" | t(locale=locale) }}</button>
         </form>
         {% else %}
           {% if selected_run.external_id %}
           <form method="post" action="/p/{{ project.slug }}/orchestration/{{ selected_run.id }}/resume" class="inline flex gap-2">
             <input name="prompt" placeholder="{{ 'orchestration.prompt_placeholder' | t(locale=locale) }}" class="border rounded p-1 text-xs w-48">
-            <button class="text-xs px-3 py-1 rounded" style="background: var(--brand); color: #fff;">{{ "orchestration.resume" | t(locale=locale) }}</button>
+            <button class="btn btn-primary">{{ "orchestration.resume" | t(locale=locale) }}</button>
           </form>
           {% endif %}
         {% endif %}
-        <a class="text-xs px-3 py-1 rounded" style="color: var(--text-muted); border:1px solid var(--border-subtle);" href="/p/{{ project.slug }}/orchestration/{{ selected_run.id }}/log">{{ "orchestration.view_log" | t(locale=locale) }}</a>
+        <a class="btn" href="/p/{{ project.slug }}/orchestration/{{ selected_run.id }}/log">{{ "orchestration.view_log" | t(locale=locale) }}</a>
         <form method="post" action="/p/{{ project.slug }}/orchestration/{{ selected_run.id }}/backfill" class="inline">
-          <button class="text-xs px-3 py-1 rounded" style="color: var(--text-muted); border:1px solid var(--border-subtle);">{{ "orchestration.backfill" | t(locale=locale) }}</button>
+          <button class="btn">{{ "orchestration.backfill" | t(locale=locale) }}</button>
         </form>
         <form method="post" action="/p/{{ project.slug }}/orchestration/{{ selected_run.id }}/delete" class="inline"
               data-confirm="{{ 'orchestration.confirm_delete' | t(locale=locale) }}" data-confirm-variant="danger">
-          <button class="text-xs px-3 py-1 rounded" style="color: var(--status-failed); border:1px solid var(--border-subtle);">{{ "orchestration.delete_run" | t(locale=locale) }}</button>
+          <button class="btn btn-danger">{{ "orchestration.delete_run" | t(locale=locale) }}</button>
         </form>
       </div>
 
@@ -263,12 +256,11 @@
       {% if unassigned %}
       <h3 class="font-semibold mb-2 mt-4 text-sm">{{ "orchestration.nodes_unassigned" | t(locale=locale) }} (<span id="node-count">{{ selected_nodes|length }}</span>)</h3>
       <div data-tt-scope>
-      <div class="mb-2 flex items-center gap-2">
+      <div class="toolbar">
         <input type="text" data-tt-search
                placeholder="{{ 'table.search' | t(locale=locale) }}"
                class="tt-search">
-        <button type="button" data-tt-reset
-                class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+        <button type="button" data-tt-reset class="btn btn-sm">
           {{ "table.reset" | t(locale=locale) }}
         </button>
       </div>
@@ -289,7 +281,7 @@
           <td class="font-mono text-xs">{{ n.agent_name }}</td>
           <td class="text-xs">{{ n.role }}</td>
           <td class="text-xs"><span class="status-pill status-{{ n.status }}">{{ n.status }}</span></td>
-          <td class="text-xs muted font-mono">{{ (n.started_at or '')[:19] }}</td>
+          <td class="text-xs muted num">{{ (n.started_at or '')[:19] }}</td>
         </tr>
         {% endfor %}
         </tbody>
@@ -301,27 +293,26 @@
 
       <div class="flex items-center justify-between gap-3 flex-wrap mb-2 mt-4">
         <h3 class="font-semibold text-sm">{{ "orchestration.messages" | t(locale=locale) }} (<span id="msg-count">{{ selected_messages|length }}</span>)</h3>
-        <label class="flex items-center gap-1.5 text-xs cursor-pointer select-none" style="color: var(--text-faint);">
+        <label class="flex items-center gap-1.5 text-xs cursor-pointer select-none faint">
           <input type="checkbox" id="autoscroll-toggle" checked>
           {{ "orchestration.autoscroll" | t(locale=locale) }}
         </label>
       </div>
       {% if selected_messages %}
       <div id="msg-filter-bar" class="hidden mb-2 flex items-center gap-2 text-xs">
-        <span style="color: var(--text-faint);">{{ "orchestration.filter_node" | t(locale=locale) }}:</span>
-        <span id="msg-filter-label" class="font-mono px-2 py-0.5 rounded" style="background: var(--bg-elevated); color: var(--text-body);"></span>
-        <button id="msg-filter-clear" type="button" class="underline" style="color: var(--brand-hover);">{{ "common.clear" | t(locale=locale) }}</button>
+        <span class="faint">{{ "orchestration.filter_node" | t(locale=locale) }}:</span>
+        <span id="msg-filter-label" class="font-mono px-2 py-0.5 rounded bg-elevated"></span>
+        <button id="msg-filter-clear" type="button" class="underline text-brand-hover">{{ "common.clear" | t(locale=locale) }}</button>
       </div>
       <div id="messages-list" class="space-y-2">
       {% for m in selected_messages %}
-        <div class="rounded p-3 msg-card" data-node-id="{{ m.node_id }}"
-             style="background: var(--bg-elevated); border:1px solid var(--border-subtle);">
-          <div class="text-xs mb-1" style="color: var(--text-faint);">
+        <div class="rounded p-3 msg-card" data-node-id="{{ m.node_id }}">
+          <div class="text-xs mb-1 faint">
             <span class="font-mono">{{ m.author }}</span> ·
             <span class="font-mono">{{ m.kind }}</span> ·
             {{ (m.ts or '')[:19] }}
           </div>
-          <pre class="whitespace-pre-wrap text-sm font-mono" style="color: var(--text-body);">{{ m.text }}</pre>
+          <pre class="whitespace-pre-wrap text-sm font-mono">{{ m.text }}</pre>
         </div>
       {% endfor %}
       </div>
@@ -379,42 +370,38 @@
       </script>
       {% else %}
       <div id="messages-list" class="space-y-2"></div>
-      <p class="text-sm" style="color: var(--text-faint);">{{ "orchestration.no_messages" | t(locale=locale) }}</p>
+      <p class="text-sm faint">{{ "orchestration.no_messages" | t(locale=locale) }}</p>
       {% endif %}
     </div>
     <script src="/static/orchestration_stream.js?v=node-skills-2-autoscroll" defer></script>
     {% elif runs %}
     <div class="flex-1 flex flex-col items-center justify-center text-center px-6">
-      <div class="text-sm" style="color: var(--text-muted);">{{ "orchestration.pick_run" | t(locale=locale) }}</div>
-      <div class="text-xs mt-2" style="color: var(--text-faint);">{{ "orchestration.or_create" | t(locale=locale) }}</div>
+      <div class="text-sm muted">{{ "orchestration.pick_run" | t(locale=locale) }}</div>
+      <div class="text-xs mt-2 faint">{{ "orchestration.or_create" | t(locale=locale) }}</div>
     </div>
     {% else %}
     <div class="flex-1 flex flex-col items-center justify-center text-center px-6">
-      <div class="text-sm" style="color: var(--text-muted);">{{ "orchestration.no_runs" | t(locale=locale) }}</div>
-      <div class="text-xs mt-2" style="color: var(--text-faint);">{{ "orchestration.create_right" | t(locale=locale) }}</div>
+      <div class="text-sm muted">{{ "orchestration.no_runs" | t(locale=locale) }}</div>
+      <div class="text-xs mt-2 faint">{{ "orchestration.create_right" | t(locale=locale) }}</div>
     </div>
     {% endif %}
   </section>
 
   <!-- RIGHT: stage / start panel -->
-  <aside class="rounded-lg overflow-hidden flex flex-col" style="background: var(--bg-card); border:1px solid var(--border-subtle); max-height: 78vh;">
-    <div class="px-3 py-2 flex items-center gap-2" style="border-bottom:1px solid var(--border-subtle);">
-      <button type="button" class="px-2.5 py-1 rounded text-xs font-medium"
-              style="background: var(--brand); color:#fff;">{{ "orchestration.btn_start" | t(locale=locale) }}</button>
-      <button type="button" class="px-2.5 py-1 rounded text-xs"
-              style="color: var(--text-muted);" disabled aria-disabled="true">{{ "orchestration.btn_node_chat" | t(locale=locale) }}</button>
-      <button type="button" class="px-2.5 py-1 rounded text-xs"
-              style="color: var(--text-muted);" disabled aria-disabled="true">{{ "orchestration.btn_voice" | t(locale=locale) }}</button>
+  <aside class="card card--flush flex flex-col max-h-[78vh]">
+    <div class="px-3 py-2 flex items-center gap-2 divider-b">
+      <button type="button" class="btn btn-sm btn-primary">{{ "orchestration.btn_start" | t(locale=locale) }}</button>
+      <button type="button" class="btn btn-sm" disabled aria-disabled="true">{{ "orchestration.btn_node_chat" | t(locale=locale) }}</button>
+      <button type="button" class="btn btn-sm" disabled aria-disabled="true">{{ "orchestration.btn_voice" | t(locale=locale) }}</button>
     </div>
     <div class="p-4 flex-1 overflow-y-auto" id="start-form">
       <form method="post" action="/p/{{ project.slug }}/orchestration/start" class="space-y-3">
-        <label class="block text-xs font-medium" style="color: var(--text-muted);">{{ "orchestration.goal_label" | t(locale=locale) }}</label>
+        <label class="block text-xs font-medium muted">{{ "orchestration.goal_label" | t(locale=locale) }}</label>
         <textarea id="orch-goal" name="goal" required rows="6" class="w-full rounded p-2 text-sm"
                   placeholder="{{ 'orchestration.goal_placeholder' | t(locale=locale) }}"></textarea>
-        <button class="w-full rounded py-2 text-sm font-semibold"
-                style="background: var(--brand); color:#fff;">Start Orchestrator</button>
+        <button class="w-full btn btn-primary">Start Orchestrator</button>
       </form>
-      <div class="text-xs mt-4 pt-4" style="color: var(--text-faint); border-top:1px solid var(--border-subtle);">
+      <div class="text-xs mt-4 pt-4 faint divider-t">
         {{ "orchestration.chat_voice_hint" | t(locale=locale) }}
       </div>
     </div>
@@ -422,19 +409,18 @@
 </div>
 
 {% if runs %}
-<details class="mt-6" style="color: var(--text-muted);">
+<details class="mt-6 muted">
   <summary class="text-xs cursor-pointer">{{ "orchestration.full_list" | t(locale=locale, n=runs|length) }}</summary>
   <div data-tt-scope>
-  <div class="mb-2 mt-3 flex items-center gap-2">
+  <div class="toolbar mt-3">
     <input type="text" data-tt-search
            placeholder="{{ 'table.search' | t(locale=locale) }}"
            class="tt-search">
-    <button type="button" data-tt-reset
-            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+    <button type="button" data-tt-reset class="btn btn-sm">
       {{ "table.reset" | t(locale=locale) }}
     </button>
   </div>
-  <table class="data-table"
+  <table class="data-table is-dense"
          data-table-tools
          data-tt-key="orch-runs.{{ project.slug }}"
          data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
@@ -453,16 +439,16 @@
         data-status="{{ r.status }}"
         data-started="{{ (r.started_at or '')[:19] }}"
         data-finished="{{ (r.finished_at or '')[:19] }}">
-      <td><a class="font-mono text-xs" style="color: var(--brand-hover); text-decoration: underline;" href="/p/{{ project.slug }}/orchestration?run_id={{ r.id }}">{{ r.id[:8] }}…</a></td>
+      <td><a class="text-xs underline text-brand-hover num" href="/p/{{ project.slug }}/orchestration?run_id={{ r.id }}">{{ r.id[:8] }}…</a></td>
       <td class="text-xs">{{ (r.goal or '')[:80] }}</td>
       <td><span class="badge badge-{{ {'running':'running','completed':'success','failed':'failed','cancelled':'neutral'}.get(r.status, 'neutral') }}">{{ r.status }}</span></td>
-      <td class="text-xs muted whitespace-nowrap font-mono">{{ (r.started_at or '')[:19] }}</td>
-      <td class="text-xs muted whitespace-nowrap font-mono">{{ (r.finished_at or '—')[:19] }}</td>
+      <td class="text-xs muted whitespace-nowrap num">{{ (r.started_at or '')[:19] }}</td>
+      <td class="text-xs muted whitespace-nowrap num">{{ (r.finished_at or '—')[:19] }}</td>
       <td class="text-xs whitespace-nowrap">
-        <a class="text-xs px-2 py-1 rounded" style="color: var(--text-muted); border:1px solid var(--border-subtle);" href="/p/{{ project.slug }}/orchestration/{{ r.id }}/log">log</a>
+        <a class="btn btn-sm" href="/p/{{ project.slug }}/orchestration/{{ r.id }}/log">log</a>
         <form method="post" action="/p/{{ project.slug }}/orchestration/{{ r.id }}/delete" class="inline ml-1"
               data-confirm="{{ 'orchestration.confirm_delete_row' | t(locale=locale, id=r.id[:8]) }}" data-confirm-variant="danger">
-          <button class="text-xs px-2 py-1 rounded" style="color: var(--status-failed); border:1px solid var(--border-subtle);">delete</button>
+          <button class="btn btn-sm btn-danger">delete</button>
         </form>
       </td>
     </tr>

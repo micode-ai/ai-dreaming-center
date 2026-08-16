@@ -94,4 +94,19 @@
   --control-h: 2rem;
   --control-h-sm: 1.625rem;
   --metric-bar-w: 3px;
+
+  /* ---------- Orchestration list: one-off surfaces with no clean existing
+     token match. Values are exact literals ported from the pre-migration
+     inline styles (Task 7), not approximations of an existing -soft/-border
+     pair -- see components.css for where each is consumed. ---------- */
+  --brand-banner-bg: rgba(99, 102, 241, 0.08);     /* bulk-queue banner background */
+  --brand-banner-border: rgba(99, 102, 241, 0.35); /* bulk-queue banner border */
+  --brand-row-bg: rgba(99, 102, 241, 0.10);        /* selected run-row highlight */
+  --timeout-soft-dim: rgba(245, 158, 11, 0.10);    /* queue-item-pending bg; stale-orphans banner bg */
+  --queue-dispatched-bg: rgba(52, 211, 153, 0.10);
+  --queue-dispatched-border: rgba(52, 211, 153, 0.35);
+  --queue-dispatched-fg: #059669;
+  --queue-failed-bg: rgba(248, 113, 113, 0.10);
+  --queue-failed-border: rgba(248, 113, 113, 0.35);
+  --queue-failed-fg: #b91c1c;
 }

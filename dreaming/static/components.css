@@ -207,6 +207,56 @@
 .data-table.is-dense thead th,
 .data-table.is-dense tbody td { padding: var(--row-pad-y-dense) var(--row-pad-x-dense); }
 
+/* ============================================================
+   Orchestration list (project_orchestration_list.html): a handful of
+   one-off surfaces with no clean existing-component match. Exact
+   pre-migration colour values are preserved via dedicated tokens.css
+   entries rather than approximated onto an existing -soft/-border pair,
+   since only spacing/density values are licensed to shift onto the
+   shared scale -- colour is not.
+   ============================================================ */
+
+/* Bulk-queue banner: brand-tinted informational wrapper */
+.banner-brand { background: var(--brand-banner-bg); border-color: var(--brand-banner-border); }
+
+/* Single-line banner: message + action share one centred row (the
+   stale-orphans warning's Force-close button must not top-align against
+   the message under .banner's default align-items: flex-start) */
+.banner--inline { align-items: center; }
+.banner-warn-dim { background: var(--timeout-soft-dim); border-color: var(--status-timeout-border); }
+
+/* Small one-off text/background utilities: no wrapping component sets
+   these colours here, parallel to app.css's .muted / .faint */
+.text-brand-hover { color: var(--brand-hover); }
+.text-warn { color: var(--status-timeout); }
+.bg-elevated { background: var(--bg-elevated); }
+.divider-b { border-bottom: 1px solid var(--border-subtle); }
+.divider-t { border-top: 1px solid var(--border-subtle); }
+
+/* Run sidebar list row */
+.run-row { border-bottom: 1px solid var(--border-subtle); }
+.run-row.is-selected { background: var(--brand-row-bg); }
+
+/* Goal preview: collapsible <pre> scroll box */
+.goal-preview { max-height: 12rem; overflow-y: auto; border-radius: var(--radius-sm); }
+
+/* Message card: also built client-side by orchestration_stream.js
+   (appendMessage() sets these same two properties inline) -- keep in sync */
+.msg-card { background: var(--bg-elevated); border: 1px solid var(--border-subtle); }
+
+/* Bulk-queue item rows */
+.queue-item {
+  display: flex; align-items: baseline; gap: var(--space-2);
+  padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm);
+  font-family: var(--font-mono); font-size: var(--text-xs);
+}
+.queue-item-pending    { background: var(--timeout-soft-dim);    color: var(--status-timeout);     border: 1px solid var(--status-timeout-border); }
+.queue-item-dispatched { background: var(--queue-dispatched-bg); color: var(--queue-dispatched-fg); border: 1px solid var(--queue-dispatched-border); }
+.queue-item-failed     { background: var(--queue-failed-bg);     color: var(--queue-failed-fg);     border: 1px solid var(--queue-failed-border); }
+.queue-item-default    { background: var(--bg-elevated);         color: var(--text-muted);          border: 1px solid var(--border-subtle); }
+.queue-item__status { opacity: 0.6; }
+.queue-item__error  { opacity: 0.85; }
+
 /* ---------- Modal dialog ---------- */
 dialog.note-modal {
   padding: 0; max-width: 56rem; width: calc(100% - 2rem);
