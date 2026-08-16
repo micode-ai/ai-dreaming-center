@@ -1,10 +1,10 @@
 {% extends "_project_layout.html" %}
 {% set active='ideas' %}
 {% block project_content %}
-<a href="/p/{{ project.slug }}/ideas" class="text-sm text-blue-600 underline">{{ "common.back_to_list" | t(locale=locale) }}</a>
+<a href="/p/{{ project.slug }}/ideas" class="btn btn-sm">{{ "common.back_to_list" | t(locale=locale) }}</a>
 
 {% if not item %}
-<p class="muted mt-4">{{ "ideas.detail.not_found" | t(locale=locale, id=item_id, dir=ideas_dir) }}</p>
+<p class="empty-state">{{ "ideas.detail.not_found" | t(locale=locale, id=item_id, dir=ideas_dir) }}</p>
 {% else %}
 <h1 class="text-2xl font-bold mt-3">{{ item.title or item_id }}</h1>
 <div class="flex flex-wrap gap-3 text-xs mt-2 muted">
@@ -18,37 +18,39 @@
 <div class="mt-4 flex flex-wrap gap-2 items-center">
   <form method="post" action="/p/{{ project.slug }}/ideas/{{ item_id }}/orchestrate" class="inline"
         data-confirm="{{ 'ideas.detail.confirm_orch' | t(locale=locale) }}">
-    <button class="text-sm px-3 py-1 rounded bg-purple-600 text-white font-semibold">{{ "ideas.detail.send_orch" | t(locale=locale) }}</button>
+    <button class="btn btn-primary">{{ "ideas.detail.send_orch" | t(locale=locale) }}</button>
   </form>
   {% if not item.github_issue %}
   <form method="post" action="/p/{{ project.slug }}/ideas/{{ item_id }}/github" class="inline"
         data-confirm="{{ 'ideas.detail.confirm_gh' | t(locale=locale) }}">
-    <button class="text-sm px-3 py-1 border border-slate-500 text-slate-700 rounded">{{ "ideas.detail.gh_btn" | t(locale=locale) }}</button>
+    <button class="btn">{{ "ideas.detail.gh_btn" | t(locale=locale) }}</button>
   </form>
   {% else %}
   <a target="_blank" href="{{ item.github_issue }}"
-     class="text-sm px-3 py-1 border border-slate-300 text-slate-700 rounded">GitHub issue #{{ item.github_issue.split('/')[-1] }}</a>
+     class="btn">GitHub issue #{{ item.github_issue.split('/')[-1] }}</a>
   {% endif %}
   {% if not item.jira_ticket %}
   <form method="post" action="/p/{{ project.slug }}/ideas/{{ item_id }}/jira" class="inline">
-    <button class="text-sm px-3 py-1 border rounded text-blue-600">{{ "ideas.btn.jira" | t(locale=locale) }}</button>
+    <button class="btn">{{ "ideas.btn.jira" | t(locale=locale) }}</button>
   </form>
   {% else %}
-  <span class="text-sm px-3 py-1 border border-slate-300 text-slate-700 rounded font-mono">Jira: {{ item.jira_ticket }}</span>
+  <span class="btn font-mono">Jira: {{ item.jira_ticket }}</span>
   {% endif %}
 </div>
 
 {% if item.orchestration_run %}
 <p class="mt-2 text-xs muted">
   {{ "ideas.detail.already_ran" | t(locale=locale) }}
-  <a class="text-blue-600 underline" href="/p/{{ project.slug }}/orchestration/{{ item.orchestration_run }}">run {{ item.orchestration_run[:8] }}…</a>
+  <a class="text-cache underline" href="/p/{{ project.slug }}/orchestration/{{ item.orchestration_run }}">run {{ item.orchestration_run[:8] }}…</a>
 </p>
 {% endif %}
 
 {% if body_md %}
 {% include "_markdown_partial.html" %}
 <script id="idea-md-src" type="text/markdown">{{ body_md }}</script>
-<div id="idea-md-body" class="markdown-body bg-white rounded shadow mt-6"></div>
+<div class="card mt-6">
+  <div id="idea-md-body" class="markdown-body"></div>
+</div>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     const src = document.getElementById('idea-md-src').textContent;
@@ -56,7 +58,7 @@
   });
 </script>
 {% else %}
-<p class="mt-6 muted">{{ "common.empty_body" | t(locale=locale) }}</p>
+<p class="mt-6 empty-state">{{ "common.empty_body" | t(locale=locale) }}</p>
 {% endif %}
 {% endif %}
 {% endblock %}
