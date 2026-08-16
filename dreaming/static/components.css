@@ -198,6 +198,7 @@
   padding: var(--row-pad-y) var(--row-pad-x);
   background: var(--bg-elevated); border-bottom: 1px solid var(--border-subtle);
 }
+.data-table thead th.text-right { text-align: right; }
 .data-table tbody td { padding: var(--row-pad-y) var(--row-pad-x); border-bottom: 1px solid var(--border-subtle); vertical-align: middle; }
 .data-table tbody tr:last-child td { border-bottom: 0; }
 .data-table tbody tr:hover { background: var(--bg-hover); }

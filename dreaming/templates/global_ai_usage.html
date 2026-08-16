@@ -139,8 +139,8 @@
         <thead>
           <tr>
             <th data-sort-col="agent" data-sort-type="text">{{ "ai_usage.col.agent" | t(locale=locale) }}</th>
-            <th data-sort-col="runs" data-sort-type="num">{{ "ai_usage.col.runs" | t(locale=locale) }}</th>
-            <th data-sort-col="tokens" data-sort-type="num">{{ "ai_usage.col.tokens" | t(locale=locale) }}</th>
+            <th class="text-right" data-sort-col="runs" data-sort-type="num">{{ "ai_usage.col.runs" | t(locale=locale) }}</th>
+            <th class="text-right" data-sort-col="tokens" data-sort-type="num">{{ "ai_usage.col.tokens" | t(locale=locale) }}</th>
           </tr>
         </thead>
         <tbody>
@@ -184,9 +184,9 @@
       <thead>
         <tr>
           <th data-sort-col="project" data-sort-type="text">{{ "ai_usage.col.project" | t(locale=locale) }}</th>
-          <th data-sort-col="events" data-sort-type="num">{{ "ai_usage.col.events" | t(locale=locale) }}</th>
+          <th class="text-right" data-sort-col="events" data-sort-type="num">{{ "ai_usage.col.events" | t(locale=locale) }}</th>
           <th>{{ "ai_usage.col.tokens" | t(locale=locale) }}</th>
-          <th class="w-24" data-sort-col="total" data-sort-type="num">{{ "ai_usage.col.total" | t(locale=locale) }}</th>
+          <th class="w-24 text-right" data-sort-col="total" data-sort-type="num">{{ "ai_usage.col.total" | t(locale=locale) }}</th>
         </tr>
       </thead>
       <tbody>
@@ -241,9 +241,9 @@
         <tr>
           <th data-sort-col="session" data-sort-type="text">Session</th>
           <th data-sort-col="model" data-sort-type="text">{{ "ai_usage.col.model" | t(locale=locale) }}</th>
-          <th data-sort-col="duration" data-sort-type="num">{{ "ai_usage.col.duration" | t(locale=locale) }}</th>
-          <th data-sort-col="events" data-sort-type="num">{{ "ai_usage.col.events" | t(locale=locale) }}</th>
-          <th data-sort-col="tokens" data-sort-type="num">{{ "ai_usage.col.tokens" | t(locale=locale) }}</th>
+          <th class="text-right" data-sort-col="duration" data-sort-type="num">{{ "ai_usage.col.duration" | t(locale=locale) }}</th>
+          <th class="text-right" data-sort-col="events" data-sort-type="num">{{ "ai_usage.col.events" | t(locale=locale) }}</th>
+          <th class="text-right" data-sort-col="tokens" data-sort-type="num">{{ "ai_usage.col.tokens" | t(locale=locale) }}</th>
         </tr>
       </thead>
       <tbody>
