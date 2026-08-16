@@ -7,67 +7,69 @@
 {% elif not td_dir_exists %}
 {{ autoconfig_banner(project, "tech_debt_dir", td_dir, "Tech-debt") }}
 {% elif error %}
-<p class="text-sm text-red-700">{{ "tech_debt.parse_error" | t(locale=locale) }}: <code>{{ error }}</code></p>
+<p class="text-sm text-danger">{{ "tech_debt.parse_error" | t(locale=locale) }}: <code>{{ error }}</code></p>
 {% elif total == 0 %}
-<div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
-  <p class="font-semibold text-sky-900 mb-1">{{ "tech_debt.empty.title" | t(locale=locale, dir=td_dir) }}</p>
-  <p class="text-sm text-sky-900 mb-2">
-    {{ "tech_debt.empty.desc" | t(locale=locale, code='/tech-debt-scan') }}
-  </p>
-  <form method="post" action="/p/{{ project.slug }}/tech-debt/scan">
-    <button class="text-sm bg-blue-600 text-white rounded px-3 py-1">Run /tech-debt-scan</button>
-  </form>
+<div class="banner banner-info">
+  <div class="banner__body">
+    <p class="banner__title">{{ "tech_debt.empty.title" | t(locale=locale, dir=td_dir) }}</p>
+    <p class="text-sm">
+      {{ "tech_debt.empty.desc" | t(locale=locale, code='/tech-debt-scan') }}
+    </p>
+    <form method="post" action="/p/{{ project.slug }}/tech-debt/scan">
+      <button class="btn btn-primary">Run /tech-debt-scan</button>
+    </form>
+  </div>
 </div>
 {% else %}
 <div class="grid grid-cols-2 gap-6">
-  <div class="bg-white p-4 rounded shadow">
+  <div class="card">
     <div class="text-xs muted mb-1">{{ "tech_debt.total" | t(locale=locale) }}</div>
-    <a class="text-3xl font-bold text-blue-700 hover:underline" href="/p/{{ project.slug }}/findings">{{ total }}</a>
+    <a class="text-3xl font-bold text-brand-hover hover:underline" href="/p/{{ project.slug }}/findings">{{ total }}</a>
     <div class="text-xs muted mt-1">{{ "tech_debt.open_full" | t(locale=locale) }}</div>
   </div>
-  <div class="bg-white p-4 rounded shadow">
+  <div class="card">
     <div class="text-xs muted mb-2">{{ "tech_debt.by_status" | t(locale=locale) }}</div>
     {% for status, n in by_status %}
       <div class="text-sm flex justify-between">
-        <a class="font-mono text-xs text-blue-600 hover:underline" href="/p/{{ project.slug }}/findings?status={{ status }}">{{ status }}</a>
+        <a class="font-mono text-xs text-brand-hover hover:underline" href="/p/{{ project.slug }}/findings?status={{ status }}">{{ status }}</a>
         <span class="font-bold">{{ n }}</span>
       </div>
     {% endfor %}
   </div>
 </div>
 
-<h2 class="font-semibold mt-6 mb-2">Top modules</h2>
+<h2 class="section-title">Top modules</h2>
 <div data-tt-scope>
-  <div class="mb-2 flex items-center gap-2">
+  <div class="toolbar">
     <input type="text" data-tt-search
            placeholder="{{ 'table.search' | t(locale=locale) }}"
            class="tt-search">
     <button type="button" data-tt-reset
-            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+            class="btn btn-sm">
       {{ "table.reset" | t(locale=locale) }}
     </button>
   </div>
-<table class="w-full bg-white rounded shadow text-sm"
+<table class="data-table is-dense"
        data-table-tools
        data-tt-key="techdebt-mods.{{ project.slug }}"
        data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
        data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
-  <thead class="text-left border-b"><tr><th class="p-2" data-sort-col="module" data-sort-type="text">module</th><th class="p-2 text-right" data-sort-col="count" data-sort-type="num">count</th></tr></thead>
+  <thead><tr><th data-sort-col="module" data-sort-type="text">module</th><th class="text-right" data-sort-col="count" data-sort-type="num">count</th></tr></thead>
   <tbody>
   {% for mod, n in by_module %}
-  <tr class="border-b" data-filter-row>
-    <td class="p-2 font-mono text-xs">
+  <tr data-filter-row>
+    <td class="font-mono text-xs">
       {% if mod and mod != '—' %}
-      <a class="text-blue-600 hover:underline" href="/p/{{ project.slug }}/findings?module={{ mod | urlencode }}">{{ mod }}</a>
+      <a class="text-brand-hover hover:underline" href="/p/{{ project.slug }}/findings?module={{ mod | urlencode }}">{{ mod }}</a>
       {% else %}{{ mod }}{% endif %}
     </td>
-    <td class="p-2 text-right">{{ n }}</td>
+    <td class="num text-right">{{ n }}</td>
   </tr>
   {% endfor %}
   </tbody>
 </table>
 </div>
 
-<p class="text-xs muted mt-4">{% set _link %}<a class="text-blue-600 underline" href="/p/{{ project.slug }}/findings">findings</a>{% endset %}{{ "tech_debt.source_hint" | t(locale=locale, dir=td_dir, link=_link) | safe }}</p>
+<p class="text-xs muted mt-4">{% set _link %}<a class="text-brand-hover underline" href="/p/{{ project.slug }}/findings">findings</a>{% endset %}{{ "tech_debt.source_hint" | t(locale=locale, dir=td_dir, link=_link) | safe }}</p>
 {% endif %}
 {% endblock %}
