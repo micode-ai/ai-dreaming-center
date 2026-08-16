@@ -23,6 +23,7 @@ code, pre, .font-mono, kbd, samp {
 }
 
 .muted { color: var(--text-muted); }
+.faint { color: var(--text-faint); }
 
 *:focus { outline: none; }
 *:focus-visible {
@@ -122,7 +123,7 @@ select option { background-color: var(--bg-card); color: var(--text-body); }
   background: var(--brand-soft);
   color: var(--brand-fg);
 }
-.app-sidebar__nav-link.is-active svg { opacity: 1; color: var(--brand-hover); }
+.app-sidebar__nav-link.is-active svg { opacity: 1; color: var(--brand-fg-dim); }
 .app-sidebar__footer {
   border-top: 1px solid var(--border-subtle);
   padding: 0.75rem 1rem;

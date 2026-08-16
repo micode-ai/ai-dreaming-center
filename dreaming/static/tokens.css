@@ -29,6 +29,7 @@
   --brand-soft: rgba(99, 102, 241, 0.14);
   --brand-strong: #4f46e5;
   --brand-fg: #c7d2fe;   /* text/icon on --brand-soft */
+  --brand-fg-dim: #a5b4fc;   /* active icon: one step down from --brand-fg */
   --brand-on: #ffffff;   /* text on solid --brand */
 
   /* ---------- Status: text / soft background / border ---------- */
