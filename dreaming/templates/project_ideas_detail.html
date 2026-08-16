@@ -34,7 +34,7 @@
     <button class="btn">{{ "ideas.btn.jira" | t(locale=locale) }}</button>
   </form>
   {% else %}
-  <span class="btn font-mono">Jira: {{ item.jira_ticket }}</span>
+  <span class="badge badge-neutral font-mono">Jira: {{ item.jira_ticket }}</span>
   {% endif %}
 </div>
 
