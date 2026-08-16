@@ -81,7 +81,9 @@ Tables that are scanned rather than read (`sessions`, orchestration runs, findin
 | `dreaming/static/app.css` | Components move out to `components.css`; tokens move out to `tokens.css`; keeps base elements, sidebar shell, `.md-content`, and (until Task 17) the `!important` block. |
 | 51 templates under `dreaming/templates/` | Migrated in batches, Tasks 5–16. |
 
-**Untouched:** `dreaming/static/table_tools.{css,js}`, `dreaming/static/orchestration_swimlane.css`, `dreaming/static/orchestration_stream.js` — already token-driven and feature-scoped.
+**Untouched:** `dreaming/static/table_tools.css`, `dreaming/static/table_tools.js`, `dreaming/static/orchestration_stream.js` — already token-driven and feature-scoped.
+
+**Correction (mid-wave).** `dreaming/static/orchestration_swimlane.css` was originally listed as untouched on the same grounds. Reading it during Task 7 showed the claim was false: nine hardcoded light-theme foreground colours and a reference to `--bg-surface`, a token that has never existed. Task 7A now fixes it. The lesson generalizes — "already token-driven" was asserted about all four files from their filenames and roles, not from reading them.
 
 ---
 
@@ -1104,6 +1106,84 @@ git commit -m "refactor(design): migrate project_orchestration_list.html
 
 Heaviest template in the tree (54 inline styles). SSE element ids and hx-*
 attributes preserved verbatim; live stream verified against a real run."
+```
+
+---
+
+### Task 7A: Fix `orchestration_swimlane.css` — added mid-wave
+
+**Why this task exists.** The spec and this plan both asserted that `orchestration_swimlane.css` is "already token-driven and feature-scoped" and left it untouched. **That assertion was false.** Reading it during Task 7 turned up nine hardcoded light-theme foreground colours and one reference to a token that does not exist. This is the wave's own bug class — the spec's Problem section names exactly this — sitting on the screen Task 7 just migrated. Excluding it was based on a premise, not a reading.
+
+**Files:**
+- Modify: `dreaming/static/orchestration_swimlane.css`
+- Modify: `dreaming/static/tokens.css` (two new tokens, see below)
+
+**Interfaces:**
+- Consumes: the status tokens from Task 3.
+- Produces: nothing new for later tasks. Class names, selectors, and every non-colour property stay exactly as they are — `orchestration_stream.js` and `project_orchestration_list.html` both depend on these class names.
+
+- [ ] **Step 1: Add the two missing tokens**
+
+Neither an orange nor a purple foreground exists in `tokens.css`. Add to the status group:
+
+```css
+  --status-cancelled: #fb923c;   /* cancelled / stopped pills */
+  --skill-fg: #d8b4fe;           /* skill badges under activity chips */
+```
+
+- [ ] **Step 2: Replace every light-theme foreground**
+
+These nine colours are all dark text intended for light backgrounds. Each sits on an alpha-tinted overlay over the dark app surface, so each currently fails WCAG AA — `.status-failed` measures about 2.4:1. Replace **only the `color:` values**; leave every `border-color` and `background` exactly as they are, since those are alpha tints that read correctly on dark.
+
+| Selector | Current | Replace with |
+|---|---|---|
+| `.status-running, .status-active` | `#0369a1` | `var(--status-running)` |
+| `.status-completed, .status-done, .status-approved` | `#047857` | `var(--status-success)` |
+| `.status-pending, .status-queued` | `#475569` | `var(--text-muted)` |
+| `.status-blocked` | `#92400e` | `var(--status-timeout)` |
+| `.status-rejected, .status-failed` | `#b91c1c` | `var(--status-failed)` |
+| `.status-cancelled, .status-stopped` | `#9a3412` | `var(--status-cancelled)` |
+| `.stage-icon` | `#4338ca` | `var(--brand-fg)` |
+| `.stage-meta` | `#6b7280` | `var(--text-faint)` |
+| `.swim-agent-role` | `#6b7280` | `var(--text-faint)` |
+| `.skill-badge` | `#7e22ce` | `var(--skill-fg)` |
+| `.sse-indicator.connected` | `#047857` | `var(--status-success)` |
+| `.sse-indicator.done` | `#4338ca` | `var(--brand-fg)` |
+| `.sse-indicator.disconnected` | `#b91c1c` | `var(--status-failed)` |
+| `.sse-indicator.polling` | `#92400e` | `var(--status-timeout)` |
+
+- [ ] **Step 3: Fix the undefined token**
+
+Line 32's `.swimlanes-wrap` sets `background: var(--bg-surface)`. **No such token has ever existed** — the surface token is `--bg-elevated`, and the Tailwind config's `surface` key was never mirrored into CSS. The declaration currently resolves to nothing, leaving the wrapper transparent. Change it to `var(--bg-card)`, which is what a bordered content wrapper uses everywhere else in this app.
+
+- [ ] **Step 4: Verify**
+
+Run `python scripts/check_css_tokens.py` — totals must be **unchanged** at 401 / 421. This task touches no template. `components.css` must still report no hex literals; the two new literals live in `tokens.css`, where literals belong.
+
+Run `python scripts/smoke_templates_render.py` — 51 templates, 45 routes, exit 0.
+
+Then confirm by grep that none of the nine replaced hexes survive anywhere under `dreaming/static/`:
+
+```bash
+grep -nE '#(0369a1|047857|475569|92400e|b91c1c|9a3412|4338ca|6b7280|7e22ce)' dreaming/static/
+```
+
+Expected: no output.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add dreaming/static/orchestration_swimlane.css dreaming/static/tokens.css
+git commit -m "fix(design): stop the swimlane rendering light-theme text on dark
+
+The spec claimed this file was already token-driven. It was not: nine
+hardcoded foreground colours meant for light backgrounds, of which
+.status-failed measured about 2.4:1 against its own tinted background, well
+under the 4.5:1 floor. Backgrounds and borders were already alpha tints and
+are untouched.
+
+Also fixes .swimlanes-wrap referencing --bg-surface, a token that has never
+existed, which left the wrapper transparent instead of carded."
 ```
 
 ---
