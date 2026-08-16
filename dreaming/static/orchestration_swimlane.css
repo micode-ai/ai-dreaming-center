@@ -4,12 +4,12 @@
 
 /* ─────────── Status pills ─────────── */
 .status-pill { font-size: 11px; padding: 2px 8px; border-radius: 9999px; border: 1px solid transparent; display: inline-block; }
-.status-running, .status-active { color:#0369a1; border-color:rgba(56,189,248,.45); background:rgba(56,189,248,.12); }
-.status-completed, .status-done, .status-approved { color:#047857; border-color:rgba(52,211,153,.45); background:rgba(52,211,153,.12); }
-.status-pending, .status-queued { color:#475569; border-color:rgba(156,163,175,.45); background:rgba(156,163,175,.12); }
-.status-blocked { color:#92400e; border-color:rgba(245,158,11,.45); background:rgba(245,158,11,.12); }
-.status-rejected, .status-failed { color:#b91c1c; border-color:rgba(248,113,113,.45); background:rgba(248,113,113,.12); }
-.status-cancelled, .status-stopped { color:#9a3412; border-color:rgba(249,115,22,.45); background:rgba(249,115,22,.12); }
+.status-running, .status-active { color:var(--status-running); border-color:rgba(56,189,248,.45); background:rgba(56,189,248,.12); }
+.status-completed, .status-done, .status-approved { color:var(--status-success); border-color:rgba(52,211,153,.45); background:rgba(52,211,153,.12); }
+.status-pending, .status-queued { color:var(--text-muted); border-color:rgba(156,163,175,.45); background:rgba(156,163,175,.12); }
+.status-blocked { color:var(--status-timeout); border-color:rgba(245,158,11,.45); background:rgba(245,158,11,.12); }
+.status-rejected, .status-failed { color:var(--status-failed); border-color:rgba(248,113,113,.45); background:rgba(248,113,113,.12); }
+.status-cancelled, .status-stopped { color:var(--status-cancelled); border-color:rgba(249,115,22,.45); background:rgba(249,115,22,.12); }
 
 /* ─────────── Stage rail ─────────── */
 .stage-rail { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(120px, 1fr); gap: 6px; padding: 6px 0 20px; }
@@ -23,19 +23,19 @@
 .stage-tile.failed, .stage-tile.rejected { border-color: rgba(248,113,113,.6); background: rgba(248,113,113,.06); }
 .stage-icon { width: 30px; height: 30px; display:flex; align-items:center; justify-content:center;
               border-radius:50%; font-size:14px; font-weight:700; background: rgba(99,102,241,.2);
-              color:#4338ca; margin-bottom: 6px; }
+              color:var(--brand-fg); margin-bottom: 6px; }
 .stage-label { font-size: 12px; text-align:center; font-weight:600; }
-.stage-meta { font-size: 10px; color:#6b7280; margin-top: 2px; }
+.stage-meta { font-size: 10px; color:var(--text-faint); margin-top: 2px; }
 
 /* ─────────── Swimlane body ─────────── */
 .swimlanes-wrap { border:1px solid var(--border-subtle); border-radius: 12px; overflow: hidden;
-                  background: var(--bg-surface); margin-top: 10px; }
+                  background: var(--bg-card); margin-top: 10px; }
 .swim-row { display:grid; grid-template-columns: 170px 1fr; border-bottom: 1px dashed var(--border-subtle); min-height: 56px; }
 .swim-row:last-child { border-bottom: 0; }
 .swim-agent { padding: 10px 10px 10px 14px; display:flex; flex-direction:column; gap:3px;
               border-right: 1px solid var(--border-subtle); }
 .swim-agent-name { font-size: 12px; font-weight:600; }
-.swim-agent-role { font-size: 10px; color:#6b7280; }
+.swim-agent-role { font-size: 10px; color:var(--text-faint); }
 .swim-cell { padding: 8px 6px; display:flex; flex-wrap:wrap; gap:6px; align-content:flex-start; align-items:flex-start; }
 
 /* ─────────── Activity chips ─────────── */
@@ -63,12 +63,12 @@
 .skill-badge { display:inline-flex; align-items:center; gap:2px; font-size:10px;
                line-height:1.2; padding:1px 5px; border-radius:9999px;
                border:1px solid rgba(168,85,247,.4); background: rgba(168,85,247,.10);
-               color:#7e22ce; white-space:nowrap; max-width:100%;
+               color:var(--skill-fg); white-space:nowrap; max-width:100%;
                overflow:hidden; text-overflow:ellipsis; }
 
 /* SSE status indicator (top-right of detail page) */
 .sse-indicator { font-size: 10px; padding: 2px 8px; border-radius: 9999px; font-family: monospace; }
-.sse-indicator.connected { background: rgba(52,211,153,.12); color:#047857; }
-.sse-indicator.done { background: rgba(99,102,241,.12); color:#4338ca; }
-.sse-indicator.disconnected { background: rgba(248,113,113,.12); color:#b91c1c; }
-.sse-indicator.polling { background: rgba(245,158,11,.12); color:#92400e; }
+.sse-indicator.connected { background: rgba(52,211,153,.12); color:var(--status-success); }
+.sse-indicator.done { background: rgba(99,102,241,.12); color:var(--brand-fg); }
+.sse-indicator.disconnected { background: rgba(248,113,113,.12); color:var(--status-failed); }
+.sse-indicator.polling { background: rgba(245,158,11,.12); color:var(--status-timeout); }
