@@ -14,34 +14,31 @@
      hint:          small caption shown next to the button
      last_scan:     dict from db.get_last_command_session() or None #}
 {% macro scan_action_bar(action_url, running, label, running_label, hint='', last_scan=None) %}
-<div class="flex items-center justify-end mb-4 gap-3 flex-wrap">
+<div class="toolbar justify-end">
   {% if last_scan is not none %}
   {% set _st = 'running' if running else last_scan.status %}
   {% set _ts = last_scan.finished_at or last_scan.started_at %}
-  <span class="text-xs flex items-center gap-1.5" style="color: var(--text-faint);">
-    <span>{{ "scan.last.label" | t(locale=locale) }}:</span>
-    {% if _st == 'running' %}
-      <span style="color: var(--status-running, #38bdf8);">● {{ "scan.last.running" | t(locale=locale) }}</span>
-    {% elif _st == 'success' %}
-      <span style="color: var(--status-success, #34d399);">✓ {{ "scan.last.success" | t(locale=locale) }}</span>
-    {% elif _st == 'failed' %}
-      <span style="color: var(--status-failed, #f87171);"
-            {% if last_scan.error_message %}title="{{ last_scan.error_message }}"{% endif %}>✕ {{ "scan.last.failed" | t(locale=locale) }}</span>
-    {% else %}
-      <span>{{ "scan.last.never" | t(locale=locale) }}</span>
-    {% endif %}
-    {% if _ts %}
-    <time data-scan-ts="{{ _ts }}" title="{{ _ts[:19] }}">{{ _ts[:16] }}</time>
-    {% endif %}
-  </span>
+  <span class="text-xs faint">{{ "scan.last.label" | t(locale=locale) }}:</span>
+  {% if _st == 'running' %}
+    <span class="badge badge-running">● {{ "scan.last.running" | t(locale=locale) }}</span>
+  {% elif _st == 'success' %}
+    <span class="badge badge-success">✓ {{ "scan.last.success" | t(locale=locale) }}</span>
+  {% elif _st == 'failed' %}
+    <span class="badge badge-failed"
+          {% if last_scan.error_message %}title="{{ last_scan.error_message }}"{% endif %}>✕ {{ "scan.last.failed" | t(locale=locale) }}</span>
+  {% else %}
+    <span class="badge badge-neutral">{{ "scan.last.never" | t(locale=locale) }}</span>
+  {% endif %}
+  {% if _ts %}
+  <time class="text-xs faint" data-scan-ts="{{ _ts }}" title="{{ _ts[:19] }}">{{ _ts[:16] }}</time>
+  {% endif %}
   {% endif %}
   {% if hint %}
   <span class="text-xs muted">{{ hint }}</span>
   {% endif %}
   <form method="post" action="{{ action_url }}">
     <button type="submit"
-            class="text-xs rounded px-3 py-1.5 disabled:opacity-50"
-            style="background: var(--brand); color: white; border:1px solid var(--brand-hover);"
+            class="btn btn-primary"
             {% if running %}disabled title="{{ running_label }}"{% endif %}>
       {% if running %}{{ running_label }}{% else %}{{ label }}{% endif %}
     </button>
