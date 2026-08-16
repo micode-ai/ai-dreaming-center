@@ -17,7 +17,9 @@
 These apply to **every** task. They are not repeated per task.
 
 - **No build step.** Plain CSS only. Do not add npm, PostCSS, or a Tailwind config file.
-- **Tailwind keeps layout only:** `grid`, `flex`, `gap-*`, `col-span-*`, `space-*`, `w-*`, `max-w-*`, `mb-*`, `mt-*`, responsive prefixes, `hidden`, `truncate`, `whitespace-nowrap`. Every colour, border, radius, shadow, and font-size utility leaves the templates.
+- **Tailwind keeps layout only:** `grid`, `flex`, `gap-*`, `col-span-*`, `space-*`, `w-*`, `max-w-*`, every margin utility (`mb-*`, `mt-*`, `ml-*`, `mr-*`, `mx-*`, `my-*`), padding utilities where no component sets the padding, list utilities (`list-disc`, `list-none`), responsive prefixes, `hidden`, `truncate`, `whitespace-nowrap`, `text-left/center/right`.
+- **Colour, border, radius, and shadow utilities leave the templates entirely** — those are what the linter gates and what this wave is measured on.
+- **Font-size utilities (`text-xs`, `text-sm`, …) are tolerated** where no component already sets the size. They are not gated by the linter and the replacement table does not cover them, so claiming they all disappear would be promising more than this wave delivers. Prefer a component class when one fits; leave the utility when none does. Tightening this is a follow-up once font size becomes a gated metric.
 - **Existing token names are never renamed.** `--bg-app`, `--bg-card`, `--brand`, `--status-*`, `--border-subtle`, `--text-*` are load-bearing for `table_tools.css`, `orchestration_swimlane.css`, and every not-yet-migrated inline style. Add new tokens alongside; never rename or delete an existing one during this wave.
 - **`components.css` contains no hex literal.** Colour arrives via `var(--token)`. `rgba(0, 0, 0, …)` is permitted for shadows — the rule targets palette colour, not black alpha. Enforced by `scripts/check_css_tokens.py`.
 - **The `!important` compatibility block at the bottom of `app.css` is deleted in Task 17 and not before.** It is the only thing keeping unmigrated screens readable.
@@ -841,6 +843,8 @@ Run: `python scripts/smoke_templates_render.py` — expected exit 0.
 Then with the app running, open `http://localhost:8086/p/<slug>/` and confirm: metric tiles keep their coloured left bar, status badges keep their colours, the sessions table keeps its header and hover, the active pill keeps its indigo glow, and the confirm modal still opens (click any Delete).
 
 **What may and may not change on screen.** This task moves rules onto the shared scale, so 1–2px shifts in spacing, radius, and table density are *expected* — that is the spacing ramp and the density tokens doing their job, and the plan's component inventory calls for exactly this realignment. What must **not** change is any *affordance*: a dropped shadow, a lost border, a vanished hover state, or a renamed class. If a value moved, check it landed on a scale token deliberately; if a declaration disappeared entirely, that is a defect.
+
+**One qualification on "dropped affordance", added after Task 6.** The test is whether a *perceptible* affordance is lost, not whether a declaration vanished from the source. Light-theme leftovers that never rendered on this dark background are not affordances — they are the artifacts this wave exists to remove. The worked example: `shadow-sm` is `0 1px 2px rgb(0 0 0 / 0.05)`; composited over `--bg-app` (`#0a0e17`) it shifts each channel by less than one unit, below display quantization, and it arrived as part of the `bg-white … border-slate-200 shadow-sm divide-slate-100` light-theme cluster. Removing it with the rest of that cluster is the task working, not failing. When invoking this qualification, do the arithmetic and show it — "probably invisible" is not the same claim as "sub-perceptual, here is the composite".
 
 - [ ] **Step 5: Commit**
 
