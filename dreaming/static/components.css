@@ -47,6 +47,12 @@
 .btn-warn { background: var(--status-timeout-soft); border-color: var(--status-timeout-border); color: var(--status-timeout); }
 .btn-warn:hover { background: var(--status-timeout-strong); color: var(--status-timeout); }
 
+/* Needed by _app_modal.html's appAlert('success') path (flash cookie level
+   set by ai_radar.py / project_bulk.py) -- the danger/warn siblings already
+   existed, success was the missing family member. */
+.btn-success { background: var(--status-success-soft); border-color: var(--status-success-border); color: var(--status-success); }
+.btn-success:hover { background: var(--status-success-strong); color: var(--status-success); }
+
 .btn-ghost { background: transparent; border-color: transparent; color: var(--text-muted); }
 .btn-ghost:hover { background: var(--bg-hover); color: var(--text-strong); }
 
@@ -86,6 +92,11 @@
   border-radius: var(--radius); padding: var(--space-4);
 }
 .card--flush { padding: 0; overflow: hidden; }
+/* Dashboard bento tiles (partials/dashboard/_tile_*.html): the only thing
+   .card doesn't already cover for this shape is the fixed floor height that
+   keeps three tiles of uneven content even in a grid row. Grepped for an
+   existing 9rem/min-height rule first -- none existed. */
+.dash-tile { min-height: 9rem; }
 .panel {
   background: var(--bg-elevated); border: 1px solid var(--border-subtle);
   border-radius: var(--radius); padding: var(--space-3) var(--space-4);
@@ -406,3 +417,18 @@ dialog.note-modal::backdrop { background: rgba(0, 0, 0, 0.65); backdrop-filter: 
 .modal-close { color: var(--text-muted); background: none; border: none; cursor: pointer; }
 .modal-close:hover { color: var(--text-strong); }
 .note-modal__body { max-height: 80vh; min-height: 12.5rem; overflow: auto; }
+
+/* App-wide confirm/alert modal (_app_modal.html): the same card-on-dialog
+   shape as dialog.note-modal above (no inner wrapper div needed -- header/
+   body/footer sections sit directly inside <dialog>, exactly like
+   note-modal's own <header>/body pair in project_notes.html). Smaller
+   max-width and its own backdrop tint, preserved from the template's former
+   inline <style> rather than reusing note-modal's blurred backdrop -- the
+   two dialogs never shared a backdrop shade before this migration and
+   nothing in the canonical table asks for that to change. */
+dialog.app-modal {
+  padding: 0; max-width: 28rem; width: calc(100% - 2rem);
+  border: 1px solid var(--border-subtle); border-radius: var(--radius);
+  background: var(--bg-card); color: var(--text-body); box-shadow: var(--shadow-modal);
+}
+dialog.app-modal::backdrop { background: rgba(15, 23, 42, 0.5); }

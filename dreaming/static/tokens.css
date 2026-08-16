@@ -36,6 +36,7 @@
   /* ---------- Status: text / soft background / border ---------- */
   --status-success: #4ade80;
   --status-success-soft: rgba(34, 197, 94, 0.18);
+  --status-success-strong: rgba(34, 197, 94, 0.28);   /* .btn-success hover; +0.10 over -soft, matching the failed/timeout delta */
   --status-success-border: rgba(34, 197, 94, 0.35);
   --status-failed: #f87171;
   --status-failed-soft: rgba(239, 68, 68, 0.14);

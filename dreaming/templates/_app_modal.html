@@ -4,43 +4,34 @@
    for JS callers, and reads a one-shot `flash` cookie set by dreaming.lib.flash. #}
 
 <dialog id="app-confirm-modal" class="app-modal" aria-labelledby="app-confirm-title" aria-describedby="app-confirm-body">
-  <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
-    <div class="px-5 pt-4 pb-2">
-      <h2 id="app-confirm-title" class="font-semibold text-slate-900">{{ "modal.title.confirm" | t(locale=locale) }}</h2>
+  <div class="px-5 pt-4 pb-2">
+    <h2 id="app-confirm-title" class="font-semibold strong">{{ "modal.title.confirm" | t(locale=locale) }}</h2>
+  </div>
+  <div class="px-5 pb-4">
+    <p id="app-confirm-body" class="text-sm whitespace-pre-line"></p>
+    <div id="app-confirm-input-wrap" class="mt-3 hidden">
+      <input id="app-confirm-input" type="text" class="w-full border rounded p-2 text-sm font-mono"
+             placeholder="{{ 'modal.input.placeholder' | t(locale=locale) }}">
+      <p id="app-confirm-input-hint" class="mt-1 text-xs text-danger hidden">{{ "modal.input.mismatch" | t(locale=locale) }}</p>
     </div>
-    <div class="px-5 pb-4">
-      <p id="app-confirm-body" class="text-sm text-slate-700 whitespace-pre-line"></p>
-      <div id="app-confirm-input-wrap" class="mt-3 hidden">
-        <input id="app-confirm-input" type="text" class="w-full border rounded p-2 text-sm font-mono"
-               placeholder="{{ 'modal.input.placeholder' | t(locale=locale) }}">
-        <p id="app-confirm-input-hint" class="mt-1 text-xs text-red-600 hidden">{{ "modal.input.mismatch" | t(locale=locale) }}</p>
-      </div>
-    </div>
-    <div class="px-5 py-3 bg-slate-50 rounded-b-lg flex justify-end gap-2">
-      <button type="button" id="app-confirm-cancel" class="text-sm px-3 py-1.5 border rounded text-slate-700 hover:bg-slate-100">{{ "modal.btn.cancel" | t(locale=locale) }}</button>
-      <button type="button" id="app-confirm-ok" class="text-sm px-3 py-1.5 rounded text-white"></button>
-    </div>
+  </div>
+  <div class="px-5 py-3 bg-elevated flex justify-end gap-2">
+    <button type="button" id="app-confirm-cancel" class="btn btn-sm">{{ "modal.btn.cancel" | t(locale=locale) }}</button>
+    <button type="button" id="app-confirm-ok" class="btn btn-sm btn-primary"></button>
   </div>
 </dialog>
 
 <dialog id="app-alert-modal" class="app-modal" aria-labelledby="app-alert-title" aria-describedby="app-alert-body">
-  <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
-    <div class="px-5 pt-4 pb-2">
-      <h2 id="app-alert-title" class="font-semibold text-slate-900">{{ "modal.title.alert" | t(locale=locale) }}</h2>
-    </div>
-    <div class="px-5 pb-4">
-      <p id="app-alert-body" class="text-sm text-slate-700 whitespace-pre-line"></p>
-    </div>
-    <div class="px-5 py-3 bg-slate-50 rounded-b-lg flex justify-end">
-      <button type="button" id="app-alert-ok" class="text-sm px-4 py-1.5 rounded text-white bg-blue-600 hover:bg-blue-700">{{ "modal.btn.ok" | t(locale=locale) }}</button>
-    </div>
+  <div class="px-5 pt-4 pb-2">
+    <h2 id="app-alert-title" class="font-semibold strong">{{ "modal.title.alert" | t(locale=locale) }}</h2>
+  </div>
+  <div class="px-5 pb-4">
+    <p id="app-alert-body" class="text-sm whitespace-pre-line"></p>
+  </div>
+  <div class="px-5 py-3 bg-elevated flex justify-end">
+    <button type="button" id="app-alert-ok" class="btn btn-sm btn-primary">{{ "modal.btn.ok" | t(locale=locale) }}</button>
   </div>
 </dialog>
-
-<style>
-  dialog.app-modal { padding: 0; border: none; background: transparent; max-width: 28rem; width: calc(100% - 2rem); }
-  dialog.app-modal::backdrop { background: rgba(15,23,42,.5); }
-</style>
 
 <script>
 (function () {
@@ -74,8 +65,8 @@
         ? opts.okLabel
         : (variant === 'danger' ? I18N.delete : I18N.confirm);
       confirmOk.textContent = okLabel;
-      confirmOk.className = 'text-sm px-3 py-1.5 rounded text-white ' +
-        (variant === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700');
+      confirmOk.className = 'btn btn-sm ' +
+        (variant === 'danger' ? 'btn-danger' : 'btn-primary');
 
       if (expected !== null) {
         inputWrap.classList.remove('hidden');
@@ -127,10 +118,10 @@
     return new Promise((resolve) => {
       alertBody.textContent = String(message || '');
       const v = opts.variant;
-      alertOk.className = 'text-sm px-4 py-1.5 rounded text-white ' +
-        (v === 'error' ? 'bg-red-600 hover:bg-red-700'
-         : v === 'success' ? 'bg-green-600 hover:bg-green-700'
-         : 'bg-blue-600 hover:bg-blue-700');
+      alertOk.className = 'btn btn-sm ' +
+        (v === 'error' ? 'btn-danger'
+         : v === 'success' ? 'btn-success'
+         : 'btn-primary');
 
       const cleanup = () => { alertOk.onclick = null; alertDlg.onclick = null; alertDlg.removeEventListener('cancel', onClose); };
       const onClose = (e) => { e && e.preventDefault && e.preventDefault(); cleanup(); alertDlg.close(); resolve(); };
