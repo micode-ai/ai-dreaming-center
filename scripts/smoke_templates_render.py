@@ -48,23 +48,30 @@ def compile_all() -> int:
 
 
 def walk_routes() -> int:
+    # Only a missing dependency is an environment problem worth skipping over.
+    # Any other import failure is a real regression and must not be swallowed.
     try:
         from fastapi.testclient import TestClient
         from dreaming.main import app
-    except Exception as exc:  # noqa: BLE001 - environment issue, not a failure
-        print(f"SKIP route walk (cannot import app: {exc})")
+    except ImportError as exc:
+        print(f"SKIP route walk (dependency unavailable: {exc})")
         return 0
 
     with TestClient(app) as client:
-        slug = None
+        # The /projects probe is itself a route render. If it raises or 500s,
+        # that IS the failure this script exists to catch -- reporting it as
+        # "no project configured" would turn a broken page into a green run.
         try:
             rows = client.get("/projects")
-            if rows.status_code == 200:
-                m = re.search(r'name="slug" value="([a-z0-9-]+)"', rows.text)
-                slug = m.group(1) if m else None
-        except Exception:  # noqa: BLE001
-            slug = None
+        except Exception as exc:  # noqa: BLE001 - reported as failure, not swallowed
+            print(f"Route walk FAILED: GET /projects raised {type(exc).__name__}: {exc}")
+            return 1
+        if rows.status_code >= 500:
+            print(f"Route walk FAILED: GET /projects returned HTTP {rows.status_code}")
+            return 1
 
+        m = re.search(r'name="slug" value="([a-z0-9-]+)"', rows.text)
+        slug = m.group(1) if m else None
         if not slug:
             print("SKIP route walk (no project configured in the local DB)")
             return 0
