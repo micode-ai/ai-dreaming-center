@@ -11,21 +11,23 @@ Arguments:
   what           — human label for the page ("Tech-debt", "Wiki", ...)
 #}
 {% macro autoconfig_banner(project, key, default_path, what) %}
-<div class="mb-4 p-4 border border-amber-400 bg-amber-50 rounded">
-  <p class="font-semibold text-amber-900 mb-1">{{ "autoconfig.title_not_ready" | t(locale=locale, what=what) }}</p>
-  <p class="text-sm text-amber-900 mb-2">
-    {{ "autoconfig.create_desc" | t(locale=locale, setting=key) }}
-  </p>
-  <p class="text-xs font-mono bg-white border rounded px-2 py-1 mb-3 break-all">{{ default_path }}</p>
-  <p class="text-xs text-amber-900 mb-3">
-    {{ "autoconfig.change_later" | t(locale=locale) }}
-    <a class="text-blue-600 underline" href="/p/{{ project.slug }}/settings">Settings</a>.
-  </p>
-  <form method="post" action="/p/{{ project.slug }}/settings/autoconfig">
-    <input type="hidden" name="key" value="{{ key }}">
-    <button class="text-sm bg-amber-600 text-white rounded px-3 py-1">
-      {{ "autoconfig.btn_create" | t(locale=locale) }}
-    </button>
-  </form>
+<div class="banner banner-warn">
+  <div class="banner__body">
+    <p class="banner__title">{{ "autoconfig.title_not_ready" | t(locale=locale, what=what) }}</p>
+    <p class="text-sm mb-2">
+      {{ "autoconfig.create_desc" | t(locale=locale, setting=key) }}
+    </p>
+    <p class="text-xs font-mono bg-elevated border rounded px-2 py-1 mb-3 break-all">{{ default_path }}</p>
+    <p class="text-xs mb-3">
+      {{ "autoconfig.change_later" | t(locale=locale) }}
+      <a class="text-brand-hover underline" href="/p/{{ project.slug }}/settings">Settings</a>.
+    </p>
+    <form method="post" action="/p/{{ project.slug }}/settings/autoconfig">
+      <input type="hidden" name="key" value="{{ key }}">
+      <button class="btn btn-warn">
+        {{ "autoconfig.btn_create" | t(locale=locale) }}
+      </button>
+    </form>
+  </div>
 </div>
 {% endmacro %}
