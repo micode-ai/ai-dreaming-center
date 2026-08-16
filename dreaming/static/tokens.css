@@ -27,6 +27,7 @@
   --brand: #6366f1;
   --brand-hover: #818cf8;
   --brand-soft: rgba(99, 102, 241, 0.14);
+  --brand-soft-border: rgba(99, 102, 241, 0.30);   /* kanban tier-1 badge border */
   --brand-strong: #4f46e5;
   --brand-fg: #c7d2fe;   /* text/icon on --brand-soft */
   --brand-fg-dim: #a5b4fc;   /* active icon: one step down from --brand-fg */
@@ -122,4 +123,13 @@
   --queue-dispatched-border: rgba(52, 211, 153, 0.35);
   --queue-failed-bg: rgba(248, 113, 113, 0.10);
   --queue-failed-border: rgba(248, 113, 113, 0.35);
+
+  /* ---------- Kanban plan board ----------
+     Tier-2 badge reuses --cache-fg / --cache-fg-dim (already the exact violet
+     hue, #a78bfa / #c4b5fd, shared with the AI-usage cache accent) rather than
+     minting a duplicate pair. Only the alpha-tinted soft background and
+     border have no existing match. ---------- */
+  --tier2-soft: rgba(167, 139, 250, 0.15);
+  --tier2-border: rgba(167, 139, 250, 0.30);
+  --kanban-well-bg: rgba(21, 28, 44, 0.5);  /* column well, ported exactly */
 }

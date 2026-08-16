@@ -56,6 +56,10 @@ input::placeholder, textarea::placeholder {
 input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); }
 select option { background-color: var(--bg-card); color: var(--text-body); }
 
+/* Bare <hr>, no class -- the one instance (project_kanban.html) carried a
+   static inline style. Global rule is safe: it is the only <hr> in the tree. */
+hr { border: none; border-top: 1px solid var(--border-subtle); margin: var(--space-5) 0; }
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg-app); }

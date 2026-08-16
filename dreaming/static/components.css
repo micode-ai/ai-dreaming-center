@@ -109,7 +109,14 @@
 .field { display: flex; flex-direction: column; gap: var(--space-1); margin-bottom: var(--space-3); }
 .field__label { font-size: var(--text-sm); font-weight: 500; color: var(--text-muted); }
 .field__hint { font-size: var(--text-sm); color: var(--text-faint); }
-.field__control { width: 100%; min-height: var(--control-h); padding: 0 var(--space-2); border-radius: var(--radius-sm); }
+.field__control {
+  width: 100%; min-height: var(--control-h); padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  /* Every field consumer so far (Task 10) wants the elevated-surface tone,
+     not the plain-input --bg-sidebar default the bare form-element rule in
+     app.css sets -- so the component owns it explicitly. */
+  background: var(--bg-elevated);
+}
 .field-row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 
 /* ---------- Numerics: stop columns dancing between rows ---------- */
@@ -294,6 +301,29 @@
    Only its colour and height move here. */
 .meter-track { flex: 1 1 auto; height: 0.5rem; border-radius: var(--radius-pill); overflow: hidden; background: var(--bg-hover); }
 .meter-fill { height: 100%; background: var(--brand); }
+
+/* ============================================================
+   Kanban plan board (project_kanban.html): the recessed column well,
+   the "today" underline, and the per-agent tier badge/legend dot. The
+   tier is chosen by Jinja {% if %}/{% elif %}/{% else %} into one of
+   three fixed class names -- a dynamic class list, not a dynamic style,
+   so it stays exempt from the inline-style count and the undefined-
+   class check (which skips any class= attribute containing "{%").
+   ============================================================ */
+.kanban-well {
+  background: var(--kanban-well-bg); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg); min-height: 12.5rem;
+}
+.kanban-today-dash { width: 2rem; height: 2px; border-radius: var(--radius-pill); background: var(--brand); }
+
+.tier-badge { display: inline-flex; align-items: center; padding: 0.125rem var(--space-2); border-radius: var(--radius-sm); }
+.tier-badge-1       { background: var(--brand-soft); color: var(--brand-fg-dim); border: 1px solid var(--brand-soft-border); }
+.tier-badge-2       { background: var(--tier2-soft);  color: var(--cache-fg-dim); border: 1px solid var(--tier2-border); }
+.tier-badge-default { background: var(--bg-hover);    color: var(--text-faint);  border: 1px solid var(--border-subtle); }
+
+.dot-brand { background: var(--brand); }
+.dot-tier2 { background: var(--cache-fg); }
+.dot-faint { background: var(--text-faint); }
 
 /* ---------- Modal dialog ---------- */
 dialog.note-modal {
