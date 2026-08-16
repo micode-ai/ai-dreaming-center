@@ -8,7 +8,7 @@
 {% elif not ideas_dir_exists %}
 {{ autoconfig_banner(project, "product_ideas_dir", ideas_dir, "Product-ideas") }}
 {% elif error %}
-<p class="text-sm text-red-700">{{ "common.parse_error" | t(locale=locale) }}: <code>{{ error }}</code></p>
+<p class="text-sm text-danger">{{ "common.parse_error" | t(locale=locale) }}: <code>{{ error }}</code></p>
 {% elif items %}
 {{ scan_action_bar(
      "/p/" ~ project.slug ~ "/ideas/scan",
@@ -26,35 +26,35 @@
           data-bulk-confirm-tmpl="{{ 'bulk.confirm' | t(locale=locale, n='__N__') }}"
           data-bulk-label-none="{{ 'bulk.run_none' | t(locale=locale) }}"
           data-bulk-label-tmpl="{{ 'bulk.run_selected' | t(locale=locale, n='__N__') }}"
-          class="text-xs px-3 py-1.5 rounded border border-purple-500 text-purple-700 disabled:opacity-50 disabled:cursor-not-allowed">
+          class="btn btn-sm">
     {{ "bulk.run_none" | t(locale=locale) }}
   </button>
 </form>
-<table id="ideas-table" class="w-full bg-white rounded shadow text-sm"
+<table id="ideas-table" class="data-table is-dense"
        data-table-tools
        data-tt-key="ideas.{{ project.slug }}"
        data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
        data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
-  <thead class="text-left border-b">
+  <thead>
     <tr>
-      <th class="p-2 w-8"><input type="checkbox" id="ideas-select-all" aria-label="select all visible"></th>
-      <th class="p-2" data-sort-col="id" data-sort-type="text">{{ "ideas.col.id" | t(locale=locale) }}</th>
-      <th class="p-2" data-sort-col="title" data-sort-type="text">{{ "ideas.col.title" | t(locale=locale) }}</th>
-      <th class="p-2" data-sort-col="status" data-sort-type="status">{{ "ideas.col.status" | t(locale=locale) }}</th>
-      <th class="p-2" data-sort-col="priority" data-sort-type="prio">{{ "ideas.col.priority" | t(locale=locale) }}</th>
-      <th class="p-2" data-sort-col="created" data-sort-type="date">{{ "ideas.col.created" | t(locale=locale) }}</th>
-      <th class="p-2">{{ "ideas.col.refs" | t(locale=locale) }}</th>
-      <th class="p-2"></th>
+      <th class="w-8"><input type="checkbox" id="ideas-select-all" aria-label="select all visible"></th>
+      <th data-sort-col="id" data-sort-type="text">{{ "ideas.col.id" | t(locale=locale) }}</th>
+      <th data-sort-col="title" data-sort-type="text">{{ "ideas.col.title" | t(locale=locale) }}</th>
+      <th data-sort-col="status" data-sort-type="status">{{ "ideas.col.status" | t(locale=locale) }}</th>
+      <th data-sort-col="priority" data-sort-type="prio">{{ "ideas.col.priority" | t(locale=locale) }}</th>
+      <th data-sort-col="created" data-sort-type="date">{{ "ideas.col.created" | t(locale=locale) }}</th>
+      <th>{{ "ideas.col.refs" | t(locale=locale) }}</th>
+      <th></th>
     </tr>
-    <tr class="border-b bg-slate-50 text-xs" id="ideas-filters" data-tt-filter-row>
-      <th class="p-1"></th>
-      <th class="p-1"><input type="text" data-filter-col="id"
+    <tr id="ideas-filters" data-tt-filter-row>
+      <th></th>
+      <th><input type="text" data-filter-col="id"
             placeholder="{{ 'ideas.filter.search' | t(locale=locale) }}"
             class="w-full border rounded p-1 text-xs font-mono"></th>
-      <th class="p-1"><input type="text" data-filter-col="title"
+      <th><input type="text" data-filter-col="title"
             placeholder="{{ 'ideas.filter.search' | t(locale=locale) }}"
             class="w-full border rounded p-1 text-xs font-mono"></th>
-      <th class="p-1">
+      <th>
         <select data-filter-col="status" class="w-full border rounded p-1 text-xs font-mono">
           <option value="">{{ "ideas.filter.opt.all" | t(locale=locale) }}</option>
           {% for opt in ['idea', 'exploring', 'approved', 'building', 'shipped', 'dropped'] %}
@@ -62,13 +62,13 @@
           {% endfor %}
         </select>
       </th>
-      <th class="p-1"><input type="text" data-filter-col="priority"
+      <th><input type="text" data-filter-col="priority"
             placeholder="{{ 'ideas.filter.search' | t(locale=locale) }}"
             class="w-full border rounded p-1 text-xs font-mono"></th>
-      <th class="p-1"><input type="text" data-filter-col="created"
+      <th><input type="text" data-filter-col="created"
             placeholder="YYYY-MM-DD"
             class="w-full border rounded p-1 text-xs font-mono"></th>
-      <th class="p-1">
+      <th>
         <select data-filter-col="refs" class="w-full border rounded p-1 text-xs font-mono">
           <option value="">{{ "ideas.filter.opt.all" | t(locale=locale) }}</option>
           <option value="gh">{{ "ideas.filter.opt.has_gh" | t(locale=locale) }}</option>
@@ -77,9 +77,9 @@
           <option value="none">{{ "ideas.filter.opt.no_refs" | t(locale=locale) }}</option>
         </select>
       </th>
-      <th class="p-1 text-right">
+      <th class="text-right">
         <button type="button" id="ideas-filter-reset" data-tt-reset
-                class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+                class="btn btn-sm">
           {{ "ideas.filter.reset" | t(locale=locale) }}
         </button>
       </th>
@@ -88,8 +88,7 @@
   <tbody>
   {% for it in items %}
   {% set iid = it.id or it.slug %}
-  <tr class="border-b align-top"
-      data-filter-row
+  <tr data-filter-row
       data-id="{{ (iid or '')|lower }}"
       data-title="{{ (it.title or '')|lower }}"
       data-status="{{ it.status or 'idea' }}"
@@ -98,15 +97,15 @@
       data-has-gh="{{ '1' if it.github_issue else '0' }}"
       data-has-run="{{ '1' if it.orchestration_run else '0' }}"
       data-has-jira="{{ '1' if it.jira_ticket else '0' }}">
-    <td class="p-2"><input type="checkbox" form="ideas-bulk-form" name="selected"
+    <td><input type="checkbox" form="ideas-bulk-form" name="selected"
         value="{{ iid }}" data-bulk-cb aria-label="select {{ iid }}" {% if not iid %}disabled{% endif %}></td>
-    <td class="p-2 font-mono text-xs">
+    <td class="num">
       {% if iid %}
-      <a class="text-blue-600 underline" href="/p/{{ project.slug }}/ideas/{{ iid }}">{{ iid }}</a>
+      <a class="text-brand-hover underline" href="/p/{{ project.slug }}/ideas/{{ iid }}">{{ iid }}</a>
       {% else %}—{% endif %}
     </td>
-    <td class="p-2">{{ it.title or '—' }}</td>
-    <td class="p-2 text-xs">
+    <td>{{ it.title or '—' }}</td>
+    <td class="text-xs">
       <form method="post" action="/p/{{ project.slug }}/ideas/{{ iid }}/status" class="inline">
         <select name="status" onchange="this.form.submit()" class="border rounded p-1 text-xs font-mono">
           {% set cur = it.status or 'idea' %}
@@ -116,27 +115,27 @@
         </select>
       </form>
     </td>
-    <td class="p-2 text-xs">{{ it.priority or '—' }}</td>
-    <td class="p-2 text-xs muted font-mono">{{ (it.created or '')[:10] }}</td>
-    <td class="p-2 text-xs font-mono">
-      {% if it.github_issue %}<a class="text-blue-600 underline" target="_blank" href="{{ it.github_issue }}">GH</a>{% endif %}
-      {% if it.orchestration_run %}<a class="text-purple-600 underline ml-1" href="/p/{{ project.slug }}/orchestration/{{ it.orchestration_run }}">run</a>{% endif %}
+    <td class="text-xs">{{ it.priority or '—' }}</td>
+    <td class="num muted">{{ (it.created or '')[:10] }}</td>
+    <td class="text-xs font-mono">
+      {% if it.github_issue %}<a class="text-brand-hover underline" target="_blank" href="{{ it.github_issue }}">GH</a>{% endif %}
+      {% if it.orchestration_run %}<a class="text-cache underline ml-1" href="/p/{{ project.slug }}/orchestration/{{ it.orchestration_run }}">run</a>{% endif %}
       {% if it.jira_ticket %}<span class="ml-1 muted">{{ it.jira_ticket }}</span>{% endif %}
     </td>
-    <td class="p-2 text-xs whitespace-nowrap">
+    <td class="text-xs whitespace-nowrap">
       <form method="post" action="/p/{{ project.slug }}/ideas/{{ iid }}/orchestrate" class="inline"
             data-confirm="{{ 'ideas.confirm.orchestrate_list' | t(locale=locale) }}">
-        <button class="text-xs px-2 py-1 border border-purple-500 text-purple-700 rounded">{{ "ideas.btn.orchestrate" | t(locale=locale) }}</button>
+        <button class="btn btn-sm">{{ "ideas.btn.orchestrate" | t(locale=locale) }}</button>
       </form>
       {% if not it.github_issue %}
       <form method="post" action="/p/{{ project.slug }}/ideas/{{ iid }}/github" class="inline ml-1"
             data-confirm="{{ 'ideas.confirm.gh_list' | t(locale=locale) }}">
-        <button class="text-xs px-2 py-1 border border-slate-500 text-slate-700 rounded">{{ "ideas.btn.gh" | t(locale=locale) }}</button>
+        <button class="btn btn-sm">{{ "ideas.btn.gh" | t(locale=locale) }}</button>
       </form>
       {% endif %}
       {% if not it.jira_ticket %}
       <form method="post" action="/p/{{ project.slug }}/ideas/{{ iid }}/jira" class="inline ml-1">
-        <button class="text-xs px-2 py-1 border rounded text-blue-600">{{ "ideas.btn.jira" | t(locale=locale) }}</button>
+        <button class="btn btn-sm">{{ "ideas.btn.jira" | t(locale=locale) }}</button>
       </form>
       {% endif %}
     </td>
@@ -190,14 +189,16 @@ window.tableToolsFilters.refs = function (row, value) {
 })();
 </script>
 {% else %}
-<div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
-  <p class="font-semibold text-sky-900 mb-1">{{ "ideas.empty.title" | t(locale=locale, dir=ideas_dir) }}</p>
-  <p class="text-sm text-sky-900 mb-2">
-    {{ "ideas.empty.desc" | t(locale=locale, code='/product-idea-scan') }}
-  </p>
-  <form method="post" action="/p/{{ project.slug }}/ideas/scan">
-    <button class="text-sm bg-blue-600 text-white rounded px-3 py-1">{{ "ideas.empty.run_btn" | t(locale=locale) }}</button>
-  </form>
+<div class="banner banner-info">
+  <div class="banner__body">
+    <p class="banner__title">{{ "ideas.empty.title" | t(locale=locale, dir=ideas_dir) }}</p>
+    <p class="text-sm">
+      {{ "ideas.empty.desc" | t(locale=locale, code='/product-idea-scan') }}
+    </p>
+    <form method="post" action="/p/{{ project.slug }}/ideas/scan">
+      <button class="btn btn-primary">{{ "ideas.empty.run_btn" | t(locale=locale) }}</button>
+    </form>
+  </div>
 </div>
 {% endif %}
 {% endblock %}
