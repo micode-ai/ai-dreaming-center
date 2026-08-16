@@ -127,7 +127,7 @@ def list_product_ideas(product_ideas_dir: str) -> list[ProductIdeaItem]:
                 competitor=str(fm.get("competitor", "")),
                 source=str(fm.get("source", "")),
                 source_agent=str(fm.get("source_agent", "")),
-                created=str(fm.get("created", "")),
+                created=str(fm.get("created") or fm.get("created_at") or ""),
                 target_release=str(fm.get("target_release", "unassigned")),
                 jira_epic=jira_epic,
                 jira_task=jira_task,

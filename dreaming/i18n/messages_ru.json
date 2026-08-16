@@ -167,6 +167,7 @@
   "ideas.col.title": "название",
   "ideas.col.status": "статус",
   "ideas.col.priority": "приоритет",
+  "ideas.col.created": "создана",
   "ideas.col.refs": "ссылки",
   "ideas.status.idea": "идея",
   "ideas.status.exploring": "изучается",

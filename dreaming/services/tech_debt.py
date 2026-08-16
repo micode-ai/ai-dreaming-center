@@ -123,7 +123,7 @@ def parse_tech_debt(tech_debt_dir: str) -> list[TechDebtItem]:
                 status=fm.get("status", "open"),
                 priority=fm.get("priority", "P2"),
                 module=fm.get("module", ""),
-                created=str(fm.get("created", "")),
+                created=str(fm.get("created") or fm.get("created_at") or ""),
                 created_by=fm.get("created_by", ""),
                 source=fm.get("source", ""),
                 complexity=str(fm.get("complexity", "")),

@@ -42,6 +42,7 @@
       <th class="p-2" data-sort-col="title" data-sort-type="text">{{ "ideas.col.title" | t(locale=locale) }}</th>
       <th class="p-2" data-sort-col="status" data-sort-type="status">{{ "ideas.col.status" | t(locale=locale) }}</th>
       <th class="p-2" data-sort-col="priority" data-sort-type="prio">{{ "ideas.col.priority" | t(locale=locale) }}</th>
+      <th class="p-2" data-sort-col="created" data-sort-type="date">{{ "ideas.col.created" | t(locale=locale) }}</th>
       <th class="p-2">{{ "ideas.col.refs" | t(locale=locale) }}</th>
       <th class="p-2"></th>
     </tr>
@@ -63,6 +64,9 @@
       </th>
       <th class="p-1"><input type="text" data-filter-col="priority"
             placeholder="{{ 'ideas.filter.search' | t(locale=locale) }}"
+            class="w-full border rounded p-1 text-xs font-mono"></th>
+      <th class="p-1"><input type="text" data-filter-col="created"
+            placeholder="YYYY-MM-DD"
             class="w-full border rounded p-1 text-xs font-mono"></th>
       <th class="p-1">
         <select data-filter-col="refs" class="w-full border rounded p-1 text-xs font-mono">
@@ -90,6 +94,7 @@
       data-title="{{ (it.title or '')|lower }}"
       data-status="{{ it.status or 'idea' }}"
       data-priority="{{ (it.priority or '')|lower }}"
+      data-created="{{ (it.created or '')[:10] }}"
       data-has-gh="{{ '1' if it.github_issue else '0' }}"
       data-has-run="{{ '1' if it.orchestration_run else '0' }}"
       data-has-jira="{{ '1' if it.jira_ticket else '0' }}">
@@ -112,6 +117,7 @@
       </form>
     </td>
     <td class="p-2 text-xs">{{ it.priority or '—' }}</td>
+    <td class="p-2 text-xs muted font-mono">{{ (it.created or '')[:10] }}</td>
     <td class="p-2 text-xs font-mono">
       {% if it.github_issue %}<a class="text-blue-600 underline" target="_blank" href="{{ it.github_issue }}">GH</a>{% endif %}
       {% if it.orchestration_run %}<a class="text-purple-600 underline ml-1" href="/p/{{ project.slug }}/orchestration/{{ it.orchestration_run }}">run</a>{% endif %}

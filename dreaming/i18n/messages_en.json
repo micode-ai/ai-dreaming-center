@@ -167,6 +167,7 @@
   "ideas.col.title": "title",
   "ideas.col.status": "status",
   "ideas.col.priority": "priority",
+  "ideas.col.created": "created",
   "ideas.col.refs": "refs",
   "ideas.status.idea": "idea",
   "ideas.status.exploring": "exploring",
