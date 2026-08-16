@@ -588,7 +588,8 @@ depend on them. Surfaces and borders are retuned toward visual direction A."
 
 **Files:**
 - Create: `dreaming/static/components.css`
-- Modify: `dreaming/static/app.css` (move `.card-link`, `.pill-nav`/`.pill`, `.badge-*`, `.dot`, `.metric`, `.data-table`, `dialog.note-modal` out; keep base elements, sidebar shell, `.md-content`, and the `!important` block)
+- Modify: `dreaming/static/app.css` (move `.card-link`, `.pill-nav`/`.pill`, `.badge-*`, `.dot`, `.metric`, `.data-table`, `dialog.note-modal` out; keep base elements, sidebar shell, `.md-content`, and the `!important` block; refresh the stale banner comment, which still claims this file holds the component classes)
+- Modify: `dreaming/static/tokens.css` (add `--shadow-brand` and `--metric-bar-w`, see Step 1)
 
 **Interfaces:**
 - Consumes: every token from Task 3.
@@ -735,7 +736,7 @@ depend on them. Surfaces and borders are retuned toward visual direction A."
   white-space: nowrap; transition: background-color 150ms ease, color 150ms ease;
 }
 .pill:hover { background: var(--bg-hover); color: var(--text-strong); }
-.pill.is-active { background: var(--brand); color: var(--brand-on); font-weight: 600; }
+.pill.is-active { background: var(--brand); color: var(--brand-on); font-weight: 600; box-shadow: var(--shadow-brand); }
 .pill.is-active:hover { background: var(--brand-hover); color: var(--brand-on); }
 
 /* ---------- Status badges ---------- */
@@ -765,10 +766,13 @@ depend on them. Surfaces and borders are retuned toward visual direction A."
 .metric {
   position: relative; overflow: hidden;
   background: var(--bg-card); border: 1px solid var(--border-subtle);
-  border-radius: var(--radius); padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  /* Left inset clears the status bar so text never crowds it. Expressed as a
+     relationship rather than a magic number: the bar's own width is the token. */
+  padding: var(--space-3) var(--space-4) var(--space-3) calc(var(--space-4) + var(--metric-bar-w));
   box-shadow: var(--shadow-card);
 }
-.metric::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--text-faint); }
+.metric::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: var(--metric-bar-w); background: var(--text-faint); }
 .metric.metric-success::before { background: var(--status-success); }
 .metric.metric-failed::before  { background: var(--status-failed); }
 .metric.metric-timeout::before { background: var(--status-timeout); }
@@ -834,7 +838,9 @@ If hex literals are reported, replace each with the matching token. Do not add a
 
 Run: `python scripts/smoke_templates_render.py` — expected exit 0.
 
-Then with the app running, open `http://localhost:8086/p/<slug>/` and confirm: metric tiles keep their coloured left bar, status badges keep their colours, the sessions table keeps its header and hover, and the confirm modal still opens (click any Delete). This task moved rules; it must change nothing on screen. Any visual difference means a rule was dropped in Step 2.
+Then with the app running, open `http://localhost:8086/p/<slug>/` and confirm: metric tiles keep their coloured left bar, status badges keep their colours, the sessions table keeps its header and hover, the active pill keeps its indigo glow, and the confirm modal still opens (click any Delete).
+
+**What may and may not change on screen.** This task moves rules onto the shared scale, so 1–2px shifts in spacing, radius, and table density are *expected* — that is the spacing ramp and the density tokens doing their job, and the plan's component inventory calls for exactly this realignment. What must **not** change is any *affordance*: a dropped shadow, a lost border, a vanished hover state, or a renamed class. If a value moved, check it landed on a scale token deliberately; if a declaration disappeared entirely, that is a defect.
 
 - [ ] **Step 5: Commit**
 
