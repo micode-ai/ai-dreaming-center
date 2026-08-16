@@ -378,6 +378,20 @@
 .progress-track { height: 0.5rem; border-radius: var(--radius-pill); overflow: hidden; background: var(--bg-hover); }
 .progress-fill { height: 100%; background: var(--status-success); }
 
+/* ============================================================
+   Detail views (Task 13): project_wiki_health.html's chart card and
+   canvas box, project_findings_detail.html's frontmatter <pre>, and
+   session_log.html's raw log body. Each replaces a single static
+   dimension/shadow that had no existing class -- grepped tokens.css and
+   components.css for 320px/16rem/80vh/shadow-card before adding; only
+   --shadow-card is reused (already defined for .metric/.pill-nav), the
+   rest are plain new dimensions with no colour involved.
+   ============================================================ */
+.card--shadow { box-shadow: var(--shadow-card); }
+.chart-box { height: 320px; }
+.frontmatter-pre { max-height: 16rem; }
+.log-body { max-height: 80vh; }
+
 /* ---------- Modal dialog ---------- */
 dialog.note-modal {
   padding: 0; max-width: 56rem; width: calc(100% - 2rem);
