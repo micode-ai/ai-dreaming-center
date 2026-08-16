@@ -11,7 +11,7 @@
 <body>
 <main class="max-w-xl mx-auto mt-20 p-8">
   <div class="empty-state">
-    <p class="empty-state__title">{{ "project_not_found.h1" | t(locale=locale, slug=slug) }}</p>
+    <h1 class="empty-state__title">{{ "project_not_found.h1" | t(locale=locale, slug=slug) }}</h1>
     {% if is_disabled %}
     <p>{{ "project_not_found.disabled" | t(locale=locale) }}</p>
     {% else %}
