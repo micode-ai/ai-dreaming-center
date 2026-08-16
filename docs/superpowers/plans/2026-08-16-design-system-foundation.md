@@ -27,6 +27,7 @@ These apply to **every** task. They are not repeated per task.
 - **Dynamic `style="{{ … }}"` stays.** 5 occurrences (bar widths and similar) are legitimate and exempt from the linter.
 - **Per-file counts written in prose in this plan are approximate; the linter is authoritative.** The prose figures (e.g. "`project_ai_usage.html` (92 inline styles)") were taken from a line-oriented grep, so a line carrying two `style=` attributes was counted once. `check_css_tokens.py` counts attributes, and reports one or two more for such files. Only the two totals — **464** colour utilities and **491** static inline styles — are exact gates. A per-file disagreement of one or two is expected and is not a sign you miscounted.
 - **Do not introduce single-quoted `style='…'` attributes.** The linter only matches double-quoted ones, so a single-quoted attribute would escape both the counter and the exemption check. There are none in the tree today, and migration should be removing these attributes, not adding them.
+- **`smoke_templates_render.py` covers both tiers here — do not settle for tier 1.** This worktree's `data/dreaming.db` is gitignored, throwaway, and separate from the main checkout's development database. It was seeded during Task 2 (`python scripts/smoke_seed_one.py smoke "D:/Work/micode/ai-dreaming-center/.worktrees/design-system"`), so the route walk now runs automatically and covers **45 parameter-free GET routes**. Every migration task should therefore see `OK all 45 parameter-free GET routes render`, not a `SKIP` notice. **A SKIP means the seeded project is gone — re-seed with the command above rather than accepting the weaker tier-1-only result.** Tier 2 is what catches a runtime template error (undefined variable, bad filter argument) that tier 1's compile pass cannot see; on a wave that edits 51 templates it is the more valuable of the two.
 
 ### Canonical replacement table
 
@@ -323,23 +324,30 @@ def compile_all() -> int:
 
 
 def walk_routes() -> int:
+    # Only a missing dependency is an environment problem worth skipping over.
+    # Any other import failure is a real regression and must not be swallowed.
     try:
         from fastapi.testclient import TestClient
         from dreaming.main import app
-    except Exception as exc:  # noqa: BLE001 - environment issue, not a failure
-        print(f"SKIP route walk (cannot import app: {exc})")
+    except ImportError as exc:
+        print(f"SKIP route walk (dependency unavailable: {exc})")
         return 0
 
     with TestClient(app) as client:
-        slug = None
+        # The /projects probe is itself a route render. If it raises or 500s,
+        # that IS the failure this script exists to catch -- reporting it as
+        # "no project configured" would turn a broken page into a green run.
         try:
             rows = client.get("/projects")
-            if rows.status_code == 200:
-                m = re.search(r'name="slug" value="([a-z0-9-]+)"', rows.text)
-                slug = m.group(1) if m else None
-        except Exception:  # noqa: BLE001
-            slug = None
+        except Exception as exc:  # noqa: BLE001 - reported as failure, not swallowed
+            print(f"Route walk FAILED: GET /projects raised {type(exc).__name__}: {exc}")
+            return 1
+        if rows.status_code >= 500:
+            print(f"Route walk FAILED: GET /projects returned HTTP {rows.status_code}")
+            return 1
 
+        m = re.search(r'name="slug" value="([a-z0-9-]+)"', rows.text)
+        slug = m.group(1) if m else None
         if not slug:
             print("SKIP route walk (no project configured in the local DB)")
             return 0
