@@ -4,13 +4,13 @@
 <p class="muted mb-3">{{ "settings.project_hint" | t(locale=locale) }}</p>
 <form method="post" action="/p/{{ project.slug }}/settings" class="space-y-6 max-w-3xl">
 {% for group_name, rows in groups %}
-  <fieldset class="bg-white p-4 rounded shadow">
-    <legend class="text-sm font-semibold px-2">{{ group_name }}</legend>
+  <fieldset class="card">
+    <legend class="text-sm font-semibold px-2 strong">{{ group_name }}</legend>
     <div class="space-y-3">
     {% for r in rows %}
-      <div class="border-b pb-2">
-        <div class="text-xs font-mono mb-1">{{ r.key }}</div>
-        <div class="text-xs muted mb-1">global: <code>{{ r.global }}</code></div>
+      <div class="field border-b pb-2">
+        <div class="field__label font-mono">{{ r.key }}</div>
+        <div class="field__hint">global: <code>{{ r.global }}</code></div>
         <label class="inline-flex items-center mr-3 text-xs">
           <input type="radio" name="action_{{ r.key }}" value="inherit" {% if not r.is_overridden %}checked{% endif %}>
           <span class="ml-1">inherit</span>
@@ -26,7 +26,7 @@
           {% else %}
             <input name="value_{{ r.key }}"
                    value="{{ r.override if r.is_overridden else '' }}"
-                   class="border rounded p-1 ml-2 font-mono text-xs flex-1"
+                   class="field__control ml-2 font-mono text-xs flex-1"
                    {% if 'token' in r.key or 'api_key' in r.key %}type="password" autocomplete="off"{% endif %}>
           {% endif %}
         </label>
@@ -35,6 +35,6 @@
     </div>
   </fieldset>
 {% endfor %}
-<button class="bg-blue-600 text-white rounded px-4 py-2">Save</button>
+<button class="btn btn-primary">Save</button>
 </form>
 {% endblock %}
