@@ -250,10 +250,10 @@
   padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm);
   font-family: var(--font-mono); font-size: var(--text-xs);
 }
-.queue-item-pending    { background: var(--timeout-soft-dim);    color: var(--status-timeout);     border: 1px solid var(--status-timeout-border); }
-.queue-item-dispatched { background: var(--queue-dispatched-bg); color: var(--queue-dispatched-fg); border: 1px solid var(--queue-dispatched-border); }
-.queue-item-failed     { background: var(--queue-failed-bg);     color: var(--queue-failed-fg);     border: 1px solid var(--queue-failed-border); }
-.queue-item-default    { background: var(--bg-elevated);         color: var(--text-muted);          border: 1px solid var(--border-subtle); }
+.queue-item-pending    { background: var(--timeout-soft-dim);    color: var(--status-timeout); border: 1px solid var(--status-timeout-border); }
+.queue-item-dispatched { background: var(--queue-dispatched-bg); color: var(--status-success); border: 1px solid var(--queue-dispatched-border); }
+.queue-item-failed     { background: var(--queue-failed-bg);     color: var(--status-failed);  border: 1px solid var(--queue-failed-border); }
+.queue-item-default    { background: var(--bg-elevated);         color: var(--text-muted);     border: 1px solid var(--border-subtle); }
 .queue-item__status { opacity: 0.6; }
 .queue-item__error  { opacity: 0.85; }
 

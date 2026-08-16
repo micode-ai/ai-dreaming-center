@@ -96,17 +96,22 @@
   --metric-bar-w: 3px;
 
   /* ---------- Orchestration list: one-off surfaces with no clean existing
-     token match. Values are exact literals ported from the pre-migration
-     inline styles (Task 7), not approximations of an existing -soft/-border
-     pair -- see components.css for where each is consumed. ---------- */
+     token match. The remaining literals here are alpha-tinted backgrounds
+     and borders ported exactly from the pre-migration inline styles (Task
+     7) -- overlays on the dark surface, not approximations of an existing
+     -soft/-border pair, and correct as dark-theme literals.
+     --queue-dispatched-fg and --queue-failed-fg were removed: both were
+     light-theme foreground colours (Tailwind emerald-600 / red-700) that
+     failed WCAG AA against the dark card (3.97:1 and 2.46:1) -- preserving
+     them exactly preserved a contrast bug. components.css now points
+     those two foregrounds at the existing --status-success /
+     --status-failed dark-theme tokens instead (8.58:1 / 5.80:1). ---------- */
   --brand-banner-bg: rgba(99, 102, 241, 0.08);     /* bulk-queue banner background */
   --brand-banner-border: rgba(99, 102, 241, 0.35); /* bulk-queue banner border */
   --brand-row-bg: rgba(99, 102, 241, 0.10);        /* selected run-row highlight */
   --timeout-soft-dim: rgba(245, 158, 11, 0.10);    /* queue-item-pending bg; stale-orphans banner bg */
   --queue-dispatched-bg: rgba(52, 211, 153, 0.10);
   --queue-dispatched-border: rgba(52, 211, 153, 0.35);
-  --queue-dispatched-fg: #059669;
   --queue-failed-bg: rgba(248, 113, 113, 0.10);
   --queue-failed-border: rgba(248, 113, 113, 0.35);
-  --queue-failed-fg: #b91c1c;
 }
