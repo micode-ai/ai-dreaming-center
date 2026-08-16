@@ -365,6 +365,15 @@
 .rubric-tile-reject     .rubric-tile__value { color: var(--status-failed); }
 .rubric-tile-incomplete .rubric-tile__value { color: var(--text-muted); }
 
+/* ============================================================
+   Plan progress bar (project_plans.html's done/todo ratio): a bounded-
+   width meter, distinct from .meter-track (Task 9), which flex-grows to
+   fill a toolbar row. This one must NOT carry flex, so the template's own
+   w-32 utility sizes it directly.
+   ============================================================ */
+.progress-track { height: 0.5rem; border-radius: var(--radius-pill); overflow: hidden; background: var(--bg-hover); }
+.progress-fill { height: 100%; background: var(--status-success); }
+
 /* ---------- Modal dialog ---------- */
 dialog.note-modal {
   padding: 0; max-width: 56rem; width: calc(100% - 2rem);
