@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
-<header class="mb-5 flex items-center gap-3 flex-wrap">
-  <div class="flex items-baseline gap-3">
-    <h1 class="text-2xl font-semibold tracking-tight" style="color: var(--text-strong);">{{ project.label }}</h1>
-    <span class="font-mono text-xs" style="color: var(--text-faint);">{{ project.slug }}</span>
+<div class="page-header">
+  <div class="page-header__titles">
+    <h1 class="page-header__title">{{ project.label }}</h1>
+    <span class="page-header__slug">{{ project.slug }}</span>
   </div>
-</header>
+</div>
 {% block project_content %}{% endblock %}
 {% endblock %}

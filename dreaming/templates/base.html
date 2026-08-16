@@ -55,8 +55,8 @@
     <div class="app-content">
       {% if flash %}
       <div class="px-8 pt-4">
-        <div class="rounded-lg border p-4" style="background: var(--brand-soft); border-color: rgba(99,102,241,0.35);">
-          <p class="text-sm" style="color: #c7d2fe;">{{ flash.message }}</p>
+        <div class="banner banner-info">
+          <div class="banner__body">{{ flash.message }}</div>
         </div>
       </div>
       {% endif %}
