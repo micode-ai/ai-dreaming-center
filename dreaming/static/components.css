@@ -1,8 +1,9 @@
 /* ============================================================
    components.css — semantic component classes.
 
-   RULE: no hex literal in this file. Colour arrives via var() from
-   tokens.css. rgba(0,0,0,...) is allowed for shadows only.
+   RULE: no hex, rgb()/rgba(), or hsl()/hsla() colour literal in this file.
+   Colour arrives via var() from tokens.css. Black via rgb()/rgba() (all
+   colour channels zero, any alpha) is allowed for shadows only.
    Enforced by scripts/check_css_tokens.py.
    ============================================================ */
 
@@ -424,7 +425,7 @@ dialog.app-modal {
 dialog.note-modal { max-width: 56rem; }
 dialog.app-modal  { max-width: 28rem; }
 dialog.note-modal::backdrop { background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(2px); }
-dialog.app-modal::backdrop { background: rgba(15, 23, 42, 0.5); }
+dialog.app-modal::backdrop { background: var(--overlay-modal); }
 
 /* note-modal header close glyph ("×") and scrollable raw/markdown body -- an
    identical pair of static inline styles repeats verbatim in

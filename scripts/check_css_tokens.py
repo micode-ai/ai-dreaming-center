@@ -3,9 +3,12 @@
 Three assertions, each with a per-file counter so migration progress is a number
 rather than a feeling:
 
-  1. components.css contains no hex colour literal (#abc / #aabbcc). Colour must
-     come from tokens.css via var(). rgba(0, 0, 0, ...) is permitted for shadows
-     -- the rule targets palette colour, not black alpha.
+  1. components.css contains no hex colour literal (#abc / #aabbcc) and no
+     rgb()/rgba()/hsl()/hsla() colour literal. Colour must come from
+     tokens.css via var(). Black via rgb()/rgba() (every colour channel --
+     r, g, b, or hsl lightness -- equal to zero, any alpha) is permitted for
+     shadows only; a function call with any non-zero colour channel is a
+     palette colour smuggled in past var() and is flagged just like hex.
   2. No template uses a light-theme Tailwind colour utility.
   3. No template carries a static inline style= attribute. Dynamic
      style="{{ ... }}" is exempt (bar widths and similar).
@@ -23,6 +26,31 @@ TEMPLATES = ROOT / "dreaming" / "templates"
 COMPONENTS = ROOT / "dreaming" / "static" / "components.css"
 
 HEX = re.compile(r"#[0-9a-fA-F]{3,8}\b")
+
+# rgb()/rgba()/hsl()/hsla() colour functions. HEX can't see these notations at
+# all; a palette colour written this way instead of as hex sailed straight
+# through the old check (see dialog.app-modal::backdrop's rgba(15, 23, 42, ...)
+# -- Tailwind slate-900, not black, not a shadow).
+COLOUR_FUNC = re.compile(r"\b(rgba?|hsla?)\(([^)]*)\)", re.IGNORECASE)
+NUM = re.compile(r"-?\d+(?:\.\d+)?%?")
+
+
+def _is_black_colour_func(func: str, args: str) -> bool | None:
+    """True if every colour channel is zero (rgb: r/g/b; hsl: lightness).
+
+    Alpha is ignored -- black at any opacity is a legitimate shadow. Returns
+    None if the argument list doesn't parse as at least three numeric
+    channels (so it is not treated as a colour function at all).
+    """
+    nums = NUM.findall(args)
+    if len(nums) < 3:
+        return None
+    try:
+        if func.lower().startswith("hsl"):
+            return float(nums[2].rstrip("%")) == 0
+        return all(float(c.rstrip("%")) == 0 for c in nums[:3])
+    except ValueError:
+        return None
 
 # A Tailwind utility carrying a palette colour. Requires a colour name, so
 # layout/size utilities (text-xs, border, bg-none) never match.
@@ -174,6 +202,9 @@ def _hex_in_components() -> list[str]:
     for i, line in enumerate(COMPONENTS.read_text(encoding="utf-8").splitlines(), 1):
         for m in HEX.finditer(line):
             bad.append(f"components.css:{i}: {m.group(0)}  ({line.strip()[:60]})")
+        for m in COLOUR_FUNC.finditer(line):
+            if _is_black_colour_func(m.group(1), m.group(2)) is False:
+                bad.append(f"components.css:{i}: {m.group(0)}  ({line.strip()[:60]})")
     return bad
 
 
@@ -209,14 +240,14 @@ def main() -> int:
 
     hex_bad = _hex_in_components()
     if hex_bad:
-        print(f"Hex literals in components.css: {len(hex_bad)}")
+        print(f"Colour literals in components.css: {len(hex_bad)}")
         for line in hex_bad:
             print("  " + line)
         failed = True
     elif COMPONENTS.exists():
         # Only claim OK for a file actually read. Before Task 4 creates it,
         # _hex_in_components has already printed its SKIP notice.
-        print("OK components.css: no hex literals")
+        print("OK components.css: no hex or non-black colour-function literals")
 
     utilities, inline = _scan_templates()
     if _report("Light-theme colour utilities in templates", utilities):
