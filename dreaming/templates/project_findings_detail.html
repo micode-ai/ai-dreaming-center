@@ -6,7 +6,7 @@
 {% if not item %}
 <p class="empty-state">{{ "findings.detail.not_found" | t(locale=locale, id=item_id, dir=td_dir) }}</p>
 {% else %}
-<h1 class="text-2xl font-bold mt-3">{{ item.title or item_id }}</h1>
+<h1 class="section-title">{{ item.title or item_id }}</h1>
 <div class="flex flex-wrap gap-2 items-center mt-2 text-xs">
   <span class="badge badge-neutral font-mono">id: {{ item.id or item_id }}</span>
   <span class="badge badge-neutral">status: <strong>{{ item.status or '—' }}</strong></span>

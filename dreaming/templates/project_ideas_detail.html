@@ -6,7 +6,7 @@
 {% if not item %}
 <p class="empty-state">{{ "ideas.detail.not_found" | t(locale=locale, id=item_id, dir=ideas_dir) }}</p>
 {% else %}
-<h1 class="text-2xl font-bold mt-3">{{ item.title or item_id }}</h1>
+<h1 class="section-title">{{ item.title or item_id }}</h1>
 <div class="flex flex-wrap gap-3 text-xs mt-2 muted">
   <span class="font-mono">id: {{ item.id or item_id }}</span>
   <span>{{ "ideas.col.status" | t(locale=locale) }}: <span class="font-mono">{% if item.status %}{{ ("ideas.status." ~ item.status) | t(locale=locale) }}{% else %}—{% endif %}</span></span>
