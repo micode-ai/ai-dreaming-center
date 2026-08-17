@@ -5,19 +5,21 @@
 
 {% if kit_status.template_files %}
   {% if not kit_status.all_present %}
-    <div class="mb-4 p-3 border border-amber-400 bg-amber-50 rounded text-sm">
-      <p class="font-semibold text-amber-800 mb-1">Starter-kit slash-commands are missing</p>
-      <p class="text-amber-900 mb-2">
-        Sessions need <code>/self-study</code> (and any other commands in the kit)
-        to be present at <code>{{ project.working_dir }}/.claude/commands/</code>.
-        Without them claude CLI exits in milliseconds with $0 cost (no actual work runs).
-      </p>
-      <p class="text-xs text-amber-900 mb-2">
-        Missing: {% for f in kit_status.missing %}<code class="mr-1">{{ f }}</code>{% endfor %}
-      </p>
-      <form method="post" action="/p/{{ project.slug }}/starter-kit/install" class="inline">
-        <button class="text-xs bg-amber-600 text-white rounded px-3 py-1">Install starter kit</button>
-      </form>
+    <div class="mb-4 banner banner-warn">
+      <div class="banner__body">
+        <p class="banner__title">Starter-kit slash-commands are missing</p>
+        <p class="mb-2">
+          Sessions need <code>/self-study</code> (and any other commands in the kit)
+          to be present at <code>{{ project.working_dir }}/.claude/commands/</code>.
+          Without them claude CLI exits in milliseconds with $0 cost (no actual work runs).
+        </p>
+        <p class="text-xs mb-2">
+          Missing: {% for f in kit_status.missing %}<code class="mr-1">{{ f }}</code>{% endfor %}
+        </p>
+        <form method="post" action="/p/{{ project.slug }}/starter-kit/install" class="inline">
+          <button class="btn btn-warn">Install starter kit</button>
+        </form>
+      </div>
     </div>
   {% else %}
     <details class="mb-4 text-xs muted">
@@ -28,7 +30,7 @@
       <form method="post" action="/p/{{ project.slug }}/starter-kit/install" class="mt-2"
             data-confirm="Overwrite existing starter-kit files with the latest template?" data-confirm-variant="danger">
         <input type="hidden" name="force" value="1">
-        <button class="text-xs border rounded px-2 py-1">
+        <button class="btn btn-sm">
           Reinstall (overwrite)
         </button>
       </form>
@@ -37,33 +39,33 @@
 {% endif %}
 
 <div data-tt-scope>
-  <div class="mb-2 flex items-center gap-2">
+  <div class="toolbar">
     <input type="text" data-tt-search
            placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
     <button type="button" data-tt-reset
-            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+            class="btn btn-sm">
       {{ "table.reset" | t(locale=locale) }}
     </button>
   </div>
-  <table class="w-full bg-white rounded shadow text-sm"
+  <table class="data-table"
          data-table-tools
          data-tt-key="rotation.{{ project.slug }}"
          data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
          data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
-    <thead class="text-left border-b"><tr>
-      <th class="p-2" data-sort-col="agent" data-sort-type="text">agent</th>
-      <th class="p-2" data-sort-col="tier" data-sort-type="num">tier</th>
-      <th class="p-2">enabled</th>
-      <th class="p-2" data-sort-col="last_studied" data-sort-type="date">last_studied</th>
-      <th class="p-2"></th>
+    <thead><tr>
+      <th data-sort-col="agent" data-sort-type="text">agent</th>
+      <th data-sort-col="tier" data-sort-type="num">tier</th>
+      <th>enabled</th>
+      <th data-sort-col="last_studied" data-sort-type="date">last_studied</th>
+      <th></th>
     </tr></thead>
     <tbody>
     {% for r in rotation %}
-    <tr class="border-b" data-filter-row
+    <tr data-filter-row
         data-tier="{{ r.tier }}"
         data-last_studied="{{ r.last_studied_at or '' }}">
-      <td class="p-2 font-mono">{{ r.agent_name }}</td>
-      <td class="p-2">
+      <td class="num">{{ r.agent_name }}</td>
+      <td>
         <form method="post" action="/p/{{ project.slug }}/rotation/tier" class="inline">
           <input type="hidden" name="agent_name" value="{{ r.agent_name }}">
           <select name="tier" onchange="this.form.submit()" class="border rounded p-1 text-xs">
@@ -73,20 +75,20 @@
           </select>
         </form>
       </td>
-      <td class="p-2">
+      <td>
         <form method="post" action="/p/{{ project.slug }}/rotation/toggle" class="inline">
           <input type="hidden" name="agent_name" value="{{ r.agent_name }}">
-          <button class="text-xs px-2 py-1 border rounded">{{ "✓" if r.enabled else "—" }}</button>
+          <button class="btn btn-sm">{{ "✓" if r.enabled else "—" }}</button>
         </form>
       </td>
-      <td class="p-2 text-xs muted">{{ r.last_studied_at or '—' }}</td>
-      <td class="p-2">
+      <td class="num text-xs muted">{{ r.last_studied_at or '—' }}</td>
+      <td>
         {% set running_key = project.slug ~ ":" ~ r.agent_name %}
         {% if running_key in running_keys %}
-          <span class="text-xs text-amber-600">running…</span>
+          <span class="text-xs text-warn">running…</span>
         {% else %}
           <form method="post" action="/p/{{ project.slug }}/rotation/start/{{ r.agent_name }}" class="inline">
-            <button class="text-xs bg-blue-600 text-white rounded px-2 py-1">Start session</button>
+            <button class="btn btn-sm btn-primary">Start session</button>
           </form>
         {% endif %}
       </td>

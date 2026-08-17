@@ -17,7 +17,10 @@
 These apply to **every** task. They are not repeated per task.
 
 - **No build step.** Plain CSS only. Do not add npm, PostCSS, or a Tailwind config file.
-- **Tailwind keeps layout only:** `grid`, `flex`, `gap-*`, `col-span-*`, `space-*`, `w-*`, `max-w-*`, `mb-*`, `mt-*`, responsive prefixes, `hidden`, `truncate`, `whitespace-nowrap`. Every colour, border, radius, shadow, and font-size utility leaves the templates.
+- **Tailwind keeps layout only:** `grid`, `flex`, `gap-*`, `col-span-*`, `space-*`, `w-*`, `max-w-*`, every margin utility (`mb-*`, `mt-*`, `ml-*`, `mr-*`, `mx-*`, `my-*`), padding utilities where no component sets the padding, list utilities (`list-disc`, `list-none`), responsive prefixes, `hidden`, `truncate`, `whitespace-nowrap`, `text-left/center/right`.
+- **Colour utilities leave the templates entirely** — a utility carrying a palette colour name (`bg-white`, `text-slate-600`, `border-amber-400`, `bg-white/85`) is what `COLOUR_UTILITY` in `check_css_tokens.py` matches, and it is what this wave is measured on.
+- **Un-suffixed `border`, `rounded`, and `shadow` are NOT gated** — the linter's regex requires a colour-name suffix, so those never match it. Drop them where a component already supersedes them (`.btn`, `.banner`, `.card`, `.data-table` all set their own border and radius); leave them on elements no component covers, such as the bare filter inputs inside a `table_tools` filter row. Do not hunt them down for their own sake, and do not treat an earlier task's decision to leave one as a defect — Tasks 7 and 8 both settled this the same way.
+- **Font-size utilities (`text-xs`, `text-sm`, …) are tolerated** where no component already sets the size. They are not gated by the linter and the replacement table does not cover them, so claiming they all disappear would be promising more than this wave delivers. Prefer a component class when one fits; leave the utility when none does. Tightening this is a follow-up once font size becomes a gated metric.
 - **Existing token names are never renamed.** `--bg-app`, `--bg-card`, `--brand`, `--status-*`, `--border-subtle`, `--text-*` are load-bearing for `table_tools.css`, `orchestration_swimlane.css`, and every not-yet-migrated inline style. Add new tokens alongside; never rename or delete an existing one during this wave.
 - **`components.css` contains no hex literal.** Colour arrives via `var(--token)`. `rgba(0, 0, 0, …)` is permitted for shadows — the rule targets palette colour, not black alpha. Enforced by `scripts/check_css_tokens.py`.
 - **The `!important` compatibility block at the bottom of `app.css` is deleted in Task 17 and not before.** It is the only thing keeping unmigrated screens readable.
@@ -25,6 +28,9 @@ These apply to **every** task. They are not repeated per task.
 - **Cyrillic content is written via the Write/Edit tool (UTF-8).** PowerShell `Set-Content` defaults to UTF-16 LE and breaks the parser (CLAUDE.md).
 - **User-facing strings keep `{{ "key" | t(locale=locale) }}`.** Migration must not change any string, key, `data-*` attribute, `hx-*` attribute, form `action`, or `data-confirm` payload. This wave changes appearance only. `scripts/check_i18n.py` must stay green.
 - **Dynamic `style="{{ … }}"` stays.** 5 occurrences (bar widths and similar) are legitimate and exempt from the linter.
+- **Per-file counts written in prose in this plan are approximate; the linter is authoritative.** The prose figures (e.g. "`project_ai_usage.html` (92 inline styles)") were taken from a line-oriented grep, so a line carrying two `style=` attributes was counted once. `check_css_tokens.py` counts attributes, and reports one or two more for such files. Only the two totals — **464** colour utilities and **491** static inline styles — are exact gates. A per-file disagreement of one or two is expected and is not a sign you miscounted.
+- **Do not introduce single-quoted `style='…'` attributes.** The linter only matches double-quoted ones, so a single-quoted attribute would escape both the counter and the exemption check. There are none in the tree today, and migration should be removing these attributes, not adding them.
+- **`smoke_templates_render.py` covers both tiers here — do not settle for tier 1.** This worktree's `data/dreaming.db` is gitignored, throwaway, and separate from the main checkout's development database. It was seeded during Task 2 (`python scripts/smoke_seed_one.py smoke "D:/Work/micode/ai-dreaming-center/.worktrees/design-system"`), so the route walk now runs automatically and covers **45 parameter-free GET routes**. Every migration task should therefore see `OK all 45 parameter-free GET routes render`, not a `SKIP` notice. **A SKIP means the seeded project is gone — re-seed with the command above rather than accepting the weaker tier-1-only result.** Tier 2 is what catches a runtime template error (undefined variable, bad filter argument) that tier 1's compile pass cannot see; on a wave that edits 51 templates it is the more valuable of the two.
 
 ### Canonical replacement table
 
@@ -76,7 +82,9 @@ Tables that are scanned rather than read (`sessions`, orchestration runs, findin
 | `dreaming/static/app.css` | Components move out to `components.css`; tokens move out to `tokens.css`; keeps base elements, sidebar shell, `.md-content`, and (until Task 17) the `!important` block. |
 | 51 templates under `dreaming/templates/` | Migrated in batches, Tasks 5–16. |
 
-**Untouched:** `dreaming/static/table_tools.{css,js}`, `dreaming/static/orchestration_swimlane.css`, `dreaming/static/orchestration_stream.js` — already token-driven and feature-scoped.
+**Untouched:** `dreaming/static/table_tools.css`, `dreaming/static/table_tools.js`, `dreaming/static/orchestration_stream.js` — already token-driven and feature-scoped.
+
+**Correction (mid-wave).** `dreaming/static/orchestration_swimlane.css` was originally listed as untouched on the same grounds. Reading it during Task 7 showed the claim was false: nine hardcoded light-theme foreground colours and a reference to `--bg-surface`, a token that has never existed. Task 7A now fixes it. The lesson generalizes — "already token-driven" was asserted about all four files from their filenames and roles, not from reading them.
 
 ---
 
@@ -181,7 +189,9 @@ def main() -> int:
         for line in hex_bad:
             print("  " + line)
         failed = True
-    else:
+    elif COMPONENTS.exists():
+        # Only claim OK for a file actually read. Before Task 4 creates it,
+        # _hex_in_components has already printed its SKIP notice.
         print("OK components.css: no hex literals")
 
     utilities, inline = _scan_templates()
@@ -319,23 +329,30 @@ def compile_all() -> int:
 
 
 def walk_routes() -> int:
+    # Only a missing dependency is an environment problem worth skipping over.
+    # Any other import failure is a real regression and must not be swallowed.
     try:
         from fastapi.testclient import TestClient
         from dreaming.main import app
-    except Exception as exc:  # noqa: BLE001 - environment issue, not a failure
-        print(f"SKIP route walk (cannot import app: {exc})")
+    except ImportError as exc:
+        print(f"SKIP route walk (dependency unavailable: {exc})")
         return 0
 
     with TestClient(app) as client:
-        slug = None
+        # The /projects probe is itself a route render. If it raises or 500s,
+        # that IS the failure this script exists to catch -- reporting it as
+        # "no project configured" would turn a broken page into a green run.
         try:
             rows = client.get("/projects")
-            if rows.status_code == 200:
-                m = re.search(r'name="slug" value="([a-z0-9-]+)"', rows.text)
-                slug = m.group(1) if m else None
-        except Exception:  # noqa: BLE001
-            slug = None
+        except Exception as exc:  # noqa: BLE001 - reported as failure, not swallowed
+            print(f"Route walk FAILED: GET /projects raised {type(exc).__name__}: {exc}")
+            return 1
+        if rows.status_code >= 500:
+            print(f"Route walk FAILED: GET /projects returned HTTP {rows.status_code}")
+            return 1
 
+        m = re.search(r'name="slug" value="([a-z0-9-]+)"', rows.text)
+        slug = m.group(1) if m else None
         if not slug:
             print("SKIP route walk (no project configured in the local DB)")
             return 0
@@ -576,7 +593,8 @@ depend on them. Surfaces and borders are retuned toward visual direction A."
 
 **Files:**
 - Create: `dreaming/static/components.css`
-- Modify: `dreaming/static/app.css` (move `.card-link`, `.pill-nav`/`.pill`, `.badge-*`, `.dot`, `.metric`, `.data-table`, `dialog.note-modal` out; keep base elements, sidebar shell, `.md-content`, and the `!important` block)
+- Modify: `dreaming/static/app.css` (move `.card-link`, `.pill-nav`/`.pill`, `.badge-*`, `.dot`, `.metric`, `.data-table`, `dialog.note-modal` out; keep base elements, sidebar shell, `.md-content`, and the `!important` block; refresh the stale banner comment, which still claims this file holds the component classes)
+- Modify: `dreaming/static/tokens.css` (add `--shadow-brand` and `--metric-bar-w`, see Step 1)
 
 **Interfaces:**
 - Consumes: every token from Task 3.
@@ -638,9 +656,6 @@ depend on them. Surfaces and borders are retuned toward visual direction A."
 .btn-ghost:hover { background: var(--bg-hover); color: var(--text-strong); }
 
 .btn-sm { min-height: var(--control-h-sm); font-size: var(--text-sm); padding: 0 var(--space-2); }
-
-/* Forms are laid out inline all over the app; keep them from breaking button rows. */
-form.inline { display: inline; }
 
 /* ---------- Toolbar (search + reset + count above a table) ---------- */
 .toolbar { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-2); }
@@ -726,7 +741,7 @@ form.inline { display: inline; }
   white-space: nowrap; transition: background-color 150ms ease, color 150ms ease;
 }
 .pill:hover { background: var(--bg-hover); color: var(--text-strong); }
-.pill.is-active { background: var(--brand); color: var(--brand-on); font-weight: 600; }
+.pill.is-active { background: var(--brand); color: var(--brand-on); font-weight: 600; box-shadow: var(--shadow-brand); }
 .pill.is-active:hover { background: var(--brand-hover); color: var(--brand-on); }
 
 /* ---------- Status badges ---------- */
@@ -756,10 +771,13 @@ form.inline { display: inline; }
 .metric {
   position: relative; overflow: hidden;
   background: var(--bg-card); border: 1px solid var(--border-subtle);
-  border-radius: var(--radius); padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  /* Left inset clears the status bar so text never crowds it. Expressed as a
+     relationship rather than a magic number: the bar's own width is the token. */
+  padding: var(--space-3) var(--space-4) var(--space-3) calc(var(--space-4) + var(--metric-bar-w));
   box-shadow: var(--shadow-card);
 }
-.metric::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--text-faint); }
+.metric::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: var(--metric-bar-w); background: var(--text-faint); }
 .metric.metric-success::before { background: var(--status-success); }
 .metric.metric-failed::before  { background: var(--status-failed); }
 .metric.metric-timeout::before { background: var(--status-timeout); }
@@ -825,7 +843,11 @@ If hex literals are reported, replace each with the matching token. Do not add a
 
 Run: `python scripts/smoke_templates_render.py` — expected exit 0.
 
-Then with the app running, open `http://localhost:8086/p/<slug>/` and confirm: metric tiles keep their coloured left bar, status badges keep their colours, the sessions table keeps its header and hover, and the confirm modal still opens (click any Delete). This task moved rules; it must change nothing on screen. Any visual difference means a rule was dropped in Step 2.
+Then with the app running, open `http://localhost:8086/p/<slug>/` and confirm: metric tiles keep their coloured left bar, status badges keep their colours, the sessions table keeps its header and hover, the active pill keeps its indigo glow, and the confirm modal still opens (click any Delete).
+
+**What may and may not change on screen.** This task moves rules onto the shared scale, so 1–2px shifts in spacing, radius, and table density are *expected* — that is the spacing ramp and the density tokens doing their job, and the plan's component inventory calls for exactly this realignment. What must **not** change is any *affordance*: a dropped shadow, a lost border, a vanished hover state, or a renamed class. If a value moved, check it landed on a scale token deliberately; if a declaration disappeared entirely, that is a defect.
+
+**One qualification on "dropped affordance", added after Task 6.** The test is whether a *perceptible* affordance is lost, not whether a declaration vanished from the source. Light-theme leftovers that never rendered on this dark background are not affordances — they are the artifacts this wave exists to remove. The worked example: `shadow-sm` is `0 1px 2px rgb(0 0 0 / 0.05)`; composited over `--bg-app` (`#0a0e17`) it shifts each channel by less than one unit, below display quantization, and it arrived as part of the `bg-white … border-slate-200 shadow-sm divide-slate-100` light-theme cluster. Removing it with the rest of that cluster is the task working, not failing. When invoking this qualification, do the arithmetic and show it — "probably invisible" is not the same claim as "sub-perceptual, here is the composite".
 
 - [ ] **Step 5: Commit**
 
@@ -853,6 +875,7 @@ The shell establishes `.page-header` for all 32 templates that extend `_project_
 - Modify: `dreaming/templates/base.html` (flash banner, lines 54-60)
 - Modify: `dreaming/templates/_project_layout.html` (whole file)
 - Modify: `dreaming/templates/_sidebar.html`
+- Modify: `dreaming/static/app.css` (sidebar active-item colours → tokens, Step 4)
 
 **Interfaces:**
 - Consumes: `.banner`, `.page-header*` from Task 4.
@@ -896,12 +919,12 @@ Replace the whole file with:
 ```html
 {% extends "base.html" %}
 {% block content %}
-<div class="page-header">
+<header class="page-header">
   <div class="page-header__titles">
     <h1 class="page-header__title">{{ project.label }}</h1>
     <span class="page-header__slug">{{ project.slug }}</span>
   </div>
-</div>
+</header>
 {% block project_content %}{% endblock %}
 {% endblock %}
 ```
@@ -910,6 +933,27 @@ Replace the whole file with:
 
 Apply the canonical replacement table from Global Constraints. The sidebar's own `.app-sidebar__*` classes stay — they live in `app.css` and are already tokenized. Only remove inline `style="…"` attributes and colour utilities, replacing each with the sidebar class that already covers it (or a `.btn`/`.badge` where the element is genuinely a button or badge).
 
+Then, in `dreaming/static/app.css`, replace the two hardcoded hexes in the sidebar's active-item rules with tokens. `--brand-fg` (`#c7d2fe`, Task 3) already holds the text colour exactly. The icon colour `#a5b4fc` has **no** existing token — add one to `tokens.css` in the Brand group rather than reaching for `--brand-hover`, which is `#818cf8` and visibly darker:
+
+```css
+  --brand-fg-dim: #a5b4fc;   /* active icon: one step down from --brand-fg */
+```
+
+```css
+.app-sidebar__nav-link.is-active { background: var(--brand-soft); color: var(--brand-fg); }
+.app-sidebar__nav-link.is-active svg { opacity: 1; color: var(--brand-fg-dim); }
+```
+
+Also add a `.faint` utility next to the existing `.muted` in `app.css`, since migration keeps meeting text that was `--text-faint` and there is no class for it:
+
+```css
+.faint { color: var(--text-faint); }
+```
+
+Use it for the sidebar's "pick a project" hint, which is `--text-faint` today — `.muted` is a different, lighter grey and would drift the colour.
+
+(`app.css` is not covered by the linter's no-hex rule, so this is a deliberate tidy-up in the task that already owns the shell, not a linter requirement.)
+
 - [ ] **Step 5: Verify**
 
 Run: `python scripts/check_css_tokens.py`
@@ -917,17 +961,22 @@ Expected: `base.html`, `_project_layout.html`, `_sidebar.html` no longer appear 
 
 Run: `python scripts/smoke_templates_render.py` — expected exit 0.
 
-In a browser, open `http://localhost:8086/p/<slug>/` and check: the sidebar renders with its icons and active-item highlight, the project title and slug sit on one baseline, and a flash message (trigger one by saving a setting) renders as a dark indigo banner, not a light box.
+In a browser, open `http://localhost:8086/p/<slug>/` and check: the sidebar renders with its icons and active-item highlight, and the project title and slug sit on one baseline.
+
+**Do not try to verify the flash banner here.** `base.html`'s `{% if flash %}` block is unreachable: `dreaming/lib/flash.py` sets a cookie, `read_flash` is called by nothing, no route puts `flash` in a template context, and `main.py` registers no context processor. Flash messages are consumed entirely client-side by `_app_modal.html`. The block is migrated for consistency, not because it renders. Its `.banner-info` styling is blue rather than the brand indigo the original markup used — correct for the class, whose real consumers from Task 6 onward are the `bg-sky-50` informational banners, and moot for a block that cannot render.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add dreaming/templates/base.html dreaming/templates/_project_layout.html dreaming/templates/_sidebar.html
+git add dreaming/templates/base.html dreaming/templates/_project_layout.html dreaming/templates/_sidebar.html dreaming/static/app.css
 git commit -m "refactor(design): migrate the shell to the component layer
 
 base.html flash banner -> .banner-info, _project_layout.html header ->
 .page-header, _sidebar.html off inline styles. Establishes the page-header
-shape the 32 templates extending _project_layout inherit."
+shape the 32 templates extending _project_layout inherit.
+
+app.css sidebar active-item colours move to --brand-fg / --brand-hover,
+removing the last hardcoded hexes from the shell."
 ```
 
 ---
@@ -982,7 +1031,7 @@ so the markup is just `<div class="metric__value">{{ stats.success or 0 }}</div>
 - `<h2 class="font-semibold text-slate-900 mb-2">` → `<h2 class="section-title">` (both occurrences, lines 86 and 164).
 - The search/reset wrapper `<div class="mb-2 flex items-center gap-2">` → `<div class="toolbar">`; the reset button → `class="btn btn-sm"`.
 - `<table class="data-table" …>` → `<table class="data-table is-dense" …>` — this table is scanned, not read.
-- The `started_at` cell: `class="text-xs muted whitespace-nowrap"` → `class="num dim whitespace-nowrap"`; add `.dim { color: var(--text-muted); }` to `components.css`.
+- The `started_at` cell: `class="text-xs muted whitespace-nowrap"` → `class="num muted whitespace-nowrap"`. Reuse the existing `.muted` from `app.css` — do **not** add a second class with the same declaration.
 - The `log` link → `class="btn btn-sm"`; `Stop`/`Force-close` → `class="btn btn-sm btn-warn"`; `Delete` → `class="btn btn-sm btn-danger"`.
 - Leave every `data-*`, `data-confirm`, `action`, and `| t(…)` call byte-for-byte unchanged.
 
@@ -1012,8 +1061,9 @@ git add dreaming/templates/project_dashboard.html dreaming/static/components.css
 git commit -m "refactor(design): migrate project_dashboard.html to the component layer
 
 Fixes the light bg-amber-50 banners that rendered as white boxes on the dark
-app. Sessions table moves to is-dense with mono timestamps. Adds metric__value
-status colours and .dim to components.css so the template carries no colour."
+app. Sessions table moves to is-dense with mono timestamps. Adds the four
+metric__value status colours to components.css so the template carries no
+colour of its own."
 ```
 
 ---
@@ -1057,6 +1107,84 @@ git commit -m "refactor(design): migrate project_orchestration_list.html
 
 Heaviest template in the tree (54 inline styles). SSE element ids and hx-*
 attributes preserved verbatim; live stream verified against a real run."
+```
+
+---
+
+### Task 7A: Fix `orchestration_swimlane.css` — added mid-wave
+
+**Why this task exists.** The spec and this plan both asserted that `orchestration_swimlane.css` is "already token-driven and feature-scoped" and left it untouched. **That assertion was false.** Reading it during Task 7 turned up nine hardcoded light-theme foreground colours and one reference to a token that does not exist. This is the wave's own bug class — the spec's Problem section names exactly this — sitting on the screen Task 7 just migrated. Excluding it was based on a premise, not a reading.
+
+**Files:**
+- Modify: `dreaming/static/orchestration_swimlane.css`
+- Modify: `dreaming/static/tokens.css` (two new tokens, see below)
+
+**Interfaces:**
+- Consumes: the status tokens from Task 3.
+- Produces: nothing new for later tasks. Class names, selectors, and every non-colour property stay exactly as they are — `orchestration_stream.js` and `project_orchestration_list.html` both depend on these class names.
+
+- [ ] **Step 1: Add the two missing tokens**
+
+Neither an orange nor a purple foreground exists in `tokens.css`. Add to the status group:
+
+```css
+  --status-cancelled: #fb923c;   /* cancelled / stopped pills */
+  --skill-fg: #d8b4fe;           /* skill badges under activity chips */
+```
+
+- [ ] **Step 2: Replace every light-theme foreground**
+
+These nine colours are all dark text intended for light backgrounds. Each sits on an alpha-tinted overlay over the dark app surface, so each currently fails WCAG AA — `.status-failed` measures about 2.4:1. Replace **only the `color:` values**; leave every `border-color` and `background` exactly as they are, since those are alpha tints that read correctly on dark.
+
+| Selector | Current | Replace with |
+|---|---|---|
+| `.status-running, .status-active` | `#0369a1` | `var(--status-running)` |
+| `.status-completed, .status-done, .status-approved` | `#047857` | `var(--status-success)` |
+| `.status-pending, .status-queued` | `#475569` | `var(--text-muted)` |
+| `.status-blocked` | `#92400e` | `var(--status-timeout)` |
+| `.status-rejected, .status-failed` | `#b91c1c` | `var(--status-failed)` |
+| `.status-cancelled, .status-stopped` | `#9a3412` | `var(--status-cancelled)` |
+| `.stage-icon` | `#4338ca` | `var(--brand-fg)` |
+| `.stage-meta` | `#6b7280` | `var(--text-faint)` |
+| `.swim-agent-role` | `#6b7280` | `var(--text-faint)` |
+| `.skill-badge` | `#7e22ce` | `var(--skill-fg)` |
+| `.sse-indicator.connected` | `#047857` | `var(--status-success)` |
+| `.sse-indicator.done` | `#4338ca` | `var(--brand-fg)` |
+| `.sse-indicator.disconnected` | `#b91c1c` | `var(--status-failed)` |
+| `.sse-indicator.polling` | `#92400e` | `var(--status-timeout)` |
+
+- [ ] **Step 3: Fix the undefined token**
+
+Line 32's `.swimlanes-wrap` sets `background: var(--bg-surface)`. **No such token has ever existed** — the surface token is `--bg-elevated`, and the Tailwind config's `surface` key was never mirrored into CSS. The declaration currently resolves to nothing, leaving the wrapper transparent. Change it to `var(--bg-card)`, which is what a bordered content wrapper uses everywhere else in this app.
+
+- [ ] **Step 4: Verify**
+
+Run `python scripts/check_css_tokens.py` — totals must be **unchanged** at 401 / 421. This task touches no template. `components.css` must still report no hex literals; the two new literals live in `tokens.css`, where literals belong.
+
+Run `python scripts/smoke_templates_render.py` — 51 templates, 45 routes, exit 0.
+
+Then confirm by grep that none of the nine replaced hexes survive anywhere under `dreaming/static/`:
+
+```bash
+grep -nE '#(0369a1|047857|475569|92400e|b91c1c|9a3412|4338ca|6b7280|7e22ce)' dreaming/static/
+```
+
+Expected: no output.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add dreaming/static/orchestration_swimlane.css dreaming/static/tokens.css
+git commit -m "fix(design): stop the swimlane rendering light-theme text on dark
+
+The spec claimed this file was already token-driven. It was not: nine
+hardcoded foreground colours meant for light backgrounds, of which
+.status-failed measured about 2.4:1 against its own tinted background, well
+under the 4.5:1 floor. Backgrounds and borders were already alpha tints and
+are untouched.
+
+Also fixes .swimlanes-wrap referencing --bg-surface, a token that has never
+existed, which left the wrapper transparent instead of carded."
 ```
 
 ---
@@ -1149,6 +1277,161 @@ git commit -m "refactor(design): migrate the AI-usage templates
 
 170 inline styles between them. Dynamic bar widths (style=\"width: {{ }}%\")
 kept as-is; only their colour and height moved into component classes."
+```
+
+---
+
+### Task 9A: Teach the linter to catch undefined classes — added mid-wave
+
+**Why this task exists.** Task 9 shipped nine references to a `.strong` class that was never defined. Every verification passed: the colour check saw no palette utility, the compile check saw valid Jinja, the preservation check saw the attributes survive. **A class name is just a string to all three.** With eight migration tasks left, each free to invent component classes, this gap will recur — and it fails silently, which is the worst way to fail.
+
+**Files:**
+- Modify: `scripts/check_css_tokens.py`
+
+**Interfaces:**
+- Consumes: nothing new.
+- Produces: a fourth assertion in the same CLI. Tasks 10-16 gain a check that catches a class they reference but forget to define.
+
+- [ ] **Step 1: Add the assertion**
+
+Append to `scripts/check_css_tokens.py`. The rule: a class token in a template must either be defined in this project's own CSS, or be Tailwind-shaped. Anything else is very likely a class someone meant to write and did not.
+
+```python
+# ---------------------------------------------------------------- assertion 4
+# Every class a template references must be defined in this project's CSS or be
+# a Tailwind utility. The wave's own failure mode was nine references to a
+# `.strong` that existed nowhere: the colour check passed (no palette utility),
+# the compile check passed (valid Jinja), the preservation check passed
+# (attributes survived). A class name is just a string to all of them.
+
+CSS_SOURCES = [
+    ROOT / "dreaming" / "static" / "app.css",
+    ROOT / "dreaming" / "static" / "components.css",
+    ROOT / "dreaming" / "static" / "table_tools.css",
+    ROOT / "dreaming" / "static" / "orchestration_swimlane.css",
+]
+
+CLASS_ATTR = re.compile(r'class\s*=\s*"([^"]*)"')
+CLASS_DEF = re.compile(r"\.(-?[A-Za-z_][\w-]*)")
+
+# Tailwind utilities that stand alone, with no value suffix.
+TW_EXACT = {
+    "flex", "grid", "block", "inline", "inline-block", "inline-flex", "hidden",
+    "table", "contents", "relative", "absolute", "fixed", "sticky", "static",
+    "truncate", "italic", "underline", "uppercase", "lowercase", "capitalize",
+    "container", "border", "rounded", "shadow", "ring", "outline", "transition",
+    "transform", "resize", "invisible", "visible", "antialiased", "sr-only",
+    "overflow-auto", "overflow-hidden", "overflow-x-auto", "overflow-y-auto",
+}
+
+# Roots Tailwind owns; a token is Tailwind-shaped if it starts with one of
+# these followed by "-".
+TW_ROOTS = (
+    "p", "px", "py", "pt", "pb", "pl", "pr", "m", "mx", "my", "mt", "mb", "ml",
+    "mr", "w", "h", "min", "max", "text", "bg", "border", "rounded", "shadow",
+    "gap", "space", "grid", "col", "row", "items", "justify", "self", "place",
+    "flex", "order", "opacity", "z", "top", "bottom", "left", "right", "inset",
+    "overflow", "whitespace", "break", "font", "leading", "tracking", "list",
+    "divide", "ring", "cursor", "select", "transition", "duration", "ease",
+    "translate", "scale", "rotate", "animate", "aspect", "object", "align",
+    "from", "to", "via", "fill", "stroke", "backdrop", "filter", "blur",
+)
+
+TW_VARIANTS = (
+    "sm:", "md:", "lg:", "xl:", "2xl:", "hover:", "focus:", "focus-visible:",
+    "active:", "disabled:", "group-hover:", "dark:", "first:", "last:",
+    "odd:", "even:", "print:", "motion-safe:", "motion-reduce:",
+)
+
+
+def _defined_classes() -> set[str]:
+    names: set[str] = set()
+    for path in CSS_SOURCES:
+        if path.exists():
+            names |= set(CLASS_DEF.findall(path.read_text(encoding="utf-8")))
+    return names
+
+
+def _is_tailwind(token: str) -> bool:
+    for variant in TW_VARIANTS:
+        if token.startswith(variant):
+            token = token[len(variant):]
+            break
+    if token in TW_EXACT:
+        return True
+    head = token.split("-", 1)[0]
+    return head in TW_ROOTS
+
+
+def _undefined_classes(defined: set[str]) -> dict[str, set[str]]:
+    offenders: dict[str, set[str]] = {}
+    for tpl in sorted(TEMPLATES.rglob("*.html")):
+        rel = tpl.relative_to(TEMPLATES).as_posix()
+        for attr in CLASS_ATTR.findall(tpl.read_text(encoding="utf-8")):
+            if "{{" in attr or "{%" in attr:
+                continue  # class list is built by Jinja; not statically knowable
+            for token in attr.split():
+                if token in defined or _is_tailwind(token):
+                    continue
+                offenders.setdefault(rel, set()).add(token)
+    return offenders
+```
+
+Wire it into `main()` after the inline-style report, before the final verdict:
+
+```python
+    undefined = _undefined_classes(_defined_classes())
+    if undefined:
+        total = sum(len(v) for v in undefined.values())
+        print(f"Classes referenced but never defined: {total}")
+        for name, tokens in sorted(undefined.items()):
+            print(f"  {name}: {', '.join(sorted(tokens))}")
+        failed = True
+    else:
+        print("OK every referenced class is defined or a Tailwind utility")
+```
+
+- [ ] **Step 2: Prove it catches the real bug**
+
+Temporarily remove the `.strong` rule from `app.css`, run the linter, confirm it names `.strong` in both AI-usage templates, then restore it:
+
+```bash
+python -c "import pathlib; p=pathlib.Path('dreaming/static/app.css'); t=p.read_text(encoding='utf-8'); p.write_text(t.replace('.strong { color: var(--text-strong); }\n', ''), encoding='utf-8')"
+python scripts/check_css_tokens.py
+git checkout -- dreaming/static/app.css
+```
+
+Expected: the middle command lists `strong` under both `project_ai_usage.html` and `global_ai_usage.html`. **A check that cannot fail is not a check** — if it stays silent, the wiring is wrong.
+
+- [ ] **Step 3: Run it against the real tree and triage**
+
+```bash
+python scripts/check_css_tokens.py
+```
+
+The colour and inline-style totals must be unchanged at **356 / 250** — this task touches no template or stylesheet.
+
+The new assertion will very likely report tokens on unmigrated templates. **Read every one before deciding what to do.** Two outcomes are legitimate:
+
+- A genuinely undefined class → a real bug this check was built to find. Report it; do not fix it here, since unmigrated templates belong to later tasks.
+- A Tailwind utility whose root is missing from `TW_ROOTS`, or a standalone utility missing from `TW_EXACT` → widen the list and re-run.
+
+Do **not** widen the lists to silence a token you have not identified. The whole value of this check is that it fails loudly on the unknown; an over-broad allowlist turns it back into the silence it was built to replace. List every token you allowlisted and why.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add scripts/check_css_tokens.py
+git commit -m "chore(design): fail when a template references an undefined class
+
+Task 9 shipped nine references to a .strong that existed in no stylesheet.
+The colour check saw no palette utility, the compile check saw valid Jinja, and
+the preservation check saw the attributes survive -- a class name is just a
+string to all three, so the emphasis silently vanished.
+
+A class token now has to be defined in this project's own CSS or be
+Tailwind-shaped. Jinja-built class lists are skipped, being unknowable
+statically."
 ```
 
 ---
@@ -1258,7 +1541,7 @@ Apply the canonical replacement table. Every table here is scanned, so all eight
 - `project_ideas.html` is a `table_tools` consumer (`data-ideas-*`) — preserve every data attribute.
 - `project_topics.html` contains `bg-amber-*` blocks — those become `.banner-warn` and are part of the known light-island bug.
 - Each page's `{% else %}` / no-rows branch becomes `.empty-state`.
-- `project_ideas.html` has uncommitted working-tree changes at the time of writing — rebase or reconcile before editing, do not clobber them.
+- `project_ideas.html` gained a `created` column (sortable date header, `YYYY-MM-DD` filter input, `data-created` row attribute) in commit `d01ea48`, which is already in this branch. Migrate that column like any other: the header keeps `data-sort-col="created" data-sort-type="date"`, the filter input keeps `data-filter-col="created"`, and the cell becomes `class="num muted"`.
 
 - [ ] **Step 3: Verify**
 
@@ -1485,7 +1768,7 @@ static inline styles across all 51 templates, down from 464 and 491."
 The `!important` overrides existed only to retro-fit a dark theme onto light-theme utilities. With zero such utilities left, they are dead weight — and while they remain, a new light utility would be silently absorbed instead of caught.
 
 **Files:**
-- Modify: `dreaming/static/app.css` (delete the compatibility block, currently lines 317-366)
+- Modify: `dreaming/static/app.css` (delete the compatibility block — find it by its comment anchor, not by line number: Tasks 3 and 4 remove ~90 lines above it)
 - Modify: `docs/superpowers/plans/2026-08-16-design-system-foundation.md` (tick the boxes)
 
 **Interfaces:**
@@ -1572,4 +1855,4 @@ All 51 templates are assigned exactly once: Task 5 (3), 6 (1), 7 (1), 8 (1), 9 (
 
 **Placeholder scan:** no TBD/TODO; every step names exact files, exact commands, and exact expected output. Migration tasks carry file-specific notes rather than "similar to Task N", and the shared replacement table lives in Global Constraints, which every task inherits by definition.
 
-**Type/name consistency:** class names used in Tasks 5–16 (`.page-header__title`, `.banner__body`, `.btn-warn`, `.card--flush`, `.list-rows`, `.num`, `.dim`, `.metric__value`, `.data-table.is-dense`, `.toolbar__count`, `.field-row`, `.empty-state__title`) all trace to definitions in Task 4 — except `.dim` and the four `.metric.metric-* .metric__value` rules, which Task 6 Steps 3 and 5 add explicitly to `components.css` as part of that task. Token names used in Task 4 all trace to Task 3.
+**Type/name consistency:** class names used in Tasks 5–16 (`.page-header__title`, `.banner__body`, `.btn-warn`, `.card--flush`, `.list-rows`, `.num`, `.metric__value`, `.data-table.is-dense`, `.toolbar__count`, `.field-row`, `.empty-state__title`) all trace to definitions in Task 4 — except the four `.metric.metric-* .metric__value` rules, which Task 6 Step 3 adds explicitly to `components.css` as part of that task. `.muted` predates this wave and lives in `app.css`. Token names used in Task 4 all trace to Task 3.

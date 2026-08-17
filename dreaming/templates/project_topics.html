@@ -4,27 +4,26 @@
 
 {% if db_topics %}
 <div class="flex items-center justify-between mb-2">
-  <h2 class="text-sm font-semibold" style="color: var(--text-strong);">{{ "topics.db_title" | t(locale=locale) }}</h2>
+  <h2 class="section-title">{{ "topics.db_title" | t(locale=locale) }}</h2>
   <a href="/p/{{ project.slug }}/kanban" class="text-xs underline">{{ "topics.open_kanban" | t(locale=locale) }}</a>
 </div>
 <p class="text-xs muted mb-3">{{ "topics.db_subtitle" | t(locale=locale) }}</p>
 <style>
   tr.topic-row { cursor: pointer; transition: background-color .1s ease-in-out; }
-  tr.topic-row:hover { background: rgb(241 245 249); }
   tr.topic-row a.topic-link { display: block; color: inherit; text-decoration: none; }
-  tr.topic-row:hover a.topic-link { color: rgb(37 99 235); }
+  tr.topic-row:hover a.topic-link { color: var(--brand-hover); }
 </style>
 <div data-tt-scope>
-  <div class="mb-2 flex items-center gap-2">
+  <div class="toolbar">
     <input type="text" data-tt-search
            placeholder="{{ 'table.search' | t(locale=locale) }}"
            class="tt-search">
     <button type="button" data-tt-reset
-            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+            class="btn btn-sm">
       {{ "table.reset" | t(locale=locale) }}
     </button>
   </div>
-<table class="data-table mb-6"
+<table class="data-table is-dense mb-6"
        data-table-tools
        data-tt-key="topics.{{ project.slug }}"
        data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
@@ -66,39 +65,43 @@
 {% if not found %}
   {% if not db_topics %}
     {% if can_install_checklist %}
-    <div class="mb-4 p-4 border border-amber-400 bg-amber-50 rounded">
-      <p class="font-semibold text-amber-900 mb-1">{{ "topics.weekly_not_ready" | t(locale=locale) }}</p>
-      <p class="text-sm text-amber-900 mb-2">
-        {{ "topics.weekly_desc" | t(locale=locale) }}
-        {{ "topics.location" | t(locale=locale) }}
-        <code class="text-xs">{{ project.working_dir }}/.claude/agents/lessons/_weekly-learning-checklist.md</code>.
-        {{ "topics.current_empty" | t(locale=locale, code='nightly_learning') }}
-      </p>
-      <p class="text-sm text-amber-900 mb-3">
-        {{ "topics.bootstrap_desc" | t(locale=locale, code1='## agent-name', code2='- topic') }}
-      </p>
-      <form method="post" action="/p/{{ project.slug }}/starter-kit/install">
-        <input type="hidden" name="redirect_to" value="/p/{{ project.slug }}/topics">
-        <button class="text-sm bg-amber-600 text-white rounded px-3 py-1">
-          {{ "topics.bootstrap_btn" | t(locale=locale) }}
-        </button>
-      </form>
+    <div class="banner banner-warn">
+      <div class="banner__body">
+        <p class="banner__title">{{ "topics.weekly_not_ready" | t(locale=locale) }}</p>
+        <p class="text-sm">
+          {{ "topics.weekly_desc" | t(locale=locale) }}
+          {{ "topics.location" | t(locale=locale) }}
+          <code class="text-xs">{{ project.working_dir }}/.claude/agents/lessons/_weekly-learning-checklist.md</code>.
+          {{ "topics.current_empty" | t(locale=locale, code='nightly_learning') }}
+        </p>
+        <p class="text-sm">
+          {{ "topics.bootstrap_desc" | t(locale=locale, code1='## agent-name', code2='- topic') }}
+        </p>
+        <form method="post" action="/p/{{ project.slug }}/starter-kit/install">
+          <input type="hidden" name="redirect_to" value="/p/{{ project.slug }}/topics">
+          <button class="btn btn-warn">
+            {{ "topics.bootstrap_btn" | t(locale=locale) }}
+          </button>
+        </form>
+      </div>
     </div>
     {% else %}
-    <p class="muted">{{ "topics.not_found" | t(locale=locale) }}</p>
-    <ul class="muted text-xs font-mono ml-4">
-      <li>{{ project.working_dir }}/.claude/agents/lessons/_weekly-learning-checklist.md</li>
-      <li>{{ project.working_dir }}/.claude/agents/_weekly-learning-checklist.md</li>
-    </ul>
-    <p class="muted mt-4">{{ "topics.template_missing" | t(locale=locale, dir='templates/starter-kit/') }}</p>
+    <div class="empty-state">
+      <p>{{ "topics.not_found" | t(locale=locale) }}</p>
+      <ul class="text-xs font-mono">
+        <li>{{ project.working_dir }}/.claude/agents/lessons/_weekly-learning-checklist.md</li>
+        <li>{{ project.working_dir }}/.claude/agents/_weekly-learning-checklist.md</li>
+      </ul>
+      <p class="mt-4">{{ "topics.template_missing" | t(locale=locale, dir='templates/starter-kit/') }}</p>
+    </div>
     {% endif %}
   {% endif %}
 {% elif items %}
-<h3 class="text-sm font-semibold mb-2" style="color: var(--text-strong);">{{ "topics.file_title" | t(locale=locale) }}</h3>
+<h3 class="section-title">{{ "topics.file_title" | t(locale=locale) }}</h3>
 <p class="text-xs muted mb-3">{{ "topics.source" | t(locale=locale) }}: <code>{{ checklist_path }}</code></p>
-<div class="bg-white rounded shadow p-4 space-y-1 text-sm font-mono">
+<div class="card text-sm font-mono space-y-1">
 {% for it in items %}
-  <div class="border-b py-1">
+  <div class="divider-b py-1">
     {% if it is mapping %}
       {% if it.raw %}{{ it.raw }}{% else %}{{ it }}{% endif %}
     {% else %}{{ it.title or it }}{% endif %}
@@ -106,18 +109,20 @@
 {% endfor %}
 </div>
 {% elif not db_topics %}
-<div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
-  <p class="font-semibold text-sky-900 mb-1">{{ "topics.empty_title" | t(locale=locale) }}</p>
-  <p class="text-sm text-sky-900 mb-2">
-    {{ "topics.empty_v2_desc" | t(locale=locale) }}
-  </p>
-  <p class="text-sm text-sky-900">
-    <a href="/p/{{ project.slug }}/kanban" class="underline font-medium">{{ "topics.open_kanban" | t(locale=locale) }}</a>
-  </p>
-  <p class="text-xs muted mt-3">
-    {{ "topics.empty_file_side_channel" | t(locale=locale) }}
-    <code class="text-xs">{{ checklist_path }}</code>
-  </p>
+<div class="banner banner-info">
+  <div class="banner__body">
+    <p class="banner__title">{{ "topics.empty_title" | t(locale=locale) }}</p>
+    <p class="text-sm">
+      {{ "topics.empty_v2_desc" | t(locale=locale) }}
+    </p>
+    <p class="text-sm">
+      <a href="/p/{{ project.slug }}/kanban" class="underline font-medium">{{ "topics.open_kanban" | t(locale=locale) }}</a>
+    </p>
+    <p class="text-xs muted mt-3">
+      {{ "topics.empty_file_side_channel" | t(locale=locale) }}
+      <code class="text-xs">{{ checklist_path }}</code>
+    </p>
+  </div>
 </div>
 {% endif %}
 {% endblock %}

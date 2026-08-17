@@ -1,0 +1,433 @@
+/* ============================================================
+   components.css — semantic component classes.
+
+   RULE: no hex, rgb()/rgba(), or hsl()/hsla() colour literal in this file.
+   Colour arrives via var() from tokens.css. Black via rgb()/rgba() (all
+   colour channels zero, any alpha) is allowed for shadows only.
+   Enforced by scripts/check_css_tokens.py.
+   ============================================================ */
+
+/* ---------- Page header ---------- */
+.page-header {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: var(--space-4); flex-wrap: wrap; margin-bottom: var(--space-5);
+}
+.page-header__titles { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; min-width: 0; }
+.page-header__title { margin: 0; font-size: var(--text-h1); font-weight: 600; letter-spacing: -0.015em; color: var(--text-strong); }
+.page-header__slug { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-faint); }
+.page-header__sub { margin: var(--space-1) 0 0; font-size: var(--text-base); color: var(--text-muted); }
+.page-header__actions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+
+/* ---------- Section heading ---------- */
+.section-title {
+  margin: var(--space-5) 0 var(--space-2);
+  font-size: var(--text-h2); font-weight: 600; color: var(--text-strong);
+  display: flex; align-items: center; gap: var(--space-2);
+}
+.section-title:first-child { margin-top: 0; }
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-1);
+  font-family: inherit; font-size: var(--text-base); font-weight: 500; line-height: 1;
+  min-height: var(--control-h); padding: 0 var(--space-3);
+  border: 1px solid var(--border-muted); border-radius: var(--radius-sm);
+  background: var(--bg-elevated); color: var(--text-body);
+  white-space: nowrap; text-decoration: none; cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.btn:hover { background: var(--bg-hover); color: var(--text-strong); }
+.btn:disabled, .btn[aria-disabled="true"] { cursor: not-allowed; opacity: 0.55; }
+
+.btn-primary { background: var(--brand); border-color: transparent; color: var(--brand-on); font-weight: 600; }
+.btn-primary:hover { background: var(--brand-hover); color: var(--brand-on); }
+
+.btn-danger { background: var(--status-failed-soft); border-color: var(--status-failed-border); color: var(--status-failed); }
+.btn-danger:hover { background: var(--status-failed-strong); color: var(--status-failed); }
+
+.btn-warn { background: var(--status-timeout-soft); border-color: var(--status-timeout-border); color: var(--status-timeout); }
+.btn-warn:hover { background: var(--status-timeout-strong); color: var(--status-timeout); }
+
+/* Needed by _app_modal.html's appAlert('success') path (flash cookie level
+   set by ai_radar.py / project_bulk.py) -- the danger/warn siblings already
+   existed, success was the missing family member. */
+.btn-success { background: var(--status-success-soft); border-color: var(--status-success-border); color: var(--status-success); }
+.btn-success:hover { background: var(--status-success-strong); color: var(--status-success); }
+
+.btn-ghost { background: transparent; border-color: transparent; color: var(--text-muted); }
+.btn-ghost:hover { background: var(--bg-hover); color: var(--text-strong); }
+
+.btn-sm { min-height: var(--control-h-sm); font-size: var(--text-sm); padding: 0 var(--space-2); }
+
+/* ---------- Toolbar (search + reset + count above a table) ---------- */
+.toolbar { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-2); }
+
+/* ---------- Banners ---------- */
+.banner {
+  display: flex; align-items: flex-start; gap: var(--space-3);
+  padding: var(--space-3) var(--space-4); margin-bottom: var(--space-4);
+  border: 1px solid var(--border-subtle); border-radius: var(--radius);
+  background: var(--bg-card); color: var(--text-body);
+  font-size: var(--text-base); line-height: 1.55;
+}
+.banner__body { flex: 1 1 auto; min-width: 0; }
+.banner__title { margin: 0 0 var(--space-1); font-weight: 600; color: var(--text-strong); }
+.banner__actions { flex: 0 0 auto; display: flex; align-items: center; gap: var(--space-2); }
+.banner p { margin: 0 0 var(--space-1); }
+.banner p:last-child { margin-bottom: 0; }
+
+.banner-info { background: var(--status-running-soft); border-color: var(--status-running-border); }
+.banner-info .banner__title { color: var(--status-running); }
+.banner-warn { background: var(--status-timeout-soft); border-color: var(--status-timeout-border); }
+.banner-warn .banner__title { color: var(--status-timeout); }
+.banner-danger { background: var(--status-failed-soft); border-color: var(--status-failed-border); }
+.banner-danger .banner__title { color: var(--status-failed); }
+
+/* ---------- Cards, panels, row lists ---------- */
+.card {
+  background: var(--bg-card); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius); padding: var(--space-4);
+}
+.card--flush { padding: 0; overflow: hidden; }
+/* Dashboard bento tiles (partials/dashboard/_tile_*.html): the only thing
+   .card doesn't already cover for this shape is the fixed floor height that
+   keeps three tiles of uneven content even in a grid row. Grepped for an
+   existing 9rem/min-height rule first -- none existed. */
+.dash-tile { min-height: 9rem; }
+.panel {
+  background: var(--bg-elevated); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius); padding: var(--space-3) var(--space-4);
+}
+.list-rows { list-style: none; margin: 0; padding: 0; }
+.list-rows > li {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border-subtle);
+}
+.list-rows > li:last-child { border-bottom: 0; }
+
+/* ---------- Empty state ---------- */
+.empty-state {
+  padding: var(--space-6) var(--space-4); text-align: center;
+  border: 1px dashed var(--border-subtle); border-radius: var(--radius);
+  background: var(--bg-card); color: var(--text-muted); font-size: var(--text-base);
+}
+.empty-state__title { margin: 0 0 var(--space-1); font-weight: 600; color: var(--text-body); }
+
+/* ---------- Form fields ---------- */
+.field { display: flex; flex-direction: column; gap: var(--space-1); margin-bottom: var(--space-3); }
+.field__label { font-size: var(--text-sm); font-weight: 500; color: var(--text-muted); }
+.field__hint { font-size: var(--text-sm); color: var(--text-faint); }
+.field__control {
+  width: 100%; min-height: var(--control-h); padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  /* Background is intentionally NOT set here. app.css's bare
+     input/select/textarea rule already gives every field consumer
+     --bg-sidebar; that rule wins on <input> (nine :not() attribute
+     selectors outrank this class) but loses on <select>/<textarea>
+     (bare element selectors), which made the two look different for no
+     reason. Leaving colour out of this rule lets the base rule own it
+     consistently across all three control types. */
+}
+.field-row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+
+/* ---------- Numerics: stop columns dancing between rows ---------- */
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* ============================================================
+   Moved verbatim from app.css (same class names, tokenized).
+   ============================================================ */
+
+/* ---------- Card hover lift ---------- */
+.card-link { border: 1px solid var(--border-subtle); transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease; }
+.card-link:hover { transform: translateY(-1px); box-shadow: var(--shadow-card-hover); border-color: var(--border-muted); }
+
+/* ---------- Pill nav ---------- */
+.pill-nav {
+  display: flex; flex-wrap: wrap; gap: var(--space-1); padding: var(--space-1);
+  background: var(--bg-card); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-card);
+}
+.pill {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm);
+  font-size: var(--text-base); font-weight: 500; color: var(--text-muted);
+  white-space: nowrap; transition: background-color 150ms ease, color 150ms ease;
+}
+.pill:hover { background: var(--bg-hover); color: var(--text-strong); }
+.pill.is-active { background: var(--brand); color: var(--brand-on); font-weight: 600; box-shadow: var(--shadow-brand); }
+.pill.is-active:hover { background: var(--brand-hover); color: var(--brand-on); }
+
+/* ---------- Status badges ---------- */
+.badge {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  padding: 0.125rem var(--space-2); border-radius: var(--radius-pill);
+  font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.01em;
+}
+.badge-success { background: var(--status-success-soft); color: var(--status-success); }
+.badge-failed  { background: var(--status-failed-soft);  color: var(--status-failed); }
+.badge-timeout { background: var(--status-timeout-soft); color: var(--status-timeout); }
+.badge-running { background: var(--status-running-soft); color: var(--status-running); }
+.badge-live    { background: var(--status-live-soft);    color: var(--status-live); }
+.badge-neutral { background: var(--bg-hover); color: var(--text-muted); }
+.badge-brand   { background: var(--brand-soft); color: var(--brand-fg); }
+
+/* ---------- Live dot ---------- */
+.dot { display: inline-block; width: var(--space-2); height: var(--space-2); border-radius: var(--radius-pill); background: currentColor; }
+@media (prefers-reduced-motion: no-preference) {
+  .dot-pulse { animation: dot-pulse 1.6s ease-in-out infinite; }
+}
+@keyframes dot-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+  50% { box-shadow: 0 0 0 4px transparent; opacity: 0.6; }
+}
+
+/* ---------- Metric tile ---------- */
+.metric {
+  position: relative; overflow: hidden;
+  background: var(--bg-card); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  /* Left inset clears the status bar so text never crowds it. Expressed as a
+     relationship rather than a magic number: the bar's own width is the token. */
+  padding: var(--space-3) var(--space-4) var(--space-3) calc(var(--space-4) + var(--metric-bar-w));
+  box-shadow: var(--shadow-card);
+}
+.metric::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: var(--metric-bar-w); background: var(--text-faint); }
+.metric.metric-success::before { background: var(--status-success); }
+.metric.metric-failed::before  { background: var(--status-failed); }
+.metric.metric-timeout::before { background: var(--status-timeout); }
+.metric.metric-running::before { background: var(--status-running); }
+.metric.metric-info::before    { background: var(--brand); }
+.metric__label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); font-weight: 500; }
+.metric__value { margin-top: var(--space-1); font-size: 1.75rem; font-weight: 600; letter-spacing: -0.02em; color: var(--text-strong); font-variant-numeric: tabular-nums; }
+.metric.metric-success .metric__value { color: var(--status-success); }
+.metric.metric-failed  .metric__value { color: var(--status-failed); }
+.metric.metric-timeout .metric__value { color: var(--status-timeout); }
+.metric.metric-running .metric__value { color: var(--status-running); }
+
+/* Some KPI tiles use a status-coloured left accent bar purely for visual
+   rhythm across a row while the big number itself is a plain count, not a
+   status (project_cascade_costs.html's "Total tokens" / "Avg cost per run").
+   .metric-neutral opts the value out of the modifier's colour without
+   touching the shared rules other .metric consumers rely on -- a fourth
+   class keeps this selector's specificity above the three-class rules
+   above regardless of source order. */
+.metric.metric-running.metric-neutral .metric__value,
+.metric.metric-timeout.metric-neutral .metric__value { color: var(--text-strong); }
+
+/* ---------- Tables ---------- */
+.data-table {
+  width: 100%; background: var(--bg-card);
+  border: 1px solid var(--border-subtle); border-radius: var(--radius);
+  overflow: hidden; border-collapse: separate; border-spacing: 0;
+  font-size: var(--row-font); color: var(--text-body);
+}
+.data-table thead th {
+  text-align: left; font-size: var(--text-xs); font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-faint);
+  padding: var(--row-pad-y) var(--row-pad-x);
+  background: var(--bg-elevated); border-bottom: 1px solid var(--border-subtle);
+}
+.data-table thead th.text-right { text-align: right; }
+.data-table tbody td { padding: var(--row-pad-y) var(--row-pad-x); border-bottom: 1px solid var(--border-subtle); vertical-align: middle; }
+.data-table tbody tr:last-child td { border-bottom: 0; }
+.data-table tbody tr:hover { background: var(--bg-hover); }
+
+/* Dense mode: for tables that are scanned, not read. */
+.data-table.is-dense { font-size: var(--row-font-dense); }
+.data-table.is-dense thead th,
+.data-table.is-dense tbody td { padding: var(--row-pad-y-dense) var(--row-pad-x-dense); }
+
+/* A table_tools filter row lives in a second <thead><tr> alongside the label
+   row (project_evolutions.html). Its th cells hold form controls, not
+   column labels, so the label row's uppercase/letter-spacing/weight must
+   not cascade onto placeholder/option text. Colour needs no reset here --
+   input/select already set their own explicit color in app.css. */
+.data-table thead tr[data-tt-filter-row] th {
+  text-transform: none; letter-spacing: normal; font-weight: 400;
+}
+
+/* ============================================================
+   Orchestration list (project_orchestration_list.html): a handful of
+   one-off surfaces with no clean existing-component match. Exact
+   pre-migration colour values are preserved via dedicated tokens.css
+   entries rather than approximated onto an existing -soft/-border pair,
+   since only spacing/density values are licensed to shift onto the
+   shared scale -- colour is not.
+   ============================================================ */
+
+/* Bulk-queue banner: brand-tinted informational wrapper */
+.banner-brand { background: var(--brand-banner-bg); border-color: var(--brand-banner-border); }
+
+/* Single-line banner: message + action share one centred row (the
+   stale-orphans warning's Force-close button must not top-align against
+   the message under .banner's default align-items: flex-start) */
+.banner--inline { align-items: center; }
+.banner-warn-dim { background: var(--timeout-soft-dim); border-color: var(--status-timeout-border); }
+
+/* Small one-off text/background utilities: no wrapping component sets
+   these colours here, parallel to app.css's .muted / .faint */
+.text-brand-hover { color: var(--brand-hover); }
+.text-warn { color: var(--status-timeout); }
+.text-success { color: var(--status-success); }
+.text-running { color: var(--status-running); }
+.text-danger { color: var(--status-failed); }
+.text-cache { color: var(--cache-fg); }
+.text-cache-dim { color: var(--cache-fg-dim); }
+.bg-elevated { background: var(--bg-elevated); }
+.divider-b { border-bottom: 1px solid var(--border-subtle); }
+.divider-t { border-top: 1px solid var(--border-subtle); }
+
+/* Run sidebar list row */
+.run-row { border-bottom: 1px solid var(--border-subtle); }
+.run-row.is-selected { background: var(--brand-row-bg); }
+
+/* Goal preview: collapsible <pre> scroll box */
+.goal-preview { max-height: 12rem; overflow-y: auto; border-radius: var(--radius-sm); }
+
+/* Message card: also built client-side by orchestration_stream.js
+   (appendMessage() sets these same two properties inline) -- keep in sync */
+.msg-card { background: var(--bg-elevated); border: 1px solid var(--border-subtle); }
+
+/* Bulk-queue item rows */
+.queue-item {
+  display: flex; align-items: baseline; gap: var(--space-2);
+  padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm);
+  font-family: var(--font-mono); font-size: var(--text-xs);
+}
+.queue-item-pending    { background: var(--timeout-soft-dim);    color: var(--status-timeout); border: 1px solid var(--status-timeout-border); }
+.queue-item-dispatched { background: var(--queue-dispatched-bg); color: var(--status-success); border: 1px solid var(--queue-dispatched-border); }
+.queue-item-failed     { background: var(--queue-failed-bg);     color: var(--status-failed);  border: 1px solid var(--queue-failed-border); }
+.queue-item-default    { background: var(--bg-elevated);         color: var(--text-muted);     border: 1px solid var(--border-subtle); }
+.queue-item__status { opacity: 0.6; }
+.queue-item__error  { opacity: 0.85; }
+
+/* ============================================================
+   AI-usage dashboards (project_ai_usage.html / global_ai_usage.html):
+   preset/date-range tabs, weekly stat tiles, and a proportional-width
+   usage meter. No existing component covers these shapes without
+   restructuring the toolbar or adding an accent bar that was never
+   there, so they get their own small classes.
+   ============================================================ */
+
+/* Preset/date-range filter tab: a segmented control where each item
+   keeps its own border+background (unlike .pill-nav's shared frame),
+   matching the exact bg-card/border-subtle vs brand/brand-on pair the
+   original inline conditional used. */
+.filter-tab {
+  display: inline-flex; align-items: center;
+  padding: var(--space-1) var(--space-3); border-radius: var(--radius-lg);
+  font-size: var(--text-xs); font-weight: 500; white-space: nowrap;
+  background: var(--bg-card); color: var(--text-muted);
+  border: 1px solid var(--border-subtle); text-decoration: none;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.filter-tab.is-active { background: var(--brand); border-color: var(--brand); color: var(--brand-on); }
+
+/* Weekly learning-stat tile: flatter than .metric (no left accent bar,
+   no border, no shadow) -- the original was a plain bg-hover chip. */
+.stat-chip { background: var(--bg-hover); border-radius: var(--radius); padding: var(--space-3); }
+
+/* Proportional usage meter (top-projects token bar). The fill's
+   style="width: {{ ... }}%" stays inline -- it is dynamic per-row data.
+   Only its colour and height move here. */
+.meter-track { flex: 1 1 auto; height: 0.5rem; border-radius: var(--radius-pill); overflow: hidden; background: var(--bg-hover); }
+.meter-fill { height: 100%; background: var(--brand); }
+/* .is-fixed: project_plans.html's done/todo ratio bar has a fixed w-32
+   width (set by the template) rather than flex-growing to fill a toolbar
+   row -- .is-success recolours the fill for that same "done" ratio bar
+   (was bg-green-500). Modifiers on the one meter primitive rather than a
+   second track/fill pair. */
+.meter-track.is-fixed { flex: none; }
+.meter-fill.is-success { background: var(--status-success); }
+
+/* ============================================================
+   Kanban plan board (project_kanban.html): the recessed column well,
+   the "today" underline, and the per-agent tier badge/legend dot. The
+   tier is chosen by Jinja {% if %}/{% elif %}/{% else %} into one of
+   three fixed class names -- a dynamic class list, not a dynamic style,
+   so it stays exempt from the inline-style count and the undefined-
+   class check (which skips any class= attribute containing "{%").
+   ============================================================ */
+.kanban-well {
+  background: var(--kanban-well-bg); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg); min-height: 12.5rem;
+}
+.kanban-today-dash { width: 2rem; height: 2px; border-radius: var(--radius-pill); background: var(--brand); }
+
+.tier-badge { display: inline-flex; align-items: center; padding: 0.125rem var(--space-2); border-radius: var(--radius-sm); }
+.tier-badge-1       { background: var(--brand-soft); color: var(--brand-fg-dim); border: 1px solid var(--brand-soft-border); }
+.tier-badge-2       { background: var(--tier2-soft);  color: var(--cache-fg-dim); border: 1px solid var(--tier2-border); }
+.tier-badge-default { background: var(--bg-hover);    color: var(--text-faint);  border: 1px solid var(--border-subtle); }
+
+.dot-brand { background: var(--brand); }
+.dot-tier2 { background: var(--cache-fg); }
+.dot-faint { background: var(--text-faint); }
+
+/* ============================================================
+   Evolutions rubric-coverage tiles (project_evolutions.html): four small
+   status-tinted stat boxes above the evolutions table. Background/border
+   are exact-preserved alpha tints (see tokens.css); the big-number colour
+   moves from a hardcoded light-theme hex to the matching dark-theme status
+   token -- see task-11 report for the contrast arithmetic that motivated
+   the swap. Font-size/weight stay as Tailwind utilities on the value div
+   (text-lg font-bold); only colour and the tile's own bg/border/radius/
+   padding move into CSS.
+   ============================================================ */
+.rubric-tile { border-radius: var(--radius-sm); padding: var(--space-2); text-align: center; }
+/* auto/review/reject backgrounds reuse existing queue/timeout tint tokens
+   (byte-identical rgba values -- see tokens.css); only the border alpha
+   (0.30, vs those tokens' own 0.35 borders) and the incomplete tile's tint
+   are genuinely new. */
+.rubric-tile-auto       { background: var(--queue-dispatched-bg); border: 1px solid var(--rubric-auto-border); }
+.rubric-tile-review     { background: var(--timeout-soft-dim);    border: 1px solid var(--rubric-review-border); }
+.rubric-tile-reject     { background: var(--queue-failed-bg);     border: 1px solid var(--rubric-reject-border); }
+.rubric-tile-incomplete { background: var(--rubric-incomplete-soft); border: 1px solid var(--rubric-incomplete-border); }
+.rubric-tile-auto       .rubric-tile__value { color: var(--status-success); }
+.rubric-tile-review     .rubric-tile__value { color: var(--status-timeout); }
+.rubric-tile-reject     .rubric-tile__value { color: var(--status-failed); }
+.rubric-tile-incomplete .rubric-tile__value { color: var(--text-muted); }
+
+/* ============================================================
+   Detail views (Task 13): project_wiki_health.html's chart card and
+   canvas box, project_findings_detail.html's frontmatter <pre>, and
+   session_log.html's raw log body. Each replaces a single static
+   dimension/shadow that had no existing class -- grepped tokens.css and
+   components.css for 320px/16rem/80vh/shadow-card before adding; only
+   --shadow-card is reused (already defined for .metric/.pill-nav), the
+   rest are plain new dimensions with no colour involved.
+   ============================================================ */
+.card--shadow { box-shadow: var(--shadow-card); }
+.chart-box { height: 320px; }
+.frontmatter-pre { max-height: 16rem; }
+.log-body { max-height: 80vh; }
+
+/* ---------- Modal dialog ---------- */
+/* Shared card-on-dialog shape for note-modal (project_notes.html/
+   project_wiki.html/project_evolutions.html) and app-modal (_app_modal.html,
+   the confirm/alert dialog -- header/body/footer sit directly inside
+   <dialog>, no inner wrapper div, same as note-modal's own <header>/body
+   pair). Only max-width and ::backdrop differ between the two dialogs, so
+   those are the only declarations left outside the shared rule; app-modal's
+   own backdrop tint is preserved from its former inline <style> rather than
+   reusing note-modal's blurred one -- the two never shared a backdrop shade
+   before this migration and nothing asks for that to change. */
+dialog.note-modal,
+dialog.app-modal {
+  padding: 0; width: calc(100% - 2rem);
+  border: 1px solid var(--border-subtle); border-radius: var(--radius);
+  background: var(--bg-card); color: var(--text-body);
+  box-shadow: var(--shadow-modal);
+}
+dialog.note-modal { max-width: 56rem; }
+dialog.app-modal  { max-width: 28rem; }
+dialog.note-modal::backdrop { background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(2px); }
+dialog.app-modal::backdrop { background: var(--overlay-modal); }
+
+/* note-modal header close glyph ("×") and scrollable raw/markdown body -- an
+   identical pair of static inline styles repeats verbatim in
+   project_notes.html and project_wiki.html's own note-modal instances
+   (grepped before adding); project_evolutions.html is simply the first of
+   the three migrated, so this is the shared shape those two can reuse. */
+.modal-close { color: var(--text-muted); background: none; border: none; cursor: pointer; }
+.modal-close:hover { color: var(--text-strong); }
+.note-modal__body { max-height: 80vh; min-height: 12.5rem; overflow: auto; }

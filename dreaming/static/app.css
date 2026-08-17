@@ -1,56 +1,13 @@
 /* ============================================================
-   AI Dreaming Center — dark design tokens & base styles
-   (ported visuals from agent-learning-center; preserves existing
-   class names: .pill-nav, .pill, .badge-*, .metric, .data-table)
+   AI Dreaming Center — base element styles.
+   Holds: html/body, code/pre/font-mono, .muted, focus rules, form
+   elements, scrollbars, the sidebar shell, and .md-content.
    ============================================================ */
-
-:root {
-  /* Surfaces */
-  --bg-app: #0a0e1a;
-  --bg-card: #111827;
-  --bg-sidebar: #0f1117;
-  --bg-elevated: #151c2c;
-  --bg-hover: #1a2332;
-
-  /* Borders */
-  --border-subtle: #1e293b;
-  --border-muted: #334155;
-
-  /* Text */
-  --text-strong: #f1f5f9;
-  --text-body: #e2e8f0;
-  --text-muted: #94a3b8;
-  --text-faint: #64748b;
-
-  /* Brand (indigo, matches original ALC) */
-  --brand: #6366f1;
-  --brand-hover: #818cf8;
-  --brand-soft: rgba(99, 102, 241, 0.12);
-  --brand-strong: #4f46e5;
-
-  /* Status colors — text + soft background pairs tuned for dark */
-  --status-success: #4ade80;
-  --status-success-soft: rgba(34, 197, 94, 0.18);
-  --status-failed: #f87171;
-  --status-failed-soft: rgba(239, 68, 68, 0.18);
-  --status-timeout: #fbbf24;
-  --status-timeout-soft: rgba(245, 158, 11, 0.18);
-  --status-running: #60a5fa;
-  --status-running-soft: rgba(59, 130, 246, 0.18);
-  --status-live: #34d399;
-  --status-live-soft: rgba(16, 185, 129, 0.18);
-
-  /* Shadows */
-  --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.35), 0 1px 3px 0 rgba(0, 0, 0, 0.25);
-  --shadow-card-hover: 0 6px 18px -8px rgba(0, 0, 0, 0.55), 0 2px 4px rgba(0, 0, 0, 0.35);
-
-  --ring: 0 0 0 2px var(--brand-soft), 0 0 0 4px var(--brand);
-}
 
 html { scroll-behavior: smooth; }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-family: var(--font-sans);
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   -webkit-font-smoothing: antialiased;
   color: var(--text-body);
@@ -59,11 +16,13 @@ body {
 }
 
 code, pre, .font-mono, kbd, samp {
-  font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-feature-settings: 'liga' 0;
 }
 
 .muted { color: var(--text-muted); }
+.faint { color: var(--text-faint); }
+.strong { color: var(--text-strong); }
 
 *:focus { outline: none; }
 *:focus-visible {
@@ -95,6 +54,10 @@ input::placeholder, textarea::placeholder {
 input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); }
 select option { background-color: var(--bg-card); color: var(--text-body); }
 
+/* Bare <hr>, no class -- the one instance (project_kanban.html) carried a
+   static inline style. Global rule is safe: it is the only <hr> in the tree. */
+hr { border: none; border-top: 1px solid var(--border-subtle); margin: var(--space-5) 0; }
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg-app); }
@@ -121,6 +84,7 @@ select option { background-color: var(--bg-card); color: var(--text-body); }
   font-weight: 600;
   font-size: 0.875rem;
   letter-spacing: 0.01em;
+  text-decoration: none;
 }
 .app-sidebar__brand-icon {
   width: 1.75rem; height: 1.75rem; border-radius: 0.5rem;
@@ -131,6 +95,14 @@ select option { background-color: var(--bg-card); color: var(--text-body); }
 .app-sidebar__project {
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border-subtle);
+}
+.app-sidebar__project select {
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-body);
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%2210%22 viewBox=%220 0 10 10%22><path d=%22M2 3.5 L5 6.5 L8 3.5%22 stroke=%22%2364748b%22 stroke-width=%221.5%22 fill=%22none%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/></svg>');
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
 }
 .app-sidebar__section-title {
   font-size: 0.625rem;
@@ -152,9 +124,9 @@ select option { background-color: var(--bg-card); color: var(--text-body); }
 .app-sidebar__nav-link:hover { background: var(--bg-hover); color: var(--text-strong); }
 .app-sidebar__nav-link.is-active {
   background: var(--brand-soft);
-  color: #c7d2fe;
+  color: var(--brand-fg);
 }
-.app-sidebar__nav-link.is-active svg { opacity: 1; color: #a5b4fc; }
+.app-sidebar__nav-link.is-active svg { opacity: 1; color: var(--brand-fg-dim); }
 .app-sidebar__footer {
   border-top: 1px solid var(--border-subtle);
   padding: 0.75rem 1rem;
@@ -163,6 +135,8 @@ select option { background-color: var(--bg-card); color: var(--text-body); }
   color: var(--text-faint);
   font-size: 0.75rem;
 }
+.app-sidebar__footer form { border: 1px solid var(--border-subtle); }
+.app-sidebar__footer form .btn + .btn { border-left: 1px solid var(--border-subtle); }
 .app-content { margin-left: 14rem; flex: 1; min-width: 0; }
 .app-content > main { padding: 1.5rem 2rem; }
 
@@ -176,194 +150,9 @@ select option { background-color: var(--bg-card); color: var(--text-body); }
   .app-content { margin-left: 4.5rem; }
 }
 
-/* ---------- Card hover lift ---------- */
-.card-link {
-  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
-  border: 1px solid var(--border-subtle);
-}
-.card-link:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-card-hover);
-  border-color: var(--border-muted);
-}
-
 /* Buttons */
 button, [role="button"] { cursor: pointer; }
 button:disabled, [aria-disabled="true"] { cursor: not-allowed; opacity: 0.55; }
-
-/* ---------- Pill nav (used inside content for sub-tabs) ---------- */
-.pill-nav {
-  display: flex; flex-wrap: wrap;
-  gap: 0.375rem;
-  padding: 0.375rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: 0.75rem;
-  box-shadow: var(--shadow-card);
-}
-.pill {
-  display: inline-flex; align-items: center; gap: 0.375rem;
-  padding: 0.375rem 0.75rem;
-  border-radius: 0.5rem;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--text-muted);
-  transition: background-color 150ms ease, color 150ms ease;
-  white-space: nowrap;
-}
-.pill:hover { background: var(--bg-hover); color: var(--text-strong); }
-.pill.is-active {
-  background: var(--brand);
-  color: #ffffff;
-  font-weight: 600;
-  box-shadow: 0 1px 2px rgba(99, 102, 241, 0.35);
-}
-.pill.is-active:hover { background: var(--brand-hover); color: #ffffff; }
-
-/* ---------- Status badges ---------- */
-.badge {
-  display: inline-flex; align-items: center; gap: 0.3rem;
-  padding: 0.125rem 0.5rem;
-  border-radius: 9999px;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-.badge-success { background: var(--status-success-soft); color: var(--status-success); }
-.badge-failed  { background: var(--status-failed-soft);  color: var(--status-failed); }
-.badge-timeout { background: var(--status-timeout-soft); color: var(--status-timeout); }
-.badge-running { background: var(--status-running-soft); color: var(--status-running); }
-.badge-live    { background: var(--status-live-soft);    color: var(--status-live); }
-.badge-neutral { background: var(--bg-hover); color: var(--text-muted); }
-
-/* Live dot */
-.dot {
-  display: inline-block;
-  width: 0.5rem; height: 0.5rem;
-  border-radius: 9999px;
-  background: currentColor;
-}
-@media (prefers-reduced-motion: no-preference) {
-  .dot-pulse { animation: dot-pulse 1.6s ease-in-out infinite; }
-}
-@keyframes dot-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
-  50% { box-shadow: 0 0 0 4px transparent; opacity: 0.6; }
-}
-
-/* ---------- Metric tile ---------- */
-.metric {
-  position: relative;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: 0.625rem;
-  padding: 0.875rem 1rem 0.875rem 1.125rem;
-  box-shadow: var(--shadow-card);
-  overflow: hidden;
-}
-.metric::before {
-  content: '';
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 3px;
-  background: var(--text-faint);
-}
-.metric.metric-success::before { background: var(--status-success); }
-.metric.metric-failed::before  { background: var(--status-failed); }
-.metric.metric-timeout::before { background: var(--status-timeout); }
-.metric.metric-running::before { background: var(--status-running); }
-.metric.metric-info::before    { background: var(--brand); }
-
-/* ---------- Table polish ---------- */
-.data-table {
-  width: 100%;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: 0.625rem;
-  overflow: hidden;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 0.875rem;
-  color: var(--text-body);
-}
-.data-table thead th {
-  text-align: left;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  padding: 0.625rem 0.75rem;
-  background: var(--bg-elevated);
-  border-bottom: 1px solid var(--border-subtle);
-}
-.data-table tbody td { padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--border-subtle); vertical-align: middle; }
-.data-table tbody tr:last-child td { border-bottom: 0; }
-.data-table tbody tr:hover { background: var(--bg-hover); }
-
-/* Dialog modal — opened via <dialog>.showModal(). */
-dialog.note-modal {
-  padding: 0;
-  border: 1px solid var(--border-subtle);
-  border-radius: 0.625rem;
-  max-width: 56rem;
-  width: calc(100% - 2rem);
-  background: var(--bg-card);
-  color: var(--text-body);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
-}
-dialog.note-modal::backdrop { background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(2px); }
-
-/* ---------- Compatibility overrides for Tailwind utilities used by existing
-   templates that still encode light-theme colors. Letting these target only
-   utility classes keeps tokens authoritative while we migrate templates over
-   piece by piece. ---------- */
-.bg-white,
-.bg-slate-50,
-.bg-slate-100,
-.bg-gray-50,
-.bg-gray-100 { background-color: var(--bg-card) !important; }
-
-.bg-white\/85, .bg-white\/80 { background-color: rgba(17, 24, 39, 0.85) !important; }
-
-.border-slate-200,
-.border-slate-100,
-.border-gray-200,
-.border-gray-100 { border-color: var(--border-subtle) !important; }
-.border-slate-300, .border-gray-300 { border-color: var(--border-muted) !important; }
-
-.text-slate-900, .text-gray-900, .text-black { color: var(--text-strong) !important; }
-.text-slate-800, .text-gray-800 { color: var(--text-strong) !important; }
-.text-slate-700, .text-gray-700 { color: var(--text-body) !important; }
-.text-slate-600, .text-gray-600 { color: var(--text-muted) !important; }
-.text-slate-500, .text-gray-500 { color: var(--text-muted) !important; }
-.text-slate-400, .text-gray-400 { color: var(--text-faint) !important; }
-.text-slate-300 { color: var(--text-muted) !important; }
-
-.hover\:bg-slate-50:hover,
-.hover\:bg-slate-100:hover,
-.hover\:bg-gray-50:hover,
-.hover\:bg-gray-100:hover { background-color: var(--bg-hover) !important; }
-
-.hover\:text-slate-900:hover,
-.hover\:text-slate-700:hover { color: var(--text-strong) !important; }
-
-/* Blue brand utilities — re-tint to indigo */
-.bg-blue-600 { background-color: var(--brand) !important; }
-.bg-blue-700, .hover\:bg-blue-700:hover { background-color: var(--brand-hover) !important; }
-.text-blue-600 { color: var(--brand-hover) !important; }
-.text-blue-700 { color: #a5b4fc !important; }
-.border-blue-500, .focus\:border-blue-500:focus { border-color: var(--brand) !important; }
-
-/* Red / danger utilities — keep semantic red but on dark */
-.bg-red-50 { background-color: rgba(239, 68, 68, 0.10) !important; }
-.bg-red-100 { background-color: rgba(239, 68, 68, 0.16) !important; }
-.text-red-600, .text-red-700 { color: var(--status-failed) !important; }
-.border-red-200, .border-red-300 { border-color: rgba(239, 68, 68, 0.35) !important; }
-
-.bg-green-50 { background-color: rgba(34, 197, 94, 0.10) !important; }
-.bg-green-100 { background-color: rgba(34, 197, 94, 0.18) !important; }
-.text-green-600, .text-green-700 { color: var(--status-success) !important; }
 
 /* Markdown content (used by the orchestration chat and doc views) */
 .md-content h1 { font-size: 1.5rem; font-weight: 700; color: var(--text-strong); margin: 1rem 0 0.5rem; }

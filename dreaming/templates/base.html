@@ -12,14 +12,12 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
-      darkMode: 'class',
-      theme: { extend: { colors: { dark: {
-        bg: '#0a0e1a', card: '#111827', sidebar: '#0f1117',
-        border: '#1e293b', hover: '#1a2332', surface: '#151c2c',
-      } } } }
+      darkMode: 'class'
     }
   </script>
+  <link rel="stylesheet" href="/static/tokens.css">
   <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/components.css">
   <link rel="stylesheet" href="/static/table_tools.css">
   <script src="https://unpkg.com/htmx.org@2"></script>
   <style>
@@ -53,8 +51,8 @@
     <div class="app-content">
       {% if flash %}
       <div class="px-8 pt-4">
-        <div class="rounded-lg border p-4" style="background: var(--brand-soft); border-color: rgba(99,102,241,0.35);">
-          <p class="text-sm" style="color: #c7d2fe;">{{ flash.message }}</p>
+        <div class="banner banner-info">
+          <div class="banner__body">{{ flash.message }}</div>
         </div>
       </div>
       {% endif %}

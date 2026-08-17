@@ -1,13 +1,24 @@
 <!DOCTYPE html>
 <html lang="{{ locale|default('ru') }}">
-<head><meta charset="utf-8"><title>{{ "project_not_found.title" | t(locale=locale) }}</title></head>
-<body style="font-family:sans-serif;max-width:600px;margin:80px auto;">
-<h1>{{ "project_not_found.h1" | t(locale=locale, slug=slug) }}</h1>
-{% if is_disabled %}
-<p>{{ "project_not_found.disabled" | t(locale=locale) }}</p>
-{% else %}
-<p>{{ "project_not_found.check_slug" | t(locale=locale) }}</p>
-{% endif %}
-<p><a href="/projects">{{ "project_not_found.go_list" | t(locale=locale) }}</a></p>
+<head>
+  <meta charset="utf-8">
+  <title>{{ "project_not_found.title" | t(locale=locale) }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/tokens.css">
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/components.css">
+</head>
+<body>
+<main class="max-w-xl mx-auto mt-20 p-8">
+  <div class="empty-state">
+    <h1 class="empty-state__title">{{ "project_not_found.h1" | t(locale=locale, slug=slug) }}</h1>
+    {% if is_disabled %}
+    <p>{{ "project_not_found.disabled" | t(locale=locale) }}</p>
+    {% else %}
+    <p>{{ "project_not_found.check_slug" | t(locale=locale) }}</p>
+    {% endif %}
+    <p><a href="/projects" class="text-brand-hover underline">{{ "project_not_found.go_list" | t(locale=locale) }}</a></p>
+  </div>
+</main>
 </body>
 </html>

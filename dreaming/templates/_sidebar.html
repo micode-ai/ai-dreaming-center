@@ -19,14 +19,13 @@
         <circle cx="12" cy="12" r="3"/>
       </svg>
     </span>
-    <a href="/" class="app-sidebar__brand-text" style="text-decoration:none;">{{ "common.app_name" | t(locale=locale) }}</a>
+    <a href="/" class="app-sidebar__brand-text">{{ "common.app_name" | t(locale=locale) }}</a>
   </div>
 
   {% if projects %}
   <div class="app-sidebar__project">
     <select onchange="(()=>{const slug=event.target.value; if(slug==='*'){location.href='/'} else if(slug==='+'){location.href='/projects?new=1'} else {const cur=location.pathname; const m=cur.match(/^\/p\/[^\/]+(\/.*)?$/); location.href='/p/'+slug+(m && m[1] ? m[1] : '/');}})()"
             class="w-full appearance-none rounded-md pl-2.5 pr-7 py-1.5 text-xs cursor-pointer"
-            style="background-color: var(--bg-elevated); border:1px solid var(--border-subtle); color: var(--text-body); background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%2210%22 viewBox=%220 0 10 10%22><path d=%22M2 3.5 L5 6.5 L8 3.5%22 stroke=%22%2364748b%22 stroke-width=%221.5%22 fill=%22none%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/></svg>'); background-repeat:no-repeat; background-position: right 0.5rem center;"
             aria-label="{{ 'navbar.all_projects' | t(locale=locale) }}">
       <option value="*">● {{ "navbar.all_projects" | t(locale=locale) }}</option>
       {% for p in projects %}
@@ -118,12 +117,12 @@
         active) }}
     {% else %}
       <div class="app-sidebar__section-title">{{ "sidebar.section.project" | t(locale=locale) }}</div>
-      <div class="px-3 py-2 text-xs" style="color: var(--text-faint);">
+      <div class="px-3 py-2 text-xs faint">
         {{ "sidebar.pick_project" | t(locale=locale) }}
       </div>
     {% endif %}
 
-    <div class="app-sidebar__section-title" style="margin-top: 0.5rem;">{{ "sidebar.section.global" | t(locale=locale) }}</div>
+    <div class="app-sidebar__section-title mt-2">{{ "sidebar.section.global" | t(locale=locale) }}</div>
     <a class="app-sidebar__nav-link{% if active == 'g_projects' %} is-active{% endif %}" href="/projects">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
       <span>{{ "projects.title" | t(locale=locale) }}</span>
@@ -143,15 +142,13 @@
   </nav>
 
   <div class="app-sidebar__footer">
-    <form method="post" action="/locale" class="flex items-center rounded-md overflow-hidden" style="border:1px solid var(--border-subtle);">
+    <form method="post" action="/locale" class="flex items-center rounded-md overflow-hidden">
       <input type="hidden" name="next" value="{{ request.url.path }}">
       <button name="locale" value="ru" type="submit"
-              class="text-xs px-2 py-1"
-              style="background:{% if locale=='ru' %}var(--brand){% else %}transparent{% endif %}; color:{% if locale=='ru' %}#fff{% else %}var(--text-muted){% endif %}; cursor:{% if locale=='ru' %}default{% else %}pointer{% endif %};"
+              class="btn btn-sm{% if locale=='ru' %} btn-primary{% else %} btn-ghost{% endif %}"
               {% if locale=='ru' %}disabled{% endif %}>RU</button>
       <button name="locale" value="en" type="submit"
-              class="text-xs px-2 py-1"
-              style="background:{% if locale=='en' %}var(--brand){% else %}transparent{% endif %}; color:{% if locale=='en' %}#fff{% else %}var(--text-muted){% endif %}; cursor:{% if locale=='en' %}default{% else %}pointer{% endif %}; border-left:1px solid var(--border-subtle);"
+              class="btn btn-sm{% if locale=='en' %} btn-primary{% else %} btn-ghost{% endif %}"
               {% if locale=='en' %}disabled{% endif %}>EN</button>
     </form>
   </div>

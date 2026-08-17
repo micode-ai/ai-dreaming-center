@@ -1,15 +1,19 @@
 {% extends "base.html" %}
 {% set active = 'g_projects' %}
 {% block content %}
-<h1 class="text-2xl font-bold mb-4" style="color: var(--text-strong);">{{ "projects.title" | t(locale=locale) }}</h1>
+<header class="page-header">
+  <div class="page-header__titles">
+    <h1 class="page-header__title">{{ "projects.title" | t(locale=locale) }}</h1>
+  </div>
+</header>
 
 {% if projects %}
 <div data-tt-scope>
-  <div class="mb-2 flex items-center gap-2">
+  <div class="toolbar">
     <input type="text" data-tt-search
            placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
     <button type="button" data-tt-reset
-            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+            class="btn btn-sm">
       {{ "table.reset" | t(locale=locale) }}
     </button>
   </div>
@@ -31,31 +35,31 @@
     <tr data-filter-row data-dir="{{ p.working_dir }}">
       <td>
         <form method="post" action="/projects/{{ p.id }}/rename"
-              class="flex items-center gap-1 js-slug-form" data-original-slug="{{ p.slug }}">
+              class="field-row js-slug-form" data-original-slug="{{ p.slug }}">
           <input name="slug" value="{{ p.slug }}" required pattern="^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$"
-                 class="font-mono text-xs rounded px-2 py-1" style="width: 14rem;"
+                 class="font-mono text-xs rounded px-2 py-1 w-56"
                  title="{{ 'projects.slug_hint' | t(locale=locale) }}">
-          <button class="text-xs px-2 py-1 rounded" style="background: var(--bg-hover); color: var(--text-muted); border:1px solid var(--border-subtle);" title="{{ 'projects.save_slug' | t(locale=locale) }}">↵</button>
+          <button class="btn btn-sm" title="{{ 'projects.save_slug' | t(locale=locale) }}">↵</button>
         </form>
       </td>
       <td>
-        <form method="post" action="/projects/{{ p.id }}/rename" class="flex items-center gap-1">
-          <input name="label" value="{{ p.label }}" required class="rounded px-2 py-1" style="width: 16rem;">
-          <button class="text-xs px-2 py-1 rounded" style="background: var(--bg-hover); color: var(--text-muted); border:1px solid var(--border-subtle);" title="{{ 'projects.save_label' | t(locale=locale) }}">↵</button>
+        <form method="post" action="/projects/{{ p.id }}/rename" class="field-row">
+          <input name="label" value="{{ p.label }}" required class="rounded px-2 py-1 w-64">
+          <button class="btn btn-sm" title="{{ 'projects.save_label' | t(locale=locale) }}">↵</button>
         </form>
       </td>
-      <td class="text-xs font-mono" style="color: var(--text-faint);">{{ p.working_dir }}</td>
+      <td class="num">{{ p.working_dir }}</td>
       <td>{{ "✓" if p.enabled else "—" }}</td>
       <td>{{ "★" if p.is_default else "" }}</td>
       <td class="whitespace-nowrap">
         <form method="post" action="/projects/{{ p.id }}/toggle" class="inline">
-          <button class="text-xs px-2 py-1 rounded" style="border:1px solid var(--border-subtle);">{{ "Disable" if p.enabled else "Enable" }}</button>
+          <button class="btn btn-sm">{{ "Disable" if p.enabled else "Enable" }}</button>
         </form>
         <form method="post" action="/projects/{{ p.id }}/delete" class="inline ml-1"
               data-confirm="{{ 'projects.confirm_delete' | t(locale=locale, slug=p.slug) }}"
               data-confirm-input="{{ p.slug }}"
               data-confirm-variant="danger">
-          <button class="text-xs px-2 py-1 rounded" style="color: var(--status-failed); border:1px solid var(--border-subtle);">Delete</button>
+          <button class="btn btn-sm btn-danger">Delete</button>
         </form>
       </td>
     </tr>
@@ -63,7 +67,7 @@
     </tbody>
   </table>
 </div>
-<p class="text-xs mt-3" style="color: var(--text-faint);">
+<p class="text-xs mt-3 faint">
   {{ "projects.legend_save" | t(locale=locale, enter='↵') }}
   {{ "projects.legend_slug" | t(locale=locale) }}
 </p>
@@ -96,15 +100,17 @@
   });
 </script>
 {% else %}
-<p class="muted">{{ "projects.empty" | t(locale=locale) }}</p>
-<p class="mt-4"><a href="/setup" style="color: var(--brand-hover); text-decoration: underline;">→ /setup</a></p>
+<div class="empty-state">
+  <p>{{ "projects.empty" | t(locale=locale) }}</p>
+  <p class="mt-2"><a href="/setup" class="text-brand-hover underline">→ /setup</a></p>
+</div>
 {% endif %}
 
-<div class="mt-6 rounded-lg p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-  <h2 class="font-semibold mb-2" style="color: var(--text-strong);">{{ "projects.import_title" | t(locale=locale) }}</h2>
-  <form method="post" action="/projects/import" class="flex gap-2">
-    <input name="root" value="{{ settings.projects_root }}" class="rounded p-1 flex-1" style="max-width: 32rem;">
-    <button class="text-sm rounded px-3 py-1" style="background: var(--brand); color:#fff;">{{ "projects.import_btn" | t(locale=locale) }}</button>
+<div class="card mt-6">
+  <h2 class="section-title">{{ "projects.import_title" | t(locale=locale) }}</h2>
+  <form method="post" action="/projects/import" class="field-row">
+    <input name="root" value="{{ settings.projects_root }}" class="rounded p-1 flex-1 max-w-lg">
+    <button class="btn btn-primary">{{ "projects.import_btn" | t(locale=locale) }}</button>
   </form>
 </div>
 {% endblock %}

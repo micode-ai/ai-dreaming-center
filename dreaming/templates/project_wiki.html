@@ -6,19 +6,21 @@
 {% if not wiki_dir_set %}
 {{ autoconfig_banner(project, "wiki_dir", autoconfig_default, "Wiki") }}
 {% elif not status.exists or status.domains_count == 0 %}
-<div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
-  <p class="font-semibold text-sky-900 mb-1">
-    {% if not status.exists %}{{ "wiki.empty_dir" | t(locale=locale) }}{% else %}{{ "wiki.empty_wiki" | t(locale=locale) }}{% endif %}
-  </p>
-  <p class="text-sm text-sky-900 mb-2">
-    {{ "wiki.path" | t(locale=locale) }}: <code class="text-xs">{{ status.wiki_dir }}</code>
-  </p>
-  <p class="text-sm text-sky-900 mb-3">
-    {{ "wiki.bootstrap_hint" | t(locale=locale, code='/wiki-bootstrap') }}
-  </p>
-  <form method="post" action="/p/{{ project.slug }}/wiki/bootstrap">
-    <button class="text-sm bg-blue-600 text-white rounded px-3 py-1">Run /wiki-bootstrap</button>
-  </form>
+<div class="banner banner-info">
+  <div class="banner__body">
+    <p class="banner__title">
+      {% if not status.exists %}{{ "wiki.empty_dir" | t(locale=locale) }}{% else %}{{ "wiki.empty_wiki" | t(locale=locale) }}{% endif %}
+    </p>
+    <p class="text-sm">
+      {{ "wiki.path" | t(locale=locale) }}: <code class="text-xs">{{ status.wiki_dir }}</code>
+    </p>
+    <p class="text-sm">
+      {{ "wiki.bootstrap_hint" | t(locale=locale, code='/wiki-bootstrap') }}
+    </p>
+    <form method="post" action="/p/{{ project.slug }}/wiki/bootstrap">
+      <button class="btn btn-primary">Run /wiki-bootstrap</button>
+    </form>
+  </div>
 </div>
 {% else %}
 {{ scan_action_bar(
@@ -27,14 +29,14 @@
      "wiki.lint.button" | t(locale=locale),
      "wiki.lint.running" | t(locale=locale),
 ) }}
-<div class="bg-white p-4 rounded shadow">
+<div class="card">
   <p class="text-sm muted">{{ "wiki.source" | t(locale=locale) }}: <code>{{ status.wiki_dir }}</code></p>
   <p class="mt-2 text-2xl font-bold">{{ status.domains_count }} domains</p>
   {% if status.domains %}
   <ul class="mt-4 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
     {% for d in status.domains %}
     <li>
-      <a class="text-blue-600 underline font-mono text-xs cursor-pointer"
+      <a class="text-brand-hover underline font-mono text-xs cursor-pointer"
          href="#"
          data-wiki-name="{{ d }}"
          onclick="openWiki(this); return false;">{{ d }}</a>
@@ -50,14 +52,14 @@
 {% include "_markdown_partial.html" %}
 
 <dialog id="wiki-modal" class="note-modal">
-  <header class="flex items-baseline justify-between p-3 border-b bg-slate-50">
-    <h2 id="wiki-modal-title" class="text-sm font-mono text-slate-700"></h2>
+  <header class="flex items-baseline justify-between p-3 divider-b bg-elevated">
+    <h2 id="wiki-modal-title" class="text-sm font-mono"></h2>
     <div class="flex gap-2">
-      <a id="wiki-modal-raw" class="text-xs text-blue-600 underline" target="_blank" rel="noopener">raw</a>
-      <button onclick="closeWiki()" class="text-slate-500 hover:text-slate-900 text-xl leading-none">×</button>
+      <a id="wiki-modal-raw" class="text-xs text-brand-hover underline" target="_blank" rel="noopener">raw</a>
+      <button onclick="closeWiki()" class="modal-close text-xl leading-none">×</button>
     </div>
   </header>
-  <div id="wiki-modal-body" class="markdown-body overflow-auto" style="max-height: 80vh; min-height: 200px;"></div>
+  <div id="wiki-modal-body" class="markdown-body note-modal__body"></div>
 </dialog>
 
 <script>
@@ -73,7 +75,7 @@
     const rawUrl = `/p/${slug}/wiki/raw?name=${encodeURIComponent(name)}`;
     title.textContent = name + ".md";
     rawLink.href = rawUrl;
-    body.innerHTML = '<p class="muted" style="padding: 1.5rem;">{{ "wiki.loading" | t(locale=locale) }}</p>';
+    body.innerHTML = '<p class="muted p-6">{{ "wiki.loading" | t(locale=locale) }}</p>';
     modal.showModal();
     try {
       const r = await fetch(rawUrl);
@@ -81,7 +83,7 @@
       const text = await r.text();
       window.dcRenderMarkdown(body, text);
     } catch (e) {
-      body.innerHTML = '<p class="text-red-700 font-mono text-xs" style="padding: 1.5rem;">{{ "wiki.error_prefix" | t(locale=locale) }}: ' + (e.message || e) + '</p>';
+      body.innerHTML = '<p class="text-danger font-mono text-xs p-6">{{ "wiki.error_prefix" | t(locale=locale) }}: ' + (e.message || e) + '</p>';
     }
   };
   window.closeWiki = function() { modal.close(); };

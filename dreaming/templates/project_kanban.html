@@ -4,11 +4,11 @@
 
 <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
   <div>
-    <h2 class="text-lg font-semibold" style="color: var(--text-strong);">{{ "kanban.plan_title" | t(locale=locale) }}</h2>
-    <p class="text-xs mt-0.5" style="color: var(--text-faint);">{{ "kanban.schedule_subtitle" | t(locale=locale, n=per_night) }}</p>
+    <h2 class="section-title">{{ "kanban.plan_title" | t(locale=locale) }}</h2>
+    <p class="text-xs mt-0.5 faint">{{ "kanban.schedule_subtitle" | t(locale=locale, n=per_night) }}</p>
   </div>
   <div class="flex items-center gap-3">
-    <span class="text-sm" style="color: var(--text-muted);">{{ "kanban.active_count" | t(locale=locale, n=total_enabled) }}</span>
+    <span class="text-sm muted">{{ "kanban.active_count" | t(locale=locale, n=total_enabled) }}</span>
     {% if remaining > 0 %}
     <span class="badge badge-timeout">{{ "kanban.overflow" | t(locale=locale, n=remaining) }}</span>
     {% endif %}
@@ -22,82 +22,83 @@
       <div class="text-xs font-medium uppercase tracking-wider" style="color: {{ 'var(--brand-hover)' if col.is_today else 'var(--text-faint)' }};">{{ col.weekday }}</div>
       <div class="text-sm font-semibold" style="color: {{ 'var(--text-strong)' if col.is_today else 'var(--text-muted)' }};">{{ col.date_str }}</div>
       {% if col.is_today %}
-      <div class="mt-1 mx-auto rounded-full" style="width: 2rem; height: 2px; background: var(--brand);"></div>
+      <div class="mt-1 mx-auto kanban-today-dash"></div>
       {% endif %}
     </div>
 
-    <div class="flex-1 rounded-xl p-2.5 space-y-2" style="background: rgba(21, 28, 44, 0.5); border:1px solid var(--border-subtle); min-height: 200px;">
+    <div class="flex-1 kanban-well p-2.5 space-y-2">
       {% for a in col.agents %}
-      <div class="rounded-lg p-3" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+      <div class="card">
         <div class="flex items-center justify-between mb-2 gap-2">
-          <span class="text-sm font-medium truncate" style="color: var(--text-strong);">{{ a.name }}</span>
-          <span class="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium"
-                style="background: {% if a.tier == 1 %}rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.30){% elif a.tier == 2 %}rgba(167,139,250,0.15);color:#c4b5fd;border:1px solid rgba(167,139,250,0.30){% else %}var(--bg-hover);color:var(--text-faint);border:1px solid var(--border-subtle){% endif %};">T{{ a.tier }}</span>
+          <span class="text-sm font-medium truncate strong">{{ a.name }}</span>
+          <span class="flex-shrink-0 text-[10px] font-medium tier-badge {% if a.tier == 1 %}tier-badge-1{% elif a.tier == 2 %}tier-badge-2{% else %}tier-badge-default{% endif %}">T{{ a.tier }}</span>
         </div>
-        <div class="flex items-center justify-between text-[11px]" style="color: var(--text-faint);">
+        <div class="flex items-center justify-between text-[11px] faint">
           <span>{{ "kanban.sessions" | t(locale=locale, n=a.total_sessions) }}</span>
           {% if a.last_studied_at %}
           <span class="font-mono">{{ a.last_studied_at[:10] }}</span>
           {% else %}
-          <span style="color: var(--status-timeout);">{{ "kanban.new" | t(locale=locale) }}</span>
+          <span class="text-warn">{{ "kanban.new" | t(locale=locale) }}</span>
           {% endif %}
         </div>
       </div>
       {% endfor %}
       {% if not col.agents %}
       <div class="flex items-center justify-center h-full">
-        <span class="text-xs" style="color: var(--text-faint);">{{ "kanban.no_agents" | t(locale=locale) }}</span>
+        <span class="text-xs faint">{{ "kanban.no_agents" | t(locale=locale) }}</span>
       </div>
       {% endif %}
     </div>
 
-    <div class="mt-2 text-center text-xs" style="color: var(--text-faint);">{{ "kanban.col_count" | t(locale=locale, cur=col.agents|length, total=per_night) }}</div>
+    <div class="mt-2 text-center text-xs faint">{{ "kanban.col_count" | t(locale=locale, cur=col.agents|length, total=per_night) }}</div>
   </div>
   {% endfor %}
 </div>
 
-<div class="flex items-center gap-5 text-xs mb-8 flex-wrap" style="color: var(--text-faint);">
-  <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background: var(--brand);"></span> {{ "kanban.legend.t1" | t(locale=locale) }}</div>
-  <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background: #a78bfa;"></span> {{ "kanban.legend.t2" | t(locale=locale) }}</div>
-  <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background: var(--text-faint);"></span> {{ "kanban.legend.t3" | t(locale=locale) }}</div>
+<div class="flex items-center gap-5 text-xs mb-8 flex-wrap faint">
+  <div class="flex items-center gap-1.5"><span class="dot dot-brand"></span> {{ "kanban.legend.t1" | t(locale=locale) }}</div>
+  <div class="flex items-center gap-1.5"><span class="dot dot-tier2"></span> {{ "kanban.legend.t2" | t(locale=locale) }}</div>
+  <div class="flex items-center gap-1.5"><span class="dot dot-faint"></span> {{ "kanban.legend.t3" | t(locale=locale) }}</div>
   <div class="ml-auto">{{ "kanban.legend.order" | t(locale=locale) }}</div>
 </div>
 
-<hr style="border-color: var(--border-subtle); margin: 1.5rem 0;">
+<hr>
 
 <div class="flex items-center justify-between mb-3 gap-3">
-  <h2 class="text-sm font-semibold" style="color: var(--text-strong);">Custom topics</h2>
+  <h2 class="section-title">Custom topics</h2>
   <form method="post" action="/p/{{ project.slug }}/topics/generate">
     <button type="submit"
-            class="text-xs rounded px-3 py-1.5 disabled:opacity-50"
-            style="background: var(--brand); color: white; border:1px solid var(--brand-hover);"
+            class="btn btn-primary"
             {% if topics_running %}disabled title="{{ 'kanban.topics_running' | t(locale=locale) }}"{% endif %}>
       {% if topics_running %}{{ "topics.generate.running" | t(locale=locale) }}{% else %}{{ "topics.generate.button" | t(locale=locale) }}{% endif %}
     </button>
   </form>
 </div>
-<form method="post" action="/p/{{ project.slug }}/kanban/add" class="rounded-lg p-4 mb-4 grid grid-cols-2 gap-3"
-      style="background: var(--bg-card); border:1px solid var(--border-subtle);">
+<form method="post" action="/p/{{ project.slug }}/kanban/add" class="card grid grid-cols-2 gap-3 mb-4">
   <input name="title" placeholder="{{ 'kanban.placeholder.title' | t(locale=locale) }}" required class="rounded p-2 col-span-2">
   <input name="module" placeholder="{{ 'kanban.placeholder.module' | t(locale=locale) }}" class="rounded p-2">
   <input name="target_agents" placeholder="{{ 'kanban.placeholder.agents' | t(locale=locale) }}" class="rounded p-2">
   <textarea name="question" placeholder="{{ 'kanban.placeholder.question' | t(locale=locale) }}" class="rounded p-2 col-span-2"></textarea>
   <textarea name="why_important" placeholder="{{ 'kanban.placeholder.why' | t(locale=locale) }}" class="rounded p-2 col-span-2"></textarea>
-  <button class="bg-blue-600 text-white rounded p-2 col-span-2">{{ "common.add" | t(locale=locale) }}</button>
+  <button class="btn btn-primary col-span-2">{{ "common.add" | t(locale=locale) }}</button>
 </form>
 
 {% if topics %}
 <style>
-  tr.target-highlight:target { background: rgb(254 240 138 / .55); transition: background-color 1.5s ease-out; }
+  /* Warning-tinted (not the original Tailwind yellow-400) so it reads on
+     dark: --text-body over --timeout-soft-dim composited on --bg-card is
+     ~12:1, well above the 4.5:1 floor the original rgb(254 240 138 / .55)
+     failed at ~2.6:1. */
+  tr.target-highlight:target { background: var(--timeout-soft-dim); transition: background-color 1.5s ease-out; }
   tr.target-highlight:target td { animation: target-flash 2.5s ease-out 1; }
-  @keyframes target-flash { 0% { background: rgb(250 204 21 / .65); } 100% { background: transparent; } }
+  @keyframes target-flash { 0% { background: var(--status-timeout-strong); } 100% { background: transparent; } }
 </style>
 <div data-tt-scope>
-  <div class="mb-2 flex items-center gap-2">
+  <div class="toolbar">
     <input type="text" data-tt-search
            placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
     <button type="button" data-tt-reset
-            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+            class="btn btn-sm">
       {{ "table.reset" | t(locale=locale) }}
     </button>
   </div>
@@ -123,7 +124,7 @@
       <td>
         <form method="post" action="/p/{{ project.slug }}/kanban/{{ t.id }}/delete" class="inline"
               data-confirm="{{ 'kanban.confirm_delete_topic' | t(locale=locale, title=t.title) }}" data-confirm-variant="danger">
-          <button class="text-xs underline" style="color: var(--status-failed);">delete</button>
+          <button class="text-xs underline text-danger">delete</button>
         </form>
       </td>
     </tr>

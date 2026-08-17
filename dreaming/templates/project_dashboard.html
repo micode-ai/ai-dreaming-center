@@ -3,55 +3,57 @@
 {% block project_content %}
 
 {% if bootstrap_needed %}
-<div class="mb-4 p-4 border border-amber-400 bg-amber-50 rounded">
-  <p class="font-semibold text-amber-900 mb-1">{{ "project_dashboard.not_setup_title" | t(locale=locale) }}</p>
-  <p class="text-sm text-amber-900 mb-2">
-    {{ "project_dashboard.one_click" | t(locale=locale) }}
-  </p>
-  <ul class="text-xs text-amber-900 list-disc ml-5 mb-3 space-y-1">
-    {% if kit_status and not kit_status.all_present %}
-    <li>{{ "project_dashboard.copy_files" | t(locale=locale, n=kit_status.missing|length) }}
-      ({% for f in kit_status.missing %}<code>{{ f }}</code>{{ ", " if not loop.last }}{% endfor %})
-      {{ "project_dashboard.into" | t(locale=locale, dir='.claude/') }}</li>
-    {% endif %}
-    {% if missing_dirs %}
-    <li>{{ "project_dashboard.create_dirs" | t(locale=locale, n=missing_dirs|length) }}
-      {% for k in missing_dirs %}<code>{{ k }}</code>{{ ", " if not loop.last }}{% endfor %}</li>
-    {% endif %}
-  </ul>
-  <p class="text-xs text-amber-900 mb-3">
-    {{ "project_dashboard.dont_touch" | t(locale=locale) }}
-    <a class="text-blue-600 underline" href="/p/{{ project.slug }}/settings">Settings</a>.
-  </p>
-  <form method="post" action="/p/{{ project.slug }}/bootstrap-all">
-    <button class="text-sm bg-amber-600 text-white rounded px-4 py-2 font-semibold">
-      Bootstrap everything
-    </button>
-  </form>
+<div class="banner banner-warn">
+  <div class="banner__body">
+    <p class="banner__title">{{ "project_dashboard.not_setup_title" | t(locale=locale) }}</p>
+    <p class="text-sm mb-2">
+      {{ "project_dashboard.one_click" | t(locale=locale) }}
+    </p>
+    <ul class="text-xs list-disc ml-5 mb-3 space-y-1">
+      {% if kit_status and not kit_status.all_present %}
+      <li>{{ "project_dashboard.copy_files" | t(locale=locale, n=kit_status.missing|length) }}
+        ({% for f in kit_status.missing %}<code>{{ f }}</code>{{ ", " if not loop.last }}{% endfor %})
+        {{ "project_dashboard.into" | t(locale=locale, dir='.claude/') }}</li>
+      {% endif %}
+      {% if missing_dirs %}
+      <li>{{ "project_dashboard.create_dirs" | t(locale=locale, n=missing_dirs|length) }}
+        {% for k in missing_dirs %}<code>{{ k }}</code>{{ ", " if not loop.last }}{% endfor %}</li>
+      {% endif %}
+    </ul>
+    <p class="text-xs mb-3">
+      {{ "project_dashboard.dont_touch" | t(locale=locale) }}
+      <a class="underline" href="/p/{{ project.slug }}/settings">Settings</a>.
+    </p>
+    <form method="post" action="/p/{{ project.slug }}/bootstrap-all">
+      <button class="btn btn-warn">
+        Bootstrap everything
+      </button>
+    </form>
+  </div>
 </div>
 {% endif %}
 
 {% set week_total = (stats.success or 0) + (stats.no_gap or 0) + (stats.failed or 0) + (stats.timeout or 0) + (stats.running or 0) %}
 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
   <div class="metric metric-info">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "p.metrics.week_total" | t(locale=locale) }}</div>
-    <div class="text-3xl font-semibold mt-1" style="color: var(--text-strong);">{{ week_total }}</div>
+    <div class="metric__label">{{ "p.metrics.week_total" | t(locale=locale) }}</div>
+    <div class="metric__value">{{ week_total }}</div>
   </div>
   <div class="metric metric-success">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "p.metrics.success" | t(locale=locale) }}</div>
-    <div class="text-3xl font-semibold mt-1" style="color: var(--status-success);">{{ stats.success or 0 }}</div>
+    <div class="metric__label">{{ "p.metrics.success" | t(locale=locale) }}</div>
+    <div class="metric__value">{{ stats.success or 0 }}</div>
   </div>
   <div class="metric metric-running">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "p.metrics.no_gap" | t(locale=locale) }}</div>
-    <div class="text-3xl font-semibold mt-1" style="color: var(--status-running);">{{ stats.no_gap or 0 }}</div>
+    <div class="metric__label">{{ "p.metrics.no_gap" | t(locale=locale) }}</div>
+    <div class="metric__value">{{ stats.no_gap or 0 }}</div>
   </div>
   <div class="metric metric-failed">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "p.metrics.failed" | t(locale=locale) }}</div>
-    <div class="text-3xl font-semibold mt-1" style="color: var(--status-failed);">{{ stats.failed or 0 }}</div>
+    <div class="metric__label">{{ "p.metrics.failed" | t(locale=locale) }}</div>
+    <div class="metric__value">{{ stats.failed or 0 }}</div>
   </div>
   <div class="metric metric-timeout">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">{{ "p.metrics.timeout" | t(locale=locale) }}</div>
-    <div class="text-3xl font-semibold mt-1" style="color: var(--status-timeout);">{{ stats.timeout or 0 }}</div>
+    <div class="metric__label">{{ "p.metrics.timeout" | t(locale=locale) }}</div>
+    <div class="metric__value">{{ stats.timeout or 0 }}</div>
   </div>
 </div>
 
@@ -70,30 +72,32 @@
   {% endif %}
 {% endfor %}
 {% if ns.stale_orphans %}
-<div class="mb-3 p-2 border border-amber-400 bg-amber-50 rounded text-sm flex items-center justify-between">
-  <span class="text-amber-900">
+<div class="banner banner-warn">
+  <div class="banner__body">
     {{ ns.stale_orphans }} stuck <code>running</code> row{{ "s" if ns.stale_orphans != 1 else "" }} (process gone, DB never closed).
-  </span>
-  <form method="post" action="/p/{{ project.slug }}/sessions/force-close-stale"
-        data-confirm="Mark all running rows for this project as cancelled?" data-confirm-variant="danger">
-    <button class="text-xs bg-amber-600 text-white rounded px-3 py-1">
-      Force-close all stale
-    </button>
-  </form>
+  </div>
+  <div class="banner__actions">
+    <form method="post" action="/p/{{ project.slug }}/sessions/force-close-stale"
+          data-confirm="Mark all running rows for this project as cancelled?" data-confirm-variant="danger">
+      <button class="btn btn-sm btn-warn">
+        Force-close all stale
+      </button>
+    </form>
+  </div>
 </div>
 {% endif %}
 
-<h2 class="font-semibold text-slate-900 mb-2">{{ "p.recent_sessions" | t(locale=locale) }}</h2>
+<h2 class="section-title">{{ "p.recent_sessions" | t(locale=locale) }}</h2>
 <div data-tt-scope>
-  <div class="mb-2 flex items-center gap-2">
+  <div class="toolbar">
     <input type="text" data-tt-search
            placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
     <button type="button" data-tt-reset
-            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+            class="btn btn-sm">
       {{ "table.reset" | t(locale=locale) }}
     </button>
   </div>
-  <table class="data-table"
+  <table class="data-table is-dense"
          data-table-tools
          data-tt-key="dashboard.sessions.{{ project.slug }}"
          data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
@@ -135,20 +139,20 @@
         {% endif %}
       </td>
       <td class="text-xs">{{ s.topic or '' }}</td>
-      <td class="text-xs muted whitespace-nowrap">{{ s.started_at }}</td>
+      <td class="num muted whitespace-nowrap">{{ s.started_at }}</td>
       <td class="text-right whitespace-nowrap">
-        <a class="text-xs border border-slate-200 hover:border-slate-300 rounded px-2 py-1 mr-1 text-slate-700 hover:bg-slate-50 transition-colors inline-block" href="/p/{{ project.slug }}/sessions/{{ s.id }}/log">log</a>
+        <a class="btn btn-sm mr-1" href="/p/{{ project.slug }}/sessions/{{ s.id }}/log">log</a>
         {% if is_running_row %}
           <form method="post" action="/p/{{ project.slug }}/sessions/{{ s.id }}/stop" class="inline"
               data-confirm="{{ "Stop running process for " if is_live else "Force-close orphan row for " }}{{ s.agent_name }}?" data-confirm-variant="danger">
-            <button class="text-xs border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded px-2 py-1 mr-1 transition-colors">
+            <button class="btn btn-sm btn-warn mr-1">
               {{ "Stop" if is_live else "Force-close" }}
             </button>
           </form>
         {% endif %}
         <form method="post" action="/p/{{ project.slug }}/sessions/{{ s.id }}/delete" class="inline"
               data-confirm="Permanently delete this session row?{{ "  (process is still running — it will be killed first)" if is_live else "" }}" data-confirm-variant="danger">
-          <button class="text-xs border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 rounded px-2 py-1 transition-colors">
+          <button class="btn btn-sm btn-danger">
             Delete
           </button>
         </form>
@@ -161,19 +165,19 @@
   </table>
 </div>
 
-<h2 class="font-semibold text-slate-900 mt-6 mb-2 flex items-center gap-2">
+<h2 class="section-title">
   {{ "p.active_runs" | t(locale=locale) }}
   {% if active_keys %}<span class="badge badge-live"><span class="dot dot-pulse" aria-hidden="true"></span>{{ active_keys|length }}</span>{% endif %}
 </h2>
 {% if active_keys %}
-<ul class="bg-white rounded-lg border border-slate-200 shadow-sm divide-y divide-slate-100">
+<ul class="card card--flush list-rows">
   {% for key in active_keys %}
     {% set agent = key.split(':', 1)[1] %}
-    <li class="flex items-center justify-between px-3 py-2">
-      <span class="font-mono text-sm text-slate-700">{{ key }}</span>
+    <li>
+      <span class="num">{{ key }}</span>
       <form method="post" action="/p/{{ project.slug }}/live/kill/{{ agent }}" class="inline"
             data-confirm="Kill running process for {{ agent }}?" data-confirm-variant="danger">
-        <button class="text-xs border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded px-2.5 py-1 transition-colors">
+        <button class="btn btn-sm btn-warn">
           Stop
         </button>
       </form>
@@ -181,6 +185,6 @@
   {% endfor %}
 </ul>
 {% else %}
-<p class="muted">{{ "p.no_active_runs" | t(locale=locale) }}</p>
+<p class="empty-state">{{ "p.no_active_runs" | t(locale=locale) }}</p>
 {% endif %}
 {% endblock %}

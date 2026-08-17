@@ -1,29 +1,29 @@
 {% extends "base.html" %}
 {% set active = 'g_ai_radar' %}
 {% block content %}
-<header class="mb-5 flex items-baseline gap-3 flex-wrap">
-  <h1 class="text-2xl font-semibold tracking-tight" style="color: var(--text-strong);">
-    {{ "radar.title" | t(locale=locale) }}
-  </h1>
-  <span class="text-xs" style="color: var(--text-faint);">
-    {{ findings|length }} {{ "radar.findings_total" | t(locale=locale) }}
-  </span>
-  <form method="post" action="/ai-radar/scan-now" class="ml-auto inline">
-    <button class="text-xs px-3 py-1.5 rounded" title="{{ 'radar.scan.hint' | t(locale=locale) }}"
-            style="background: var(--brand); color:#fff;">{{ "radar.scan.run" | t(locale=locale) }}</button>
-  </form>
+<header class="page-header">
+  <div class="page-header__titles">
+    <h1 class="page-header__title">{{ "radar.title" | t(locale=locale) }}</h1>
+    <span class="text-xs faint">
+      {{ findings|length }} {{ "radar.findings_total" | t(locale=locale) }}
+    </span>
+  </div>
+  <div class="page-header__actions">
+    <form method="post" action="/ai-radar/scan-now">
+      <button class="btn btn-sm btn-primary" title="{{ 'radar.scan.hint' | t(locale=locale) }}">{{ "radar.scan.run" | t(locale=locale) }}</button>
+    </form>
+  </div>
 </header>
 
 {% if not watchlist.sources %}
-<div class="mb-4 p-4 rounded-lg"
-     style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-  <p class="font-semibold mb-2" style="color: var(--text-strong);">
+<div class="card mb-4">
+  <p class="font-semibold mb-2 strong">
     {{ "radar.onboarding.title" | t(locale=locale) }}
   </p>
-  <p class="text-sm mb-2" style="color: var(--text-body);">
+  <p class="text-sm mb-2">
     {{ "radar.onboarding.body" | t(locale=locale) }}
   </p>
-  <p class="text-xs font-mono" style="color: var(--text-faint);">{{ sources_path }}</p>
+  <p class="text-xs font-mono faint">{{ sources_path }}</p>
 </div>
 {% endif %}
 
@@ -31,8 +31,7 @@
   <section class="flex-1 min-w-0">
     <form method="get" class="mb-4 flex items-center gap-2 text-xs flex-wrap">
       <select name="status" onchange="this.form.submit()"
-              class="rounded px-2 py-1"
-              style="background: var(--bg-elevated); border:1px solid var(--border-subtle); color: var(--text-body);">
+              class="rounded px-2 py-1 bg-elevated">
         <option value="" {% if not filter_status %}selected{% endif %}>
           {{ "radar.filter.any_status" | t(locale=locale) }}
         </option>
@@ -41,8 +40,7 @@
         {% endfor %}
       </select>
       <select name="since_days" onchange="this.form.submit()"
-              class="rounded px-2 py-1"
-              style="background: var(--bg-elevated); border:1px solid var(--border-subtle); color: var(--text-body);">
+              class="rounded px-2 py-1 bg-elevated">
         <option value="" {% if not filter_since_days %}selected{% endif %}>
           {{ "radar.filter.any_time" | t(locale=locale) }}
         </option>
@@ -53,11 +51,10 @@
         {% endfor %}
       </select>
       {% if filter_source %}
-        <span class="px-2 py-1 rounded font-mono"
-              style="background: var(--brand-soft); color:#c7d2fe;">
+        <span class="badge badge-brand font-mono">
           source: {{ filter_source }}
         </span>
-        <a href="/ai-radar" class="underline" style="color: var(--text-muted);">×</a>
+        <a href="/ai-radar" class="underline muted">×</a>
       {% endif %}
     </form>
 
@@ -71,8 +68,7 @@
   </section>
 
   <aside class="w-64 shrink-0">
-    <h2 class="text-xs uppercase tracking-wide mb-2"
-        style="color: var(--text-faint);">
+    <h2 class="text-xs uppercase tracking-wide mb-2 faint">
       {{ "radar.sidebar.top_sources" | t(locale=locale) }}
     </h2>
     {% if source_counts %}
@@ -80,9 +76,8 @@
         {% for sc in source_counts %}
           <li class="flex items-baseline justify-between">
             <a href="/ai-radar?source={{ sc.source_key }}"
-               class="font-mono text-xs"
-               style="color: var(--text-body);">{{ sc.source_key }}</a>
-            <span class="text-xs" style="color: var(--text-faint);">{{ sc.n }}</span>
+               class="font-mono text-xs">{{ sc.source_key }}</a>
+            <span class="text-xs faint">{{ sc.n }}</span>
           </li>
         {% endfor %}
       </ul>

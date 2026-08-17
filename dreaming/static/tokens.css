@@ -1,0 +1,163 @@
+/* ============================================================
+   tokens.css — the single source of truth for how the app looks.
+   ONLY :root lives here. No selectors, no components, no rules.
+   Changing the app's visual direction means editing this file
+   and nothing else.
+   ============================================================ */
+
+:root {
+  /* ---------- Surfaces (retuned: direction A) ---------- */
+  --bg-app: #0a0e17;
+  --bg-card: #10151f;
+  --bg-sidebar: #080b12;
+  --bg-elevated: #141a26;
+  --bg-hover: #161c28;
+
+  /* ---------- Borders (quieter than before) ---------- */
+  --border-subtle: #1d2534;
+  --border-muted: #2a3444;
+
+  /* ---------- Text ---------- */
+  --text-strong: #f1f5f9;
+  --text-body: #dbe3ec;
+  --text-muted: #8b9bb0;
+  --text-faint: #5f6e83;
+
+  /* ---------- Brand ---------- */
+  --brand: #6366f1;
+  --brand-hover: #818cf8;
+  --brand-soft: rgba(99, 102, 241, 0.14);
+  --brand-soft-border: rgba(99, 102, 241, 0.30);   /* kanban tier-1 badge border */
+  --brand-strong: #4f46e5;
+  --brand-fg: #c7d2fe;   /* text/icon on --brand-soft */
+  --brand-fg-dim: #a5b4fc;   /* active icon: one step down from --brand-fg */
+  --brand-on: #ffffff;   /* text on solid --brand */
+
+  /* ---------- Status: text / soft background / border ---------- */
+  --status-success: #4ade80;
+  --status-success-soft: rgba(34, 197, 94, 0.18);
+  --status-success-strong: rgba(34, 197, 94, 0.28);   /* .btn-success hover; +0.10 over -soft, matching the failed/timeout delta */
+  --status-success-border: rgba(34, 197, 94, 0.35);
+  --status-failed: #f87171;
+  --status-failed-soft: rgba(239, 68, 68, 0.14);
+  --status-failed-strong: rgba(239, 68, 68, 0.24);
+  --status-failed-border: rgba(239, 68, 68, 0.35);
+  --status-timeout: #fbbf24;
+  --status-timeout-soft: rgba(245, 158, 11, 0.14);
+  --status-timeout-strong: rgba(245, 158, 11, 0.24);
+  --status-timeout-border: rgba(245, 158, 11, 0.35);
+  --status-running: #60a5fa;
+  --status-running-soft: rgba(59, 130, 246, 0.16);
+  --status-running-border: rgba(59, 130, 246, 0.35);
+  --status-live: #34d399;
+  --status-live-soft: rgba(16, 185, 129, 0.18);
+  --status-cancelled: #fb923c;   /* cancelled / stopped pills */
+  --skill-fg: #d8b4fe;           /* skill badges under activity chips */
+
+  /* ---------- AI-usage dashboards: cache accent (Tailwind violet-400 /
+     violet-300, exact-preserved -- distinct hue from --skill-fg's purple-300,
+     so snapping to it would be a visible colour change, not scale reuse) --- */
+  --cache-fg: #a78bfa;      /* cache-read glyph; matches the Chart.js dataset colour */
+  --cache-fg-dim: #c4b5fd;  /* cache-hit % figure, one step lighter */
+
+  /* ---------- Overlays ---------- */
+  --overlay-modal: rgba(15, 23, 42, 0.5);  /* app-modal backdrop: Tailwind slate-900 @ 50%, ported exactly from the pre-migration inline <style> */
+
+  /* ---------- Shadows ---------- */
+  --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.35), 0 1px 3px 0 rgba(0, 0, 0, 0.25);
+  --shadow-card-hover: 0 6px 18px -8px rgba(0, 0, 0, 0.55), 0 2px 4px rgba(0, 0, 0, 0.35);
+  --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+  --shadow-brand: 0 1px 2px rgba(99, 102, 241, 0.35);
+  --ring: 0 0 0 2px var(--brand-soft), 0 0 0 4px var(--brand);
+
+  /* ---------- Spacing scale (one ramp, no more mb-5 next to mb-6) ---------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
+  /* ---------- Radii ---------- */
+  --radius-sm: 0.4375rem;
+  --radius: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-pill: 9999px;
+
+  /* ---------- Typography ---------- */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --text-xs: 0.6875rem;
+  --text-sm: 0.75rem;
+  --text-base: 0.8125rem;
+  --text-h2: 1.0625rem;
+  --text-h1: 1.375rem;
+
+  /* ---------- Table density (direction B for scanned tables) ---------- */
+  --row-pad-y: 0.6rem;
+  --row-pad-x: 0.75rem;
+  --row-font: 0.8125rem;
+  --row-pad-y-dense: 0.35rem;
+  --row-pad-x-dense: 0.6rem;
+  --row-font-dense: 0.78125rem;
+
+  /* ---------- Controls ---------- */
+  --control-h: 2rem;
+  --control-h-sm: 1.625rem;
+  --metric-bar-w: 3px;
+
+  /* ---------- Orchestration list: one-off surfaces with no clean existing
+     token match. The remaining literals here are alpha-tinted backgrounds
+     and borders ported exactly from the pre-migration inline styles (Task
+     7) -- overlays on the dark surface, not approximations of an existing
+     -soft/-border pair, and correct as dark-theme literals.
+     --queue-dispatched-fg and --queue-failed-fg were removed: both were
+     light-theme foreground colours (Tailwind emerald-600 / red-700) that
+     failed WCAG AA against the dark card (3.97:1 and 2.46:1) -- preserving
+     them exactly preserved a contrast bug. components.css now points
+     those two foregrounds at the existing --status-success /
+     --status-failed dark-theme tokens instead (8.58:1 / 5.80:1). ---------- */
+  --brand-banner-bg: rgba(99, 102, 241, 0.08);     /* bulk-queue banner background */
+  --brand-banner-border: rgba(99, 102, 241, 0.35); /* bulk-queue banner border */
+  --brand-row-bg: rgba(99, 102, 241, 0.10);        /* selected run-row highlight */
+  --timeout-soft-dim: rgba(245, 158, 11, 0.10);    /* queue-item-pending bg; stale-orphans banner bg */
+  --queue-dispatched-bg: rgba(52, 211, 153, 0.10);
+  --queue-dispatched-border: rgba(52, 211, 153, 0.35);
+  --queue-failed-bg: rgba(248, 113, 113, 0.10);
+  --queue-failed-border: rgba(248, 113, 113, 0.35);
+
+  /* ---------- Kanban plan board ----------
+     Tier-2 badge reuses --cache-fg / --cache-fg-dim (already the exact violet
+     hue, #a78bfa / #c4b5fd, shared with the AI-usage cache accent) rather than
+     minting a duplicate pair. Only the alpha-tinted soft background and
+     border have no existing match. ---------- */
+  --tier2-soft: rgba(167, 139, 250, 0.15);
+  --tier2-border: rgba(167, 139, 250, 0.30);
+  --kanban-well-bg: rgba(21, 28, 44, 0.5);  /* column well, ported exactly */
+
+  /* ---------- Evolutions rubric-coverage tiles ----------
+     Three of the four tinted backgrounds ported exactly from the pre-
+     migration inline styles turned out to be byte-identical rgba values to
+     tokens that already exist above (queue-item / stale-orphans tints
+     defined for the Orchestration list, Task 7): auto = --queue-dispatched-bg,
+     review = --timeout-soft-dim, reject = --queue-failed-bg. Reused instead
+     of duplicated -- see components.css .rubric-tile* for where they're
+     consumed by something that is not a queue or a timeout banner; the
+     alpha tint outlived its original name and is just "emerald/amber/red at
+     10% over the card" now. --rubric-incomplete-soft is the one genuinely
+     new background (gray-400 at 10%, no existing match). All four -border
+     tokens are also genuinely new: every existing border of this hue sits
+     at alpha 0.35 (--queue-dispatched-border, --queue-failed-border), while
+     these rubric tiles were 0.30 in the original inline styles -- preserved
+     exactly rather than snapped onto the nearest existing alpha, per the
+     "colour is not licensed to shift" rule. Foreground text moves to the
+     existing status tokens instead of the four hardcoded light-theme hexes
+     (#047857 / #92400e / #b91c1c / #475569) the originals used, which
+     failed WCAG AA against this dark composite; see task-11 report for the
+     contrast arithmetic. */
+  --rubric-auto-border: rgba(52, 211, 153, 0.30);
+  --rubric-review-border: rgba(245, 158, 11, 0.30);
+  --rubric-reject-border: rgba(248, 113, 113, 0.30);
+  --rubric-incomplete-soft: rgba(156, 163, 175, 0.10);
+  --rubric-incomplete-border: rgba(156, 163, 175, 0.30);
+}

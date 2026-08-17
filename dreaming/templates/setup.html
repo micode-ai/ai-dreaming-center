@@ -4,29 +4,34 @@
   <meta charset="utf-8">
   <title>{{ "setup.title" | t(locale=locale) }}</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/tokens.css">
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/components.css">
   <link rel="stylesheet" href="/static/table_tools.css">
   <script defer src="/static/table_tools.js"></script>
-  {# Standalone light page: override the component's dark-theme search defaults. #}
-  <style>.tt-search { background:#fff; color:#0f172a; border-color:#cbd5e1; }</style>
 </head>
-<body class="bg-slate-50">
+<body>
 <main class="max-w-3xl mx-auto p-8">
-  <h1 class="text-3xl font-bold mb-6">{{ "setup.title" | t(locale=locale) }}</h1>
+  <header class="page-header">
+    <div class="page-header__titles">
+      <h1 class="page-header__title">{{ "setup.title" | t(locale=locale) }}</h1>
+    </div>
+  </header>
 
   <form method="post" action="/setup" class="space-y-6">
-    <section class="bg-white p-6 rounded shadow">
-      <h2 class="text-xl font-semibold mb-3">{{ "setup.global_step" | t(locale=locale) }}</h2>
-      <label class="block mb-3">
-        <span class="text-sm">claude_path</span>
-        <input name="claude_path" value="{{ defaults.claude_path }}" class="block w-full border rounded p-2">
+    <section class="card">
+      <h2 class="section-title">{{ "setup.global_step" | t(locale=locale) }}</h2>
+      <label class="field">
+        <span class="field__label">claude_path</span>
+        <input name="claude_path" value="{{ defaults.claude_path }}" class="field__control">
       </label>
-      <label class="block mb-3">
-        <span class="text-sm">projects_root</span>
-        <input name="projects_root" value="{{ defaults.projects_root }}" class="block w-full border rounded p-2">
+      <label class="field">
+        <span class="field__label">projects_root</span>
+        <input name="projects_root" value="{{ defaults.projects_root }}" class="field__control">
       </label>
-      <label class="block">
-        <span class="text-sm">default_locale</span>
-        <select name="default_locale" class="block w-full border rounded p-2">
+      <label class="field">
+        <span class="field__label">default_locale</span>
+        <select name="default_locale" class="field__control">
           <option value="ru" {% if defaults.default_locale=='ru' %}selected{% endif %}>{{ "common.locale.ru" | t(locale=locale) }}</option>
           <option value="en" {% if defaults.default_locale=='en' %}selected{% endif %}>{{ "common.locale.en" | t(locale=locale) }}</option>
         </select>
@@ -34,43 +39,45 @@
     </section>
 
     {% if scan_error %}
-    <div class="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">{{ scan_error }}</div>
+    <div class="banner banner-danger">
+      <div class="banner__body">{{ scan_error }}</div>
+    </div>
     {% endif %}
 
     {% if scan %}
-    <section class="bg-white p-6 rounded shadow">
-      <h2 class="text-xl font-semibold mb-3">{{ "setup.found_step" | t(locale=locale, scan_root=scan_root) }}</h2>
+    <section class="card">
+      <h2 class="section-title">{{ "setup.found_step" | t(locale=locale, scan_root=scan_root) }}</h2>
       <div data-tt-scope>
-        <div class="mb-2 flex items-center gap-2">
+        <div class="toolbar">
           <input type="text" data-tt-search
                  placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
           <button type="button" data-tt-reset
-                  class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+                  class="btn btn-sm">
             {{ "table.reset" | t(locale=locale) }}
           </button>
         </div>
-        <table class="w-full text-sm"
+        <table class="data-table"
                data-table-tools
                data-tt-key="setup.scan"
                data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
                data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
-          <thead><tr class="text-left border-b">
-            <th class="p-1">{{ "setup.col.enable" | t(locale=locale) }}</th>
-            <th class="p-1">{{ "setup.col.default" | t(locale=locale) }}</th>
-            <th class="p-1" data-sort-col="slug" data-sort-type="text">slug</th>
-            <th class="p-1" data-sort-col="label" data-sort-type="text">label</th>
-            <th class="p-1" data-sort-col="path" data-sort-type="text">{{ "setup.col.path" | t(locale=locale) }}</th>
-            <th class="p-1">.claude</th>
+          <thead><tr>
+            <th>{{ "setup.col.enable" | t(locale=locale) }}</th>
+            <th>{{ "setup.col.default" | t(locale=locale) }}</th>
+            <th data-sort-col="slug" data-sort-type="text">slug</th>
+            <th data-sort-col="label" data-sort-type="text">label</th>
+            <th data-sort-col="path" data-sort-type="text">{{ "setup.col.path" | t(locale=locale) }}</th>
+            <th>.claude</th>
           </tr></thead>
           <tbody>
           {% for it in scan %}
-          <tr class="border-b" data-filter-row data-path="{{ it.path }}">
-            <td class="p-1"><input type="checkbox" name="enabled_{{ loop.index0 }}" {% if it.has_claude %}checked{% endif %}></td>
-            <td class="p-1"><input type="radio" name="default_idx" value="{{ loop.index0 }}" {% if loop.first %}checked{% endif %}></td>
-            <td class="p-1"><input name="slug_{{ loop.index0 }}" value="{{ it.suggested_slug }}" class="border rounded p-1 w-full"></td>
-            <td class="p-1"><input name="label_{{ loop.index0 }}" value="{{ it.suggested_label }}" class="border rounded p-1 w-full"></td>
-            <td class="p-1"><input name="path_{{ loop.index0 }}" value="{{ it.path }}" class="border rounded p-1 w-full" readonly></td>
-            <td class="p-1">{{ "✓" if it.has_claude else "" }}</td>
+          <tr data-filter-row data-path="{{ it.path }}">
+            <td><input type="checkbox" name="enabled_{{ loop.index0 }}" {% if it.has_claude %}checked{% endif %}></td>
+            <td><input type="radio" name="default_idx" value="{{ loop.index0 }}" {% if loop.first %}checked{% endif %}></td>
+            <td><input name="slug_{{ loop.index0 }}" value="{{ it.suggested_slug }}" class="field__control"></td>
+            <td><input name="label_{{ loop.index0 }}" value="{{ it.suggested_label }}" class="field__control"></td>
+            <td><input name="path_{{ loop.index0 }}" value="{{ it.path }}" class="field__control" readonly></td>
+            <td>{{ "✓" if it.has_claude else "" }}</td>
           </tr>
           {% endfor %}
           </tbody>
@@ -79,10 +86,10 @@
       <input type="hidden" name="scan_count" value="{{ scan|length }}">
       <p class="text-sm muted mt-3">{{ "setup.found_count" | t(locale=locale, n=scan|length) }}</p>
     </section>
-    <button class="bg-blue-600 text-white px-4 py-2 rounded">{{ "setup.btn.save_import" | t(locale=locale) }}</button>
+    <button class="btn btn-primary">{{ "setup.btn.save_import" | t(locale=locale) }}</button>
     {% else %}
     <p class="text-xs muted">{{ "setup.scan_hint" | t(locale=locale) }}</p>
-    <button name="action" value="scan" class="bg-blue-600 text-white px-4 py-2 rounded">{{ "setup.btn.scan" | t(locale=locale) }}</button>
+    <button name="action" value="scan" class="btn btn-primary">{{ "setup.btn.scan" | t(locale=locale) }}</button>
     {% endif %}
   </form>
 </main>

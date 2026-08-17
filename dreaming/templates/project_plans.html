@@ -7,43 +7,42 @@
 {% elif not exists %}
 {{ autoconfig_banner(project, "plans_dir", plans_dir, "Plans") }}
 {% elif error %}
-<p class="text-sm text-red-700">{{ "common.error" | t(locale=locale) }}: <code>{{ error }}</code></p>
+<p class="text-sm text-danger">{{ "common.error" | t(locale=locale) }}: <code>{{ error }}</code></p>
 {% elif items %}
 <p class="text-xs muted mb-3">{{ items|length }} plans in <code>{{ plans_dir }}</code></p>
 <div data-tt-scope>
-  <div class="mb-2 flex items-center gap-2">
+  <div class="toolbar">
     <input type="text" data-tt-search
            placeholder="{{ 'table.search' | t(locale=locale) }}"
            class="tt-search">
     <button type="button" data-tt-reset
-            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+            class="btn btn-sm">
       {{ "table.reset" | t(locale=locale) }}
     </button>
   </div>
-<table class="w-full bg-white rounded shadow text-sm"
+<table class="data-table is-dense"
        data-table-tools
        data-tt-key="plans.{{ project.slug }}"
        data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
        data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
-  <thead class="text-left border-b"><tr>
-    <th class="p-2" data-sort-col="name" data-sort-type="text">name</th>
-    <th class="p-2" data-sort-col="title" data-sort-type="text">title</th>
-    <th class="p-2" data-sort-col="status" data-sort-type="status">status</th>
-    <th class="p-2" data-sort-col="progress" data-sort-type="num">progress</th>
-    <th class="p-2">refs</th>
-    <th class="p-2"></th>
+  <thead><tr>
+    <th data-sort-col="name" data-sort-type="text">name</th>
+    <th data-sort-col="title" data-sort-type="text">title</th>
+    <th data-sort-col="status" data-sort-type="status">status</th>
+    <th data-sort-col="progress" data-sort-type="num">progress</th>
+    <th>refs</th>
+    <th></th>
   </tr></thead>
   <tbody>
   {% for it in items %}
-  <tr class="border-b align-top"
-      data-filter-row
+  <tr data-filter-row
       data-status="{{ it.status or 'active' }}"
       data-progress="{{ it.progress_pct }}">
-    <td class="p-2 font-mono text-xs">
-      <a class="text-blue-600 underline" href="/p/{{ project.slug }}/plans/{{ it.name }}">{{ it.name }}</a>
+    <td class="num">
+      <a class="text-brand-hover underline" href="/p/{{ project.slug }}/plans/{{ it.name }}">{{ it.name }}</a>
     </td>
-    <td class="p-2 text-xs">{{ it.title }}</td>
-    <td class="p-2 text-xs">
+    <td class="text-xs">{{ it.title }}</td>
+    <td class="text-xs">
       <form method="post" action="/p/{{ project.slug }}/plans/{{ it.name }}/status" class="inline">
         <select name="status" onchange="this.form.submit()" class="border rounded p-1 text-xs font-mono">
           {% set cur = it.status or 'active' %}
@@ -53,32 +52,32 @@
         </select>
       </form>
     </td>
-    <td class="p-2">
+    <td>
       <div class="flex items-center gap-2">
-        <div class="bg-slate-200 rounded h-2 w-32 overflow-hidden">
-          <div class="bg-green-500 h-full" style="width:{{ it.progress_pct }}%"></div>
+        <div class="meter-track is-fixed w-32">
+          <div class="meter-fill is-success" style="width:{{ it.progress_pct }}%"></div>
         </div>
         <span class="text-xs muted">{{ it.done }}/{{ it.done + it.todo }}</span>
       </div>
     </td>
-    <td class="p-2 text-xs font-mono">
-      {% if it.github_issue %}<a class="text-blue-600 underline" target="_blank" href="{{ it.github_issue }}">GH</a>{% endif %}
-      {% if it.orchestration_run %}<a class="text-purple-600 underline ml-1" href="/p/{{ project.slug }}/orchestration/{{ it.orchestration_run }}">run</a>{% endif %}
+    <td class="text-xs font-mono">
+      {% if it.github_issue %}<a class="text-brand-hover underline" target="_blank" href="{{ it.github_issue }}">GH</a>{% endif %}
+      {% if it.orchestration_run %}<a class="text-cache underline ml-1" href="/p/{{ project.slug }}/orchestration/{{ it.orchestration_run }}">run</a>{% endif %}
     </td>
-    <td class="p-2 text-xs whitespace-nowrap">
+    <td class="text-xs whitespace-nowrap">
       <form method="post" action="/p/{{ project.slug }}/plans/{{ it.name }}/orchestrate" class="inline"
             data-confirm="{{ 'plans.confirm_continue' | t(locale=locale, title=(it.title or it.name)) }}">
-        <button class="text-xs px-2 py-1 border border-purple-500 text-purple-700 rounded">Run</button>
+        <button class="btn btn-sm">Run</button>
       </form>
       {% if not it.github_issue %}
       <form method="post" action="/p/{{ project.slug }}/plans/{{ it.name }}/github" class="inline ml-1"
             data-confirm="{{ 'plans.confirm_gh' | t(locale=locale) }}">
-        <button class="text-xs px-2 py-1 border border-slate-500 text-slate-700 rounded">→ GH</button>
+        <button class="btn btn-sm">→ GH</button>
       </form>
       {% endif %}
       <form method="post" action="/p/{{ project.slug }}/plans/{{ it.name }}/delete" class="inline ml-1"
             data-confirm="{{ 'plans.confirm_delete' | t(locale=locale, name=it.name) }}" data-confirm-variant="danger">
-        <button class="text-xs px-2 py-1 border rounded text-red-600">del</button>
+        <button class="btn btn-sm btn-danger">del</button>
       </form>
     </td>
   </tr>
@@ -87,15 +86,17 @@
 </table>
 </div>
 {% else %}
-<div class="mb-4 p-4 border border-sky-300 bg-sky-50 rounded">
-  <p class="font-semibold text-sky-900 mb-1">{{ "plans.empty.title" | t(locale=locale, dir=plans_dir) }}</p>
-  <p class="text-sm text-sky-900 mb-2">
-    {% set _link %}<a class="text-blue-600 underline" href="/p/{{ project.slug }}/orchestration">orchestration</a>{% endset %}
-    {{ "plans.empty.desc" | t(locale=locale, link=_link, code='/plans-extract') | safe }}
-  </p>
-  <form method="post" action="/p/{{ project.slug }}/plans/extract">
-    <button class="text-sm bg-blue-600 text-white rounded px-3 py-1">Run /plans-extract</button>
-  </form>
+<div class="banner banner-info">
+  <div class="banner__body">
+    <p class="banner__title">{{ "plans.empty.title" | t(locale=locale, dir=plans_dir) }}</p>
+    <p class="text-sm">
+      {% set _link %}<a class="text-brand-hover underline" href="/p/{{ project.slug }}/orchestration">orchestration</a>{% endset %}
+      {{ "plans.empty.desc" | t(locale=locale, link=_link, code='/plans-extract') | safe }}
+    </p>
+    <form method="post" action="/p/{{ project.slug }}/plans/extract">
+      <button class="btn btn-primary">Run /plans-extract</button>
+    </form>
+  </div>
 </div>
 {% endif %}
 {% endblock %}

@@ -1,39 +1,39 @@
 {% extends "_project_layout.html" %}
 {% set active='notes' %}
 {% block project_content %}
-<p class="text-xs muted mb-3">{{ "notes.source" | t(locale=locale) }}: <code>{{ notes_dir }}</code> {% if not exists %}<span class="text-red-600">{{ "notes.dir_missing" | t(locale=locale) }}</span>{% endif %}</p>
+<p class="text-xs muted mb-3">{{ "notes.source" | t(locale=locale) }}: <code>{{ notes_dir }}</code> {% if not exists %}<span class="text-danger">{{ "notes.dir_missing" | t(locale=locale) }}</span>{% endif %}</p>
 {% if files %}
 <div data-tt-scope>
-  <div class="mb-2 flex items-center gap-2">
+  <div class="toolbar">
     <input type="text" data-tt-search
            placeholder="{{ 'table.search' | t(locale=locale) }}"
            class="tt-search">
     <button type="button" data-tt-reset
-            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+            class="btn btn-sm">
       {{ "table.reset" | t(locale=locale) }}
     </button>
   </div>
-<table class="w-full bg-white rounded shadow text-sm"
+<table class="data-table is-dense"
        data-table-tools
        data-tt-key="notes.{{ project.slug }}"
        data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
        data-tt-empty-text="{{ 'table.empty' | t(locale=locale) }}">
-  <thead class="text-left border-b"><tr>
-    <th class="p-2" data-sort-col="path" data-sort-type="text">{{ "notes.col.path" | t(locale=locale) }}</th>
-    <th class="p-2 text-right" data-sort-col="size" data-sort-type="num">{{ "notes.col.size" | t(locale=locale) }}</th>
-    <th class="p-2"></th>
+  <thead><tr>
+    <th data-sort-col="path" data-sort-type="text">{{ "notes.col.path" | t(locale=locale) }}</th>
+    <th class="text-right" data-sort-col="size" data-sort-type="num">{{ "notes.col.size" | t(locale=locale) }}</th>
+    <th></th>
   </tr></thead>
   <tbody>
   {% for f in files %}
-  <tr class="border-b" data-filter-row>
-    <td class="p-2">
-      <a class="text-blue-600 underline font-mono text-xs cursor-pointer"
+  <tr data-filter-row>
+    <td>
+      <a class="text-brand-hover underline font-mono text-xs cursor-pointer"
          href="#"
          data-note-path="{{ f.relative_path }}"
          onclick="openNote(this); return false;">{{ f.relative_path }}</a>
     </td>
-    <td class="p-2 text-right text-xs muted">{{ f.size }}</td>
-    <td class="p-2 text-right">
+    <td class="num muted text-right">{{ f.size }}</td>
+    <td class="text-right">
       <a class="text-xs muted underline"
          href="/p/{{ project.slug }}/notes/raw?path={{ f.relative_path }}"
          target="_blank" rel="noopener">raw</a>
@@ -44,20 +44,20 @@
 </table>
 </div>
 {% else %}
-<p class="muted">{{ "notes.empty" | t(locale=locale) }}</p>
+<p class="empty-state">{{ "notes.empty" | t(locale=locale) }}</p>
 {% endif %}
 
 {% include "_markdown_partial.html" %}
 
 <dialog id="note-modal" class="note-modal">
-  <header class="flex items-baseline justify-between p-3 border-b bg-slate-50">
-    <h2 id="note-modal-title" class="text-sm font-mono text-slate-700"></h2>
+  <header class="flex items-baseline justify-between p-3 divider-b bg-elevated">
+    <h2 id="note-modal-title" class="text-sm font-mono"></h2>
     <div class="flex gap-2">
-      <a id="note-modal-raw" class="text-xs text-blue-600 underline" target="_blank" rel="noopener">raw</a>
-      <button onclick="closeNote()" class="text-slate-500 hover:text-slate-900 text-xl leading-none">×</button>
+      <a id="note-modal-raw" class="text-xs text-brand-hover underline" target="_blank" rel="noopener">raw</a>
+      <button onclick="closeNote()" class="modal-close text-xl leading-none">×</button>
     </div>
   </header>
-  <div id="note-modal-body" class="markdown-body overflow-auto" style="max-height: 80vh; min-height: 200px;"></div>
+  <div id="note-modal-body" class="markdown-body note-modal__body"></div>
 </dialog>
 
 <script>
@@ -81,7 +81,7 @@
       const text = await r.text();
       window.dcRenderMarkdown(body, text);
     } catch (e) {
-      body.innerHTML = '<p class="text-red-700 font-mono text-xs">{{ "notes.error_prefix" | t(locale=locale) }}: ' + (e.message || e) + '</p>';
+      body.innerHTML = '<p class="text-danger font-mono text-xs">{{ "notes.error_prefix" | t(locale=locale) }}: ' + (e.message || e) + '</p>';
     }
   };
 
