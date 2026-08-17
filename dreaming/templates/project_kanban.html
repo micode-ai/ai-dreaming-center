@@ -85,9 +85,13 @@
 
 {% if topics %}
 <style>
-  tr.target-highlight:target { background: rgb(254 240 138 / .55); transition: background-color 1.5s ease-out; }
+  /* Warning-tinted (not the original Tailwind yellow-400) so it reads on
+     dark: --text-body over --timeout-soft-dim composited on --bg-card is
+     ~12:1, well above the 4.5:1 floor the original rgb(254 240 138 / .55)
+     failed at ~2.6:1. */
+  tr.target-highlight:target { background: var(--timeout-soft-dim); transition: background-color 1.5s ease-out; }
   tr.target-highlight:target td { animation: target-flash 2.5s ease-out 1; }
-  @keyframes target-flash { 0% { background: rgb(250 204 21 / .65); } 100% { background: transparent; } }
+  @keyframes target-flash { 0% { background: var(--status-timeout-strong); } 100% { background: transparent; } }
 </style>
 <div data-tt-scope>
   <div class="toolbar">
