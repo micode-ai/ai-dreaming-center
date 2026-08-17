@@ -16,10 +16,7 @@ STATIC = ROOT / "dreaming" / "static"
 TEMPLATES = ROOT / "dreaming" / "templates"
 
 # Tables intentionally without sort/filter (justify each entry).
-ALLOWLIST: set[str] = {
-    # Dead/unused template (run detail UI lives in project_orchestration_list.html).
-    "project_orchestration_detail.html",
-}
+ALLOWLIST: set[str] = set()
 
 def _check_assets() -> None:
     js = (STATIC / "table_tools.js").read_text(encoding="utf-8")
