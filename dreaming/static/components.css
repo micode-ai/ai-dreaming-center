@@ -173,7 +173,6 @@
   /* Left inset clears the status bar so text never crowds it. Expressed as a
      relationship rather than a magic number: the bar's own width is the token. */
   padding: var(--space-3) var(--space-4) var(--space-3) calc(var(--space-4) + var(--metric-bar-w));
-  box-shadow: var(--shadow-card);
 }
 .metric::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: var(--metric-bar-w); background: var(--text-faint); }
 .metric.metric-success::before { background: var(--status-success); }
@@ -377,7 +376,9 @@
    session_log.html's raw log body. Each replaces a single static
    dimension/shadow that had no existing class -- grepped tokens.css and
    components.css for 320px/16rem/80vh/shadow-card before adding; only
-   --shadow-card is reused (already defined for .metric/.pill-nav), the
+   --shadow-card is reused (at the time, also carried by .metric and the
+   since-deleted .pill-nav; D3 dropped it from .metric per direction A's
+   no-shadow trait, leaving this the token's only consumer), the
    rest are plain new dimensions with no colour involved.
    ============================================================ */
 .card--shadow { box-shadow: var(--shadow-card); }
