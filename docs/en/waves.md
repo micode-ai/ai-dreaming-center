@@ -16,6 +16,7 @@ History of AI Dreaming Center development: what was done in each wave, the git t
 - [Wave 4 lite — AI Usage analytics](#wave-4-lite--ai-usage-analytics)
 - [Wave 4 full — evolutions / loops / plans / cascade-costs](#wave-4-full--evolutions--loops--plans--cascade-costs)
 - [Wave 5 — aggregated dashboard](#wave-5--aggregated-dashboard)
+- [Wave D1/D2 — Design system foundation](#wave-d1d2--design-system-foundation)
 - [Not implemented yet](#not-implemented-yet)
 
 ## Wave 0 — Foundation
@@ -264,6 +265,61 @@ History of AI Dreaming Center development: what was done in each wave, the git t
 **Acceptance**:
 - `/` renders N cards (one per enabled project).
 - Active running keys are displayed.
+
+## Wave D1/D2 — Design system foundation
+
+**Tag**: `design-system`. Merge commit `83df347`, range `666c72b`..`5aebaa5` — 80 commits, 56 files, +2719/−1670.
+
+**Spec**: [`docs/superpowers/specs/2026-08-16-design-system-foundation-design.md`](../superpowers/specs/2026-08-16-design-system-foundation-design.md)
+**Plan**: [`docs/superpowers/plans/2026-08-16-design-system-foundation.md`](../superpowers/plans/2026-08-16-design-system-foundation.md)
+
+**Problem**: `app.css` defined tokens and almost nothing used them. Appearance was encoded directly in markup — **491 static inline `style=` attributes** and **464 light-theme Tailwind utilities** (`bg-white`, `text-slate-900`, `border-slate-200`) inherited from the ALC port. A block of ~50 `!important` rules at the bottom of `app.css` retro-fitted the dark theme onto whichever utilities someone had remembered to patch. The unpatched ones rendered light.
+
+**Result**:
+
+| | Before | After |
+|---|---|---|
+| Static inline `style=` | 491 | **0** |
+| Light-theme colour utilities | 464 | **0** |
+| `!important` in `dreaming/static/` | ~50 | **0** |
+| Button classes | 0 (100+ markup variations) | `.btn` + 5 variants |
+
+**What went in**:
+
+- **Stylesheet split** into three files with enforced boundaries: [`tokens.css`](../../dreaming/static/tokens.css) — `:root` only (89 tokens, the single place the app's look is defined); [`components.css`](../../dreaming/static/components.css) — semantic classes, no colour literal; [`app.css`](../../dreaming/static/app.css) — base elements, form elements, sidebar shell, `.md-content`.
+- **Component layer**: `.btn` (+ `primary` / `danger` / `warn` / `ghost` / `success` / `sm`), `.card`, `.panel`, `.banner` (+ `info` / `warn` / `danger` / `brand` / `--inline`), `.page-header`, `.section-title`, `.toolbar`, `.empty-state`, `.field`, `.num`, `.data-table.is-dense`, `.meter-track` / `.meter-fill`, `.filter-tab`, `.stat-chip`, `.rubric-tile`, `.queue-item`.
+- **All 51 templates migrated** — shell first, then three acceptance-gate screens (dashboard, orchestration, findings), then in batches.
+- **`!important` block deleted** as the final commit, behind a green linter gate.
+- **Two new check scripts** (below).
+
+**Bugs fixed** (not only appearance):
+
+- `bg-sky-50` and `bg-amber-50` in seven files rendered as near-white boxes on the dark app — never covered by the `!important` block.
+- `border-purple-500 text-purple-700` buttons — dark purple text on a dark card.
+- **~20 light-theme colours the spec did not know about**, found during migration and fixed with recomputed contrast: `#059669` at 3.97:1, `#b91c1c` at 2.46:1, nine in `orchestration_swimlane.css` (its "failed" status pill measured 2.4:1), and the kanban row highlight at 2.61:1 → 12.09:1.
+- `orchestration_swimlane.css` referenced `var(--bg-surface)` — **a token that never existed**; the swimlane wrapper rendered transparent.
+- The live-view Kill button carried `hover:bg-red-100`, and the `!important` block shimmed red backgrounds but not their hover variants — it flashed literal light Tailwind colour on mouse-over.
+- `.field__control` set a background at specificity (0,1,0) while the base rule targets `input` through nine attribute selectors at (0,9,1). The component background never applied to `<input>` but did to `<select>`: three consecutive fields on `/setup` rendered two different colours.
+
+**New checks** (in the existing `scripts/check_*` / `smoke_*` convention):
+
+- [`scripts/check_css_tokens.py`](../../scripts/check_css_tokens.py) — four assertions: no colour literal in `components.css` (including `rgb()`/`rgba()`/`hsl()`, black permitted for shadows); no light-theme utility in templates; no static inline `style=`; and **every class the markup references is defined** — in our CSS, in a template `<style>` block, or referenced by JavaScript as a hook. Exits 0.
+- [`scripts/smoke_templates_render.py`](../../scripts/smoke_templates_render.py) — compiles all 51 templates (catching a Jinja typo on a page nobody opens) and walks all 45 parameter-free GET routes asserting no 500. No such safety net existed before.
+
+**Acceptance**: `check_css_tokens.py` → `ALL OK`, exit 0. `smoke_templates_render.py` → 51 templates, 45 routes, exit 0. `check_i18n.py`, `check_no_native_dialogs.py`, `smoke_table_tools.py`, `smoke_ai_radar.py` all green. A sweep of 30 pages computing background luminance for 8487 elements found zero light islands.
+
+**What did NOT change**: no application Python. Not one string, `data-*`, `hx-*`, `id`, `name`, `action`, `data-confirm`, or `| t()` call — verified by multiset comparison across all 51 templates between base and head.
+
+**Deferred**:
+
+- **Inherited dead code** — `.pill-nav` / `.pill` in `components.css` (used by no template), the unreachable `{% if flash %}` block in `base.html` (`read_flash` has no callers; flashes are consumed client-side by `_app_modal.html`), `.md-content` in `app.css` (37 lines; the live renderer class is `markdown-body`), and the dead `project_orchestration_detail.html`. Removing inherited dead code is a separate decision from migrating. **~90 lines, one commit.**
+- **Seven single-property `.text-*` colour utilities** in `components.css` — a third parallel system alongside `.badge-*` and `.metric.metric-*`, ~115 call sites. Growth was capped; consolidating into one base class with modifiers is a D3 input.
+- **`_is_tailwind()` in the linter is too permissive**: it accepts any token whose first segment is a Tailwind root, so `.text-warn` and `.bg-elevated` are indistinguishable from real utilities. **A typo in any of the eight custom classes passes silently** — the exact failure mode that check was written for. Tighten alongside the `.text-*` consolidation.
+- **Card shadows are inconsistent**: `.metric` and `.pill-nav` carry `--shadow-card`, `.card` and `.data-table` do not. Direction A calls for none; unifying is a visible change on every dashboard, so it belongs to D3.
+- **Table density deviates from the spec**: `project_notes`, `project_plans`, `project_contracts` are named in the spec's comfortable group but shipped `.is-dense`. `project_kanban` and `project_topics` show the same data at two densities.
+- **D3** (applying the visual direction) and **D4** (key screens, ergonomics) get their own specs.
+
+**Unrelated defect found in passing**: `scripts/smoke_dashboard_tiles.py` prints its full OK sequence but **never terminates** — the process hangs holding a SQLite connection open. Looks like an unclosed async connection or an uncancelled task keeping the event loop alive. The result is correct, but a CI run would hang on it.
 
 ## Not implemented yet
 
