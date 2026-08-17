@@ -402,12 +402,26 @@
 .log-body { max-height: 80vh; }
 
 /* ---------- Modal dialog ---------- */
-dialog.note-modal {
-  padding: 0; max-width: 56rem; width: calc(100% - 2rem);
+/* Shared card-on-dialog shape for note-modal (project_notes.html/
+   project_wiki.html/project_evolutions.html) and app-modal (_app_modal.html,
+   the confirm/alert dialog -- header/body/footer sit directly inside
+   <dialog>, no inner wrapper div, same as note-modal's own <header>/body
+   pair). Only max-width and ::backdrop differ between the two dialogs, so
+   those are the only declarations left outside the shared rule; app-modal's
+   own backdrop tint is preserved from its former inline <style> rather than
+   reusing note-modal's blurred one -- the two never shared a backdrop shade
+   before this migration and nothing asks for that to change. */
+dialog.note-modal,
+dialog.app-modal {
+  padding: 0; width: calc(100% - 2rem);
   border: 1px solid var(--border-subtle); border-radius: var(--radius);
-  background: var(--bg-card); color: var(--text-body); box-shadow: var(--shadow-modal);
+  background: var(--bg-card); color: var(--text-body);
+  box-shadow: var(--shadow-modal);
 }
+dialog.note-modal { max-width: 56rem; }
+dialog.app-modal  { max-width: 28rem; }
 dialog.note-modal::backdrop { background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(2px); }
+dialog.app-modal::backdrop { background: rgba(15, 23, 42, 0.5); }
 
 /* note-modal header close glyph ("×") and scrollable raw/markdown body -- an
    identical pair of static inline styles repeats verbatim in
@@ -417,18 +431,3 @@ dialog.note-modal::backdrop { background: rgba(0, 0, 0, 0.65); backdrop-filter: 
 .modal-close { color: var(--text-muted); background: none; border: none; cursor: pointer; }
 .modal-close:hover { color: var(--text-strong); }
 .note-modal__body { max-height: 80vh; min-height: 12.5rem; overflow: auto; }
-
-/* App-wide confirm/alert modal (_app_modal.html): the same card-on-dialog
-   shape as dialog.note-modal above (no inner wrapper div needed -- header/
-   body/footer sections sit directly inside <dialog>, exactly like
-   note-modal's own <header>/body pair in project_notes.html). Smaller
-   max-width and its own backdrop tint, preserved from the template's former
-   inline <style> rather than reusing note-modal's blurred backdrop -- the
-   two dialogs never shared a backdrop shade before this migration and
-   nothing in the canonical table asks for that to change. */
-dialog.app-modal {
-  padding: 0; max-width: 28rem; width: calc(100% - 2rem);
-  border: 1px solid var(--border-subtle); border-radius: var(--radius);
-  background: var(--bg-card); color: var(--text-body); box-shadow: var(--shadow-modal);
-}
-dialog.app-modal::backdrop { background: rgba(15, 23, 42, 0.5); }
