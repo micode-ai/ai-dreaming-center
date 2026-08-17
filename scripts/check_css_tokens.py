@@ -134,6 +134,67 @@ TW_VARIANTS = (
     "odd:", "even:", "print:", "motion-safe:", "motion-reduce:",
 )
 
+# Palette names Tailwind ships, usable as a bare colour value (white) or with
+# a numeric shade (slate-600). Shares its vocabulary with COLOUR_UTILITY.
+TW_COLOUR_NAMES = {
+    "white", "black", "slate", "gray", "zinc", "neutral", "stone", "red",
+    "orange", "amber", "yellow", "lime", "green", "emerald", "teal", "cyan",
+    "sky", "blue", "indigo", "violet", "purple", "fuchsia", "pink", "rose",
+    "transparent", "current", "inherit",
+}
+
+# Bare keyword values a Tailwind utility can take -- anything that is not a
+# number, a fraction, a palette colour, or an arbitrary [..] value. Curated
+# against this project's real template tree; widen it, with a comment, the
+# day a legitimate new utility needs a keyword not yet listed here.
+TW_KEYWORDS = {
+    # scale / generic size words (rounded-md, text-2xl, max-w-3xl, h-fit, ...)
+    "xs", "sm", "base", "md", "lg", "xl", "2xl", "3xl",
+    "full", "auto", "none", "px", "screen", "min", "max", "fit",
+    # border side shorthand (border-b)
+    "b",
+    # flex/grid alignment and flow (items-center, justify-between, flex-col)
+    "start", "end", "center", "between", "baseline", "col", "wrap",
+    # typography (font-semibold, leading-tight, tracking-wider, list-disc)
+    "bold", "medium", "semibold", "normal", "mono", "relaxed", "tight",
+    "wide", "wider", "disc",
+    # misc single-word values (cursor-pointer, break-all, transition-colors)
+    "hidden", "pointer", "all", "colors", "opacity", "middle", "top", "nowrap",
+    # whitespace utility's two-word values (kept literal, not decomposed)
+    "pre-line", "pre-wrap",
+}
+
+# Roots whose Tailwind grammar is "root-axis-value" rather than "root-value"
+# (min-w-0, grid-cols-3, space-y-2, overflow-y-auto). The axis is checked
+# here; the trailing value recurses through _is_tailwind_value like any
+# other utility's value.
+TW_COMPOUND_AXES = {"w", "h", "x", "y", "cols", "rows", "span"}
+
+
+def _is_tailwind_value(value: str) -> bool:
+    """True if `value` -- everything after a Tailwind root and its hyphen --
+    is shaped like something Tailwind would actually generate, rather than an
+    arbitrary word that merely happens to share a root with one of our own
+    classes (text-warn, bg-elevated, ...).
+    """
+    if not value:
+        return False
+    if value.startswith("[") and value.endswith("]"):
+        return True  # arbitrary value: text-[10px], grid-cols-[17rem_1fr_21rem]
+    if re.fullmatch(r"\d+(?:\.\d+)?", value):
+        return True  # scale number: p-4, gap-1.5, duration-500
+    if re.fullmatch(r"\d+/\d+", value):
+        return True  # fraction: w-1/2
+    if value in TW_KEYWORDS:
+        return True
+    colour = re.fullmatch(r"([a-z]+)(?:-(\d{2,3}))?", value)
+    if colour and colour.group(1) in TW_COLOUR_NAMES:
+        return True  # palette colour, optional shade: slate-600, white
+    axis, sep, rest = value.partition("-")
+    if sep and axis in TW_COMPOUND_AXES:
+        return _is_tailwind_value(rest)
+    return False
+
 STYLE_BLOCK = re.compile(r"<style\b[^>]*>(.*?)</style>", re.DOTALL | re.IGNORECASE)
 
 SCRIPT_BLOCK = re.compile(r"<script\b[^>]*>(.*?)</script>", re.DOTALL | re.IGNORECASE)
@@ -174,8 +235,12 @@ def _is_tailwind(token: str) -> bool:
             break
     if token in TW_EXACT:
         return True
-    head = token.split("-", 1)[0]
-    return head in TW_ROOTS
+    head, sep, value = token.partition("-")
+    # A root only counts when it is followed by a Tailwind-shaped value --
+    # otherwise "text", "bg", "divide", "ring", "font" and "list" being real
+    # roots would wave through our own text-warn/bg-elevated-style classes
+    # just because their first hyphen-segment happens to match.
+    return bool(sep) and head in TW_ROOTS and _is_tailwind_value(value)
 
 
 def _undefined_classes(defined: set[str], js_blob: str) -> dict[str, set[str]]:
