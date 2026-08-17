@@ -130,14 +130,27 @@ them would be a flag-day. New tokens are added alongside:
 
 Two modes, selected per table by the template, not globally:
 
-- **Default** — current comfortable rows (~40px), for text-heavy content
-  (wiki, notes, plans, contracts).
+- **Default** — current comfortable rows (~40px), for tables that aren't
+  scanned lists (e.g. the small config-style tables in rotation, projects,
+  setup).
 - **`.is-dense`** — direction B's compact rows (~28px) plus mono numerics, for
-  scanning-oriented tables (sessions, orchestration runs, findings, ideas,
-  evolutions, AI usage).
+  scanning-oriented tables: sessions, orchestration runs, findings, ideas,
+  evolutions, AI usage — and also notes, plans, and contracts, which are
+  scanned lists with short cells (notes: path/size; plans: name/title/status/
+  progress/refs; contracts: name/kind/module/status/last-review/refs) despite
+  their names suggesting text-heavy content.
 
 `.is-dense` is a modifier on `.data-table`; it changes cell padding and font size
 via tokens only.
+
+Note: an earlier version of this section grouped wiki/notes/plans/contracts
+together under "text-heavy content" for the comfortable default mode. That
+grouping was asserted from template names, not from reading the templates.
+Checked against the actual code: notes, plans, and contracts are scanned
+lists with short cells and correctly ship `.is-dense`. Only `project_wiki.html`
+is genuinely text-heavy, and it has no `.data-table` at all — its content
+renders as prose in a modal — so it never actually exercised either density
+mode.
 
 ### Component inventory
 
