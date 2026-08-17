@@ -1,9 +1,7 @@
 /* ============================================================
    AI Dreaming Center — base element styles.
    Holds: html/body, code/pre/font-mono, .muted, focus rules, form
-   elements, scrollbars, the sidebar shell, .md-content, and the
-   temporary !important compatibility block (Task 17 removes it
-   once every template has migrated onto components.css classes).
+   elements, scrollbars, the sidebar shell, and .md-content.
    ============================================================ */
 
 html { scroll-behavior: smooth; }
@@ -155,57 +153,6 @@ hr { border: none; border-top: 1px solid var(--border-subtle); margin: var(--spa
 /* Buttons */
 button, [role="button"] { cursor: pointer; }
 button:disabled, [aria-disabled="true"] { cursor: not-allowed; opacity: 0.55; }
-
-/* ---------- Compatibility overrides for Tailwind utilities used by existing
-   templates that still encode light-theme colors. Letting these target only
-   utility classes keeps tokens authoritative while we migrate templates over
-   piece by piece. ---------- */
-.bg-white,
-.bg-slate-50,
-.bg-slate-100,
-.bg-gray-50,
-.bg-gray-100 { background-color: var(--bg-card) !important; }
-
-.bg-white\/85, .bg-white\/80 { background-color: rgba(17, 24, 39, 0.85) !important; }
-
-.border-slate-200,
-.border-slate-100,
-.border-gray-200,
-.border-gray-100 { border-color: var(--border-subtle) !important; }
-.border-slate-300, .border-gray-300 { border-color: var(--border-muted) !important; }
-
-.text-slate-900, .text-gray-900, .text-black { color: var(--text-strong) !important; }
-.text-slate-800, .text-gray-800 { color: var(--text-strong) !important; }
-.text-slate-700, .text-gray-700 { color: var(--text-body) !important; }
-.text-slate-600, .text-gray-600 { color: var(--text-muted) !important; }
-.text-slate-500, .text-gray-500 { color: var(--text-muted) !important; }
-.text-slate-400, .text-gray-400 { color: var(--text-faint) !important; }
-.text-slate-300 { color: var(--text-muted) !important; }
-
-.hover\:bg-slate-50:hover,
-.hover\:bg-slate-100:hover,
-.hover\:bg-gray-50:hover,
-.hover\:bg-gray-100:hover { background-color: var(--bg-hover) !important; }
-
-.hover\:text-slate-900:hover,
-.hover\:text-slate-700:hover { color: var(--text-strong) !important; }
-
-/* Blue brand utilities — re-tint to indigo */
-.bg-blue-600 { background-color: var(--brand) !important; }
-.bg-blue-700, .hover\:bg-blue-700:hover { background-color: var(--brand-hover) !important; }
-.text-blue-600 { color: var(--brand-hover) !important; }
-.text-blue-700 { color: #a5b4fc !important; }
-.border-blue-500, .focus\:border-blue-500:focus { border-color: var(--brand) !important; }
-
-/* Red / danger utilities — keep semantic red but on dark */
-.bg-red-50 { background-color: rgba(239, 68, 68, 0.10) !important; }
-.bg-red-100 { background-color: rgba(239, 68, 68, 0.16) !important; }
-.text-red-600, .text-red-700 { color: var(--status-failed) !important; }
-.border-red-200, .border-red-300 { border-color: rgba(239, 68, 68, 0.35) !important; }
-
-.bg-green-50 { background-color: rgba(34, 197, 94, 0.10) !important; }
-.bg-green-100 { background-color: rgba(34, 197, 94, 0.18) !important; }
-.text-green-600, .text-green-700 { color: var(--status-success) !important; }
 
 /* Markdown content (used by the orchestration chat and doc views) */
 .md-content h1 { font-size: 1.5rem; font-weight: 700; color: var(--text-strong); margin: 1rem 0 0.5rem; }
