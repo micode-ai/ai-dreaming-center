@@ -5,9 +5,9 @@
 {% if active_runs %}
 <div id="live-cards" class="flex flex-col gap-4 h-[calc(100vh-260px)]">
 {% for key, agent, is_cmd in active_runs %}
-  <div id="card-{{ agent }}" data-live-card class="bg-white rounded-lg border border-slate-200 shadow-sm p-3 flex flex-col flex-1 min-h-0 transition-opacity duration-500">
+  <div id="card-{{ agent }}" data-live-card class="card card--shadow flex flex-col flex-1 min-h-0 transition-opacity duration-500">
     <div class="flex items-center gap-3 mb-2">
-      <h2 class="font-semibold text-slate-900">{{ agent }}</h2>
+      <h2 class="font-semibold strong">{{ agent }}</h2>
       {% if is_cmd %}<span class="badge badge-neutral">command</span>{% endif %}
       <span class="font-mono text-xs muted">{{ key }}</span>
       <span class="badge badge-timeout"
@@ -21,7 +21,7 @@
         <span class="status-label">{{ "p.live.status.connecting" | t(locale=locale) }}</span>
       </span>
       <form method="post" action="/p/{{ project.slug }}/live/kill/{{ agent }}" class="ml-auto">
-        <button class="text-xs px-3 py-1 rounded-md border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 hover:border-red-300 transition-colors duration-150">{{ "p.live.kill" | t(locale=locale) }}</button>
+        <button class="btn btn-sm btn-danger">{{ "p.live.kill" | t(locale=locale) }}</button>
       </form>
     </div>
     <div class="relative flex-1 min-h-0">
@@ -29,9 +29,9 @@
            role="log"
            aria-live="polite"
            aria-label="{{ agent }} log"
-           class="absolute inset-0 bg-slate-900 text-slate-100 rounded p-3 overflow-auto text-xs font-mono leading-relaxed whitespace-pre-wrap"></pre>
+           class="absolute inset-0 rounded p-3 overflow-auto text-xs font-mono leading-relaxed whitespace-pre-wrap"></pre>
       <div id="log-empty-{{ agent }}"
-           class="absolute inset-0 flex items-center justify-center text-slate-400 text-xs italic pointer-events-none select-none">
+           class="absolute inset-0 flex items-center justify-center faint text-xs italic pointer-events-none select-none">
         {{ "p.live.waiting" | t(locale=locale) }}
       </div>
     </div>
