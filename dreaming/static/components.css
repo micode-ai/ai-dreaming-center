@@ -123,10 +123,13 @@
 .field__control {
   width: 100%; min-height: var(--control-h); padding: 0 var(--space-2);
   border-radius: var(--radius-sm);
-  /* Every field consumer so far (Task 10) wants the elevated-surface tone,
-     not the plain-input --bg-sidebar default the bare form-element rule in
-     app.css sets -- so the component owns it explicitly. */
-  background: var(--bg-elevated);
+  /* Background is intentionally NOT set here. app.css's bare
+     input/select/textarea rule already gives every field consumer
+     --bg-sidebar; that rule wins on <input> (nine :not() attribute
+     selectors outrank this class) but loses on <select>/<textarea>
+     (bare element selectors), which made the two look different for no
+     reason. Leaving colour out of this rule lets the base rule own it
+     consistently across all three control types. */
 }
 .field-row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 
