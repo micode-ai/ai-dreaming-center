@@ -2,21 +2,21 @@
 {% set active='help' %}
 {% block project_content %}
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-  <div class="rounded-lg p-5" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-    <h2 class="text-sm font-semibold mb-3" style="color: var(--text-strong);">{{ "help.title.what" | t(locale=locale) }}</h2>
-    <p class="text-sm" style="color: var(--text-body);">
+  <div class="card">
+    <h2 class="section-title">{{ "help.title.what" | t(locale=locale) }}</h2>
+    <p class="text-sm">
       {{ "help.what_desc" | t(locale=locale, code='projects') }}
     </p>
   </div>
-  <div class="rounded-lg p-5" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-    <h2 class="text-sm font-semibold mb-3" style="color: var(--text-strong);">{{ "help.title.agents" | t(locale=locale) }}</h2>
-    <p class="text-sm" style="color: var(--text-body);">
+  <div class="card">
+    <h2 class="section-title">{{ "help.title.agents" | t(locale=locale) }}</h2>
+    <p class="text-sm">
       {{ "help.agents_desc" | t(locale=locale, dir=(project.working_dir + '/.claude/agents/')) }}
     </p>
   </div>
 </div>
 
-<h2 class="text-sm font-semibold mt-6 mb-3" style="color: var(--text-strong);">{{ "help.sections" | t(locale=locale) }}</h2>
+<h2 class="section-title">{{ "help.sections" | t(locale=locale) }}</h2>
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
   {% set sections = [
     'dashboard', 'orchestration', 'questions', 'live', 'rotation', 'topics',
@@ -25,17 +25,17 @@
     'cascade_costs', 'contracts', 'sidecar_findings', 'settings',
   ] %}
   {% for key in sections %}
-  <div class="rounded-lg p-4" style="background: var(--bg-card); border:1px solid var(--border-subtle);">
-    <div class="text-sm font-semibold mb-1" style="color: var(--text-strong);">{{ ('p.' ~ key) | t(locale=locale) }}</div>
-    <div class="text-xs" style="color: var(--text-muted);">{{ ('help.section.' ~ key) | t(locale=locale) }}</div>
+  <div class="card">
+    <div class="text-sm font-semibold mb-1 strong">{{ ('p.' ~ key) | t(locale=locale) }}</div>
+    <div class="text-xs muted">{{ ('help.section.' ~ key) | t(locale=locale) }}</div>
   </div>
   {% endfor %}
 </div>
 
-<h2 class="text-sm font-semibold mt-6 mb-3" style="color: var(--text-strong);">{{ "help.title.useful" | t(locale=locale) }}</h2>
-<ul class="text-sm space-y-1" style="color: var(--text-body);">
-  {% set _settings %}<a href="/settings" style="color: var(--brand-hover); text-decoration: underline;">/settings</a>{% endset %}
-  {% set _proj_settings %}<a href="/p/{{ project.slug }}/settings" style="color: var(--brand-hover); text-decoration: underline;">{{ "help.this_page" | t(locale=locale) }}</a>{% endset %}
+<h2 class="section-title">{{ "help.title.useful" | t(locale=locale) }}</h2>
+<ul class="text-sm space-y-1">
+  {% set _settings %}<a href="/settings" class="text-brand-hover underline">/settings</a>{% endset %}
+  {% set _proj_settings %}<a href="/p/{{ project.slug }}/settings" class="text-brand-hover underline">{{ "help.this_page" | t(locale=locale) }}</a>{% endset %}
   {% set _live %}<code>/p/{{ project.slug }}/live</code>{% endset %}
   <li>{{ "help.useful.settings" | t(locale=locale, settings_link=_settings, project_link=_proj_settings) | safe }}</li>
   <li>{{ "help.useful.sessions" | t(locale=locale, pm='<code>ProcessManager</code>', live=_live) | safe }}</li>
