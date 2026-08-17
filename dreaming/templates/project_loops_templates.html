@@ -3,27 +3,26 @@
 {% block project_content %}
 <div class="flex items-center justify-between mb-3">
   <div>
-    <div class="text-xs uppercase tracking-wide" style="color: var(--text-faint);">{{ "loops_tpl.catalog" | t(locale=locale) }}</div>
-    <div class="text-sm mt-1 font-mono break-all" style="color: var(--text-body);">{{ templates_dir or '—' }}</div>
+    <div class="text-xs uppercase tracking-wide faint">{{ "loops_tpl.catalog" | t(locale=locale) }}</div>
+    <div class="text-sm mt-1 font-mono break-all">{{ templates_dir or '—' }}</div>
     {% if not templates_dir_exists %}
-    <div class="text-xs mt-1" style="color: var(--status-timeout);">{{ "loops_tpl.dir_missing" | t(locale=locale) }}</div>
+    <div class="text-xs mt-1 text-warn">{{ "loops_tpl.dir_missing" | t(locale=locale) }}</div>
     {% endif %}
   </div>
-  <a href="/p/{{ project.slug }}/loops/templates/new" class="text-xs rounded px-3 py-1.5"
-     style="background: var(--brand); color: #fff;">{{ "loops_tpl.new" | t(locale=locale) }}</a>
+  <a href="/p/{{ project.slug }}/loops/templates/new" class="btn btn-sm btn-primary">{{ "loops_tpl.new" | t(locale=locale) }}</a>
 </div>
 
 {% if items %}
 <div data-tt-scope>
-  <div class="mb-2 flex items-center gap-2">
+  <div class="toolbar">
     <input type="text" data-tt-search
            placeholder="{{ 'table.search' | t(locale=locale) }}" class="tt-search">
     <button type="button" data-tt-reset
-            class="text-xs px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-100">
+            class="btn btn-sm">
       {{ "table.reset" | t(locale=locale) }}
     </button>
   </div>
-  <table class="data-table"
+  <table class="data-table is-dense"
          data-table-tools
          data-tt-key="loops_templates.{{ project.slug }}"
          data-tt-count-tmpl="{{ 'table.shown_count' | t(locale=locale) }}"
@@ -38,15 +37,15 @@
     <tbody>
     {% for it in items %}
     <tr data-filter-row>
-      <td class="font-mono text-xs"><a class="underline" style="color: var(--brand-hover);" href="/p/{{ project.slug }}/loops/templates/{{ it.slug }}">{{ it.slug }}</a></td>
+      <td class="num"><a class="text-brand-hover underline" href="/p/{{ project.slug }}/loops/templates/{{ it.slug }}">{{ it.slug }}</a></td>
       <td>{{ it.name }}</td>
-      <td class="text-xs muted">{{ it.engine }}{% if it.max_iterations %} ({{ it.max_iterations }}x){% endif %}</td>
-      <td class="text-xs muted">{{ (it.tags or [])|join(', ') }}</td>
+      <td class="muted">{{ it.engine }}{% if it.max_iterations %} ({{ it.max_iterations }}x){% endif %}</td>
+      <td class="muted">{{ (it.tags or [])|join(', ') }}</td>
       <td class="text-right whitespace-nowrap">
-        <a class="text-xs px-2 py-1 rounded" style="color: var(--text-muted); border:1px solid var(--border-subtle);" href="/p/{{ project.slug }}/loops/templates/{{ it.slug }}">{{ "loops_tpl.edit" | t(locale=locale) }}</a>
+        <a class="btn btn-sm" href="/p/{{ project.slug }}/loops/templates/{{ it.slug }}">{{ "loops_tpl.edit" | t(locale=locale) }}</a>
         <form method="post" action="/p/{{ project.slug }}/loops/templates/{{ it.slug }}/delete" class="inline ml-1"
               data-confirm="{{ 'loops_tpl.confirm_delete' | t(locale=locale, slug=it.slug) }}" data-confirm-variant="danger">
-          <button class="text-xs px-2 py-1 rounded" style="color: var(--status-failed); border:1px solid var(--border-subtle);">{{ "loops_tpl.delete" | t(locale=locale) }}</button>
+          <button class="btn btn-sm btn-danger">{{ "loops_tpl.delete" | t(locale=locale) }}</button>
         </form>
       </td>
     </tr>
@@ -55,6 +54,6 @@
   </table>
 </div>
 {% else %}
-<p class="muted">{{ "loops_tpl.empty" | t(locale=locale, ext='.md') }}</p>
+<p class="empty-state">{{ "loops_tpl.empty" | t(locale=locale, ext='.md') }}</p>
 {% endif %}
 {% endblock %}
