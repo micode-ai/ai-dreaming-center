@@ -101,6 +101,21 @@ async def articles_page(request: Request, slug: str):
     # Needed both for the venue <select>'s own options and, below, to look
     # up a row's raw override by id without a second query per row.
     projects = await request.app.state.projects.list_all(only_enabled=True)
+    # Review fix round 1: a project-wide "is anything pending" boolean was
+    # wrong -- orchestrator_questions is shared by every kind of session on
+    # this project (self-study, rotation, ...), and two proposals can be
+    # 'writing' at once. write-article.md passes the proposal id as run_id
+    # when it asks, so a row's own pending question is the one whose run_id
+    # matches that row's id; a question with an empty or unrelated run_id
+    # (self-study, rotation, a different proposal) must not light up any
+    # card. Same accessor project_questions.py uses, fetched once here
+    # rather than per row.
+    pending_qs = await db.list_questions(project.id, status="pending", limit=50)
+    # list_questions returns raw sqlite3.Row objects (no .get()) -- index
+    # directly; the column defaults to '' (create_question coalesces a
+    # missing run_id to '' rather than storing NULL), so `or ""` covers the
+    # unlikely NULL case too without raising.
+    pending_run_ids = {q["run_id"] for q in pending_qs if (q["run_id"] or "")}
     enriched = []
     for r in rows:
         # list_article_proposals returns raw sqlite3.Row objects — dict()
@@ -135,6 +150,7 @@ async def articles_page(request: Request, slug: str):
             if override_id is not None else None
         )
         d["venue_override_slug"] = override_project.slug if override_project else None
+        d["has_pending_question"] = str(row_dict["id"]) in pending_run_ids
         enriched.append(d)
     groups = [(st, [r for r in enriched if r["status"] == st]) for st in _ORDER]
     # A status outside _ORDER (no CHECK constraint stops one existing) would
@@ -149,11 +165,6 @@ async def articles_page(request: Request, slug: str):
         "dc_locale", request.app.state.settings.default_locale,
     )
     pm = request.app.state.process_manager
-    # Questions and the card both belong to the subject (spec: "the card,
-    # the queue row, the questions | subject") -- reuse project_questions.py's
-    # own accessor rather than a second query. limit=1 is enough: this page
-    # only needs to know *whether* one is pending, not which or how many.
-    pending_questions = await db.list_questions(project.id, status="pending", limit=1)
     return request.app.state.templates.TemplateResponse(
         request, "project_articles.html",
         {"project": project,
@@ -163,7 +174,6 @@ async def articles_page(request: Request, slug: str):
          "blog_dir": blog_dir,
          "writer": articles.resolve_writer(article_root, configured_writer),
          "scan_running": f"cmd:{project.slug}:article-ideas-scan" in pm.list_running(),
-         "has_pending_question": bool(pending_questions),
          "projects": projects, "locale": locale},
     )
 

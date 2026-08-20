@@ -1145,14 +1145,23 @@ async def main() -> int:
                 return 1
         print("ok: write-article.md documents the question channel")
 
-        # ── the articles page must surface a pending question ───────
-        # A 'writing' row blocked on an answer looks identical to one that
-        # is still working, unless the card says otherwise. Isolated DB
-        # (DC_DB_PATH override), same pattern as the nested-repo /
-        # NULL-venue page checks above -- this never touches the user's
-        # live data/dreaming.db, so there is nothing here to clean up on
-        # that database; the two rows this creates (the proposal and the
-        # question) live only in this throwaway sqlite file.
+        # ── the articles page must surface a pending question, scoped to
+        # the proposal that asked it ────────────────────────────────
+        # Review fix round 1, finding 2: orchestrator_questions is shared
+        # by every kind of session on a project (self-study, rotation,
+        # ...), and two proposals can be 'writing' at once. A project-wide
+        # "anything pending?" boolean would light up every 'writing' card
+        # whenever ANY question is pending -- including one that has
+        # nothing to do with either row. The fix scopes by run_id
+        # (write-article.md now passes the proposal id as run_id), so this
+        # has to prove three things a single row/single question fixture
+        # cannot: an unrelated run_id lights up nothing, the row that
+        # actually asked shows the line and only that row, and answering
+        # clears it. Isolated DB (DC_DB_PATH override), same pattern as the
+        # nested-repo / NULL-venue page checks above -- this never touches
+        # the user's live data/dreaming.db, so there is nothing here to
+        # clean up on that database; every row created below lives only in
+        # this throwaway sqlite file.
         os.environ["DC_DB_PATH"] = str(page_db_dir / "test.db")
         try:
             with TestClient(app) as q_client:
@@ -1160,43 +1169,83 @@ async def main() -> int:
                     slug="smoke-waiting-question", label="Smoke Waiting Question",
                     working_dir=str(tmp),
                 )
-                writing_id = await app.state.db.add_article_proposal(
+                waiting_text = app.state.i18n.t("article.waiting_answer", locale="ru")
+
+                # Two 'writing' rows on the same project -- row A will ask,
+                # row B never does. Both must exist before any question is
+                # created, or a project-wide implementation would pass this
+                # check by accident (only one 'writing' row to light up).
+                row_a = await app.state.db.add_article_proposal(
                     q_project.id, source="manual", source_ref="",
-                    evidence="smoke: a writing row with a pending question "
-                             "must show the waiting state",
-                    title="Smoke waiting-on-question row", angle="…",
-                    slug_hint="smoke-waiting-question-row",
+                    evidence="smoke: the row that actually asks a question",
+                    title="Smoke waiting-on-question row A", angle="…",
+                    slug_hint="smoke-waiting-question-row-a",
                 )
-                await app.state.db.set_article_proposal_status(writing_id, "approved")
-                await app.state.db.set_article_proposal_status(writing_id, "writing")
-                question_id = await app.state.db.create_question(
+                row_b = await app.state.db.add_article_proposal(
+                    q_project.id, source="manual", source_ref="",
+                    evidence="smoke: a second writing row that never asks",
+                    title="Smoke waiting-on-question row B", angle="…",
+                    slug_hint="smoke-waiting-question-row-b",
+                )
+                for rid in (row_a, row_b):
+                    await app.state.db.set_article_proposal_status(rid, "approved")
+                    await app.state.db.set_article_proposal_status(rid, "writing")
+
+                # An unrelated pending question on the same project -- no
+                # run_id, exactly how a self-study or rotation session asks
+                # today. Neither row asked this; neither card may show it.
+                await app.state.db.create_question(
                     project_id=q_project.id, run_id=None, node_id=None,
+                    tool_use_id="smoke-waiting-question-unrelated-q1",
+                    questions_json='{"question": "unrelated self-study question", "options": []}',
+                )
+                resp0 = q_client.get(f"/p/{q_project.slug}/articles")
+                if resp0.status_code != 200:
+                    fail(f"/p/{q_project.slug}/articles with only an "
+                         f"unrelated pending question: {resp0.status_code}")
+                    return 1
+                if waiting_text in resp0.text:
+                    fail("a pending question with no matching run_id lit "
+                         "up a card that never asked it")
+                    return 1
+
+                # Now row A asks, scoped by run_id=row_a (mirrors
+                # write-article.md's instruction to pass the proposal id).
+                question_id = await app.state.db.create_question(
+                    project_id=q_project.id, run_id=str(row_a), node_id=None,
                     tool_use_id="smoke-waiting-question-q1",
                     questions_json='{"question": "real number for this claim?", "options": []}',
                 )
-                resp = q_client.get(f"/p/{q_project.slug}/articles")
-                if resp.status_code != 200:
-                    fail(f"/p/{q_project.slug}/articles with a pending "
-                         f"question: {resp.status_code}")
+                resp1 = q_client.get(f"/p/{q_project.slug}/articles")
+                if resp1.status_code != 200:
+                    fail(f"/p/{q_project.slug}/articles with row A's "
+                         f"pending question: {resp1.status_code}")
                     return 1
-                if f"/p/{q_project.slug}/questions" not in resp.text:
-                    fail("a 'writing' row with a pending question does not "
-                         "link to the questions page")
+                if f"/p/{q_project.slug}/questions" not in resp1.text:
+                    fail("row A's pending question does not link to the "
+                         "questions page")
                     return 1
-                waiting_text = app.state.i18n.t("article.waiting_answer", locale="ru")
-                if waiting_text not in resp.text:
-                    fail("a 'writing' row with a pending question does not "
-                         f"render the waiting text ({waiting_text!r})")
+                # Exactly one occurrence: if the flag were still
+                # project-wide, both 'writing' rows (A and B) would each
+                # render the line, giving two.
+                count1 = resp1.text.count(waiting_text)
+                if count1 != 1:
+                    fail(f"waiting line appeared {count1} times with one "
+                         "row asking and one not (want exactly 1 -- a "
+                         "project-wide flag would show it on both "
+                         "'writing' rows)")
                     return 1
 
-                # Answering the question must make the waiting line disappear
-                # (the flag is a live read, not stuck true once shown).
+                # Answering row A's question must clear its own line while
+                # the still-pending, still-unrelated question changes
+                # nothing (it was never able to trigger anything to begin
+                # with).
                 await app.state.db.answer_question(
                     question_id, answer_text="42%", status="answered",
                 )
                 resp2 = q_client.get(f"/p/{q_project.slug}/articles")
                 if waiting_text in resp2.text:
-                    fail("the waiting line is still shown after the "
+                    fail("the waiting line is still shown after row A's "
                          "question was answered")
                     return 1
         finally:
@@ -1204,9 +1253,10 @@ async def main() -> int:
                 os.environ.pop("DC_DB_PATH", None)
             else:
                 os.environ["DC_DB_PATH"] = prior_db_path_env
-        print("ok: a 'writing' row with a pending question shows the "
-              "waiting state and links to /p/{slug}/questions; it clears "
-              "once answered")
+        print("ok: the waiting line is scoped to the proposal that asked "
+              "(run_id) -- an unrelated pending question lights up nothing, "
+              "a second 'writing' row that never asked stays silent, and "
+              "the line clears once the asking row's question is answered")
 
         # ── publish: real git repo in a temp dir ───────────────────
         import re

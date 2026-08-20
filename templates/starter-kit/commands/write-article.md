@@ -78,14 +78,22 @@ channel is how you obey it instead of quietly working around it.
 
 Post the question against the **subject**'s slug — `$DREAMING_PROJECT_SLUG` —
 even though your cwd is the venue's article root. That project's page is
-what the user is actually looking at.
+what the user is actually looking at. Also pass `run_id` set to this run's
+`<proposal-id>`: the center's articles page shows the "writer is waiting"
+line on a proposal's own card by matching a pending question's `run_id`
+against that proposal's id, and a project can have more than one proposal
+`writing` at once (or an unrelated self-study/rotation question pending on
+the same project) — an id-less question would either light up no card at
+all or, if the page fell back to a project-wide check, light up every
+`writing` card including ones that never asked anything.
 
 ```bash
 curl -s -X POST "$DREAMING_API_URL/api/questions/create" \
   -H "Content-Type: application/json" \
   -d '{
     "project_slug": "'"$DREAMING_PROJECT_SLUG"'",
-    "tool_use_id": "write-article-<proposal-id>-q1",
+    "run_id": "<proposal-id>",
+    "tool_use_id": "write-article-<proposal-id>-<run-tag>-q1",
     "question": "Do we have a real number for this, or should the claim be cut?",
     "options": []
   }'
@@ -98,8 +106,41 @@ rewrite the value to avoid it, or close and re-open the quote around it
 (`'It'\''s broken'`). `$DREAMING_PROJECT_SLUG` is spliced in with its own
 `'"..."'` segment exactly as shown above — pasting the variable straight
 inside the single-quoted JSON will not expand it; it will POST the literal
-text `$DREAMING_PROJECT_SLUG`. `tool_use_id` only needs to be unique within
-this run — a counter (`-q1`, `-q2`) against the proposal id is enough.
+text `$DREAMING_PROJECT_SLUG`.
+
+**`tool_use_id` must be unique per *asking*, not per proposal — a
+proposal-scoped id breaks on retry.** `db.create_question` treats a
+repeated `tool_use_id` as the same question: it returns the row that
+already exists — with whatever `answer_text` (or lack of one) that row
+already has — instead of creating a new one. That is deliberate, so a
+session resumed mid-question does not duplicate its own ask. But retrying a
+`failed` proposal re-dispatches `/write-article <proposal-id>` with the
+*same* proposal id, so an id built only from the proposal id (e.g.
+`write-article-<proposal-id>-q1`) computes to exactly the same key the
+first attempt used. The retry's very first `create` call then silently
+returns that old row: if it was answered, the retry proceeds on the
+*previous* attempt's answer to whatever the previous attempt asked, not a
+fresh answer to what the retry actually needs; if it was dismissed, the
+retry is denied any chance to ask at all. Either way the writer would ship
+a fact the user never confirmed for that question.
+
+Add a run-scoped tag to the id to prevent this. Generate it once, the first
+time you need to ask in this run — a timestamp works:
+
+```bash
+date +%s
+```
+
+— and reuse the number it prints for every question you ask in *this* run
+(`-q1`, `-q2`, ...): `write-article-<proposal-id>-<that number>-q1`. Each
+`curl` you run is a separate Bash tool call, and shell variables do not
+survive between them, so don't rely on a shell variable still being set —
+just remember the literal number you saw and paste it into every
+`tool_use_id` you build afterwards. A fresh attempt and its retry land on
+different tags (different times), so they never collide; two questions
+inside the same run still get distinct ids via the `-q1`/`-q2` suffix.
+Do not simplify this back down to a proposal-scoped id — that is exactly
+the collision this paragraph exists to prevent.
 
 The response is `{"id": "...", "status": "pending"}`. Poll it, sleeping
 between attempts:
