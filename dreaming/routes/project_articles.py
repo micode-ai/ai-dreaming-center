@@ -98,6 +98,9 @@ async def articles_page(request: Request, slug: str):
     # pre-computed so nothing about "is this page complete" is decided in
     # Jinja.
     rows = await db.list_article_proposals(project_id=project.id)
+    # Needed both for the venue <select>'s own options and, below, to look
+    # up a row's raw override by id without a second query per row.
+    projects = await request.app.state.projects.list_all(only_enabled=True)
     enriched = []
     for r in rows:
         # list_article_proposals returns raw sqlite3.Row objects — dict()
@@ -112,6 +115,26 @@ async def articles_page(request: Request, slug: str):
         row_publish_mode = await resolver.get(row_venue, "article_publish_mode", "off")
         d = _enrich(row_dict, verify_cmd=row_verify_cmd, publish_mode=row_publish_mode)
         d["venue_slug"] = row_venue.slug
+        # Review fix round 1: the resolved venue_slug above is *always* some
+        # real enabled project (override -> article_venue_project -> the
+        # subject itself), so it always equals one of the <select>'s own
+        # options -- most often the subject's own, when there is in fact no
+        # override at all. Using it to decide the <select>'s preselection
+        # made the "no override" default option unreachable, and let an
+        # operator who submits the form untouched silently pin a previously
+        # unpinned row. venue_override_slug instead carries the RAW
+        # per-row override (None when there is none), so the template can
+        # tell "tracks the default, whatever that resolves to" apart from
+        # "explicitly pinned to this same project". A stale/disabled
+        # override (naming no enabled project) has no matching <option> to
+        # begin with, so it falls back to showing the default selected --
+        # there being nothing else it could honestly point to on this list.
+        override_id = row_dict.get("target_project_id")
+        override_project = (
+            next((p for p in projects if p.id == override_id), None)
+            if override_id is not None else None
+        )
+        d["venue_override_slug"] = override_project.slug if override_project else None
         enriched.append(d)
     groups = [(st, [r for r in enriched if r["status"] == st]) for st in _ORDER]
     # A status outside _ORDER (no CHECK constraint stops one existing) would
@@ -125,7 +148,6 @@ async def articles_page(request: Request, slug: str):
     locale = request.cookies.get(
         "dc_locale", request.app.state.settings.default_locale,
     )
-    projects = await request.app.state.projects.list_all(only_enabled=True)
     pm = request.app.state.process_manager
     # Questions and the card both belong to the subject (spec: "the card,
     # the queue row, the questions | subject") -- reuse project_questions.py's

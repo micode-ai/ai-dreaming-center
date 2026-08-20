@@ -905,7 +905,7 @@ async def main() -> int:
                 )
                 # Deliberately no article_venue_project setting -- this is
                 # the NULL-venue case, not an override.
-                await app.state.db.add_article_proposal(
+                null_venue_row_id = await app.state.db.add_article_proposal(
                     null_venue_project.id, source="manual", source_ref="",
                     evidence="smoke: NULL target_project_id must equal wave A",
                     title="Null venue smoke row", angle="…",
@@ -949,7 +949,7 @@ async def main() -> int:
                     slug="smoke-other-venue", label="Smoke Other Venue",
                     working_dir=str(other_venue_dir),
                 )
-                await app.state.db.add_article_proposal(
+                explicit_venue_row_id = await app.state.db.add_article_proposal(
                     null_venue_project.id, source="manual", source_ref="",
                     evidence="smoke: an explicit venue override must show its badge",
                     title="Explicit venue smoke row", angle="…",
@@ -964,6 +964,66 @@ async def main() -> int:
                     fail("explicit-venue row did not render the venue badge "
                          f"naming {other_venue_project.slug!r}: {resp2.text[:2000]}")
                     return 1
+
+                # ── review fix round 1: the <select> preselection must use ──
+                # the RAW override, not the resolved venue_slug. The
+                # resolved slug always equals some real project (override ->
+                # article_venue_project -> the subject itself), so comparing
+                # against it made the "no override" default option
+                # unreachable -- an operator confirming the form untouched
+                # would silently pin a previously-unpinned row. Isolate each
+                # card's own <form ...venue> block by proposal id (both rows
+                # are 'proposed' and share one page) and inspect its
+                # <option> tags directly rather than the raw HTML text,
+                # since exact inter-attribute whitespace is a template
+                # rendering detail, not the thing under test.
+                import re as _re
+
+                def _venue_form(html: str, row_id) -> str:
+                    m = _re.search(
+                        r'<form method="post" action="/p/smoke-null-venue'
+                        r'/articles/%s/venue".*?</form>' % row_id,
+                        html, _re.DOTALL,
+                    )
+                    if m is None:
+                        fail(f"no venue <form> found for proposal {row_id}")
+                        raise LookupError
+                    return m.group(0)
+
+                def _option(html: str, value: str) -> str:
+                    m = _re.search(
+                        r'<option value="%s"[^>]*>' % _re.escape(value), html,
+                    )
+                    if m is None:
+                        fail(f"no <option value={value!r}> found: {html[:500]}")
+                        raise LookupError
+                    return m.group(0)
+
+                try:
+                    no_override_form = _venue_form(resp2.text, null_venue_row_id)
+                    if "selected" not in _option(no_override_form, ""):
+                        fail("no-override row: the default option is not "
+                             f"selected: {no_override_form}")
+                        return 1
+                    if "selected" in _option(no_override_form, other_venue_project.slug):
+                        fail("no-override row: a project option is "
+                             f"selected when it should not be: {no_override_form}")
+                        return 1
+
+                    override_form = _venue_form(resp2.text, explicit_venue_row_id)
+                    if "selected" in _option(override_form, ""):
+                        fail("overridden row: the default option is "
+                             f"selected when an override exists: {override_form}")
+                        return 1
+                    if "selected" not in _option(override_form, other_venue_project.slug):
+                        fail("overridden row: its own venue's option is not "
+                             f"selected: {override_form}")
+                        return 1
+                except LookupError:
+                    return 1
+                print("ok: the venue <select> preselects the default option "
+                      "for an unpinned row and the actual override's option "
+                      "for a pinned one")
         finally:
             if prior_db_path_env is None:
                 os.environ.pop("DC_DB_PATH", None)
