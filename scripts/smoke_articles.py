@@ -487,6 +487,95 @@ async def main() -> int:
         print("ok: resolve_article_root falls back to working_dir when it "
               "is not inside a git repository")
 
+        # ── articles_page: the writer label must reflect the resolved root ──
+        # Regression pin for the exact bug this follow-up fixed: the page's
+        # "writer" label used to resolve from project.working_dir even
+        # though articles_approve (fixed earlier in this task) now dispatches
+        # from the derived article root. A label that names a different
+        # agent than the one that will actually be dispatched is not
+        # decoration, it's a false claim. Mirrors the real mi-code-ai shape:
+        # the parent repo's own .claude/agents/ has an unrelated
+        # writer-shaped agent name (landing-copywriter, matching the
+        # 'copywriter' hint), and the nested repo that actually owns the
+        # blog has its own, different writer (blog-writer).
+        import os
+        page_parent = tmp / "page_parent"
+        _git_init(page_parent)
+        (page_parent / ".claude" / "agents").mkdir(parents=True)
+        (page_parent / ".claude" / "agents" / "landing-copywriter.md").write_text(
+            "---\nname: landing-copywriter\n---\n", encoding="utf-8",
+        )
+        page_nested = page_parent / "nested_landing"
+        _git_init(page_nested)
+        (page_nested / "blog").mkdir(parents=True)
+        (page_nested / ".claude" / "agents").mkdir(parents=True)
+        (page_nested / ".claude" / "agents" / "blog-writer.md").write_text(
+            "---\nname: blog-writer\n---\n", encoding="utf-8",
+        )
+
+        # Isolated DB for this check, same as smoke_orchestration_stream.py /
+        # smoke_review.py's pattern: point DC_DB_PATH at a throwaway sqlite
+        # file before (re-)entering the TestClient context, so the app's
+        # lifespan opens a fresh db instead of the live one. The fixture
+        # project and its article_blog_dir setting live only here — never
+        # in data/dreaming.db, and never as a change to the real 'test'
+        # project's settings.
+        prior_db_path_env = os.environ.get("DC_DB_PATH")
+        page_db_dir = Path(tempfile.mkdtemp(prefix="dc_smoke_articles_page_"))
+        os.environ["DC_DB_PATH"] = str(page_db_dir / "test.db")
+        try:
+            with TestClient(app) as page_client:
+                page_project = await ProjectsService(app.state.db).create(
+                    slug="smoke-nested-page", label="Smoke Nested Page",
+                    working_dir=str(page_parent),
+                )
+                await ProjectsService(app.state.db).set_setting(
+                    page_project.id, "article_blog_dir", "nested_landing/blog",
+                )
+                resp = page_client.get("/p/smoke-nested-page/articles")
+                if resp.status_code != 200:
+                    fail(f"articles_page (nested-repo project): {resp.status_code}")
+                    return 1
+                if "blog-writer" not in resp.text:
+                    fail("articles_page did not show the nested repo's own "
+                         "agent (blog-writer) as the writer")
+                    return 1
+                if "landing-copywriter" in resp.text:
+                    fail("articles_page showed the parent repo's unrelated "
+                         "agent (landing-copywriter) instead of the nested "
+                         "repo's blog-writer -- the label is not using the "
+                         "resolved article root")
+                    return 1
+        finally:
+            if prior_db_path_env is None:
+                os.environ.pop("DC_DB_PATH", None)
+            else:
+                os.environ["DC_DB_PATH"] = prior_db_path_env
+        print("ok: /p/{slug}/articles shows the nested repo's own writer "
+              "agent, not the parent repo's unrelated one")
+
+        # A project with no article_blog_dir configured at all must still
+        # render (the existing "not set" banner stays; resolve_article_root
+        # must fall back to the project root rather than erroring).
+        os.environ["DC_DB_PATH"] = str(page_db_dir / "test.db")
+        try:
+            with TestClient(app) as page_client:
+                unset_project = await ProjectsService(app.state.db).create(
+                    slug="smoke-unset-blog-dir", label="Smoke Unset Blog Dir",
+                    working_dir=str(page_parent),
+                )
+                resp = page_client.get("/p/smoke-unset-blog-dir/articles")
+                if resp.status_code != 200:
+                    fail("articles_page (no article_blog_dir configured): "
+                         f"{resp.status_code}")
+                    return 1
+        finally:
+            if prior_db_path_env is None:
+                os.environ.pop("DC_DB_PATH", None)
+            else:
+                os.environ["DC_DB_PATH"] = prior_db_path_env
+        print("ok: /p/{slug}/articles still renders with no article_blog_dir set")
+
         gate_cases = [
             ({"verify_ok": 1, "status": "drafted"}, "npm run build", "commit", True),
             ({"verify_ok": 0, "status": "drafted"}, "npm run build", "commit", False),

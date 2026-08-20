@@ -60,6 +60,12 @@ async def articles_page(request: Request, slug: str):
     publish_mode = await resolver.get(project, "article_publish_mode", "off")
     blog_dir = await resolver.get(project, "article_blog_dir", "")
     configured_writer = await resolver.get(project, "article_writer_agent", "")
+    # The writer label is a claim about what articles_approve will actually
+    # dispatch, not decoration — it must be resolved from the same root
+    # (resolve_article_root falls back to project.working_dir when blog_dir
+    # is unset/nested-escaping/missing/non-git, so this renders fine for
+    # projects with no article_blog_dir configured at all).
+    article_root = await articles.resolve_article_root(project.working_dir, blog_dir)
     # `list_article_proposals` caps at 200 rows; `count_article_proposals`
     # does not, so it — not len(enriched) — is the source of truth for how
     # many proposals actually exist. Both numbers go to the template
@@ -89,7 +95,7 @@ async def articles_page(request: Request, slug: str):
          "total": true_total, "shown": shown,
          "capped": shown < true_total,
          "blog_dir": blog_dir,
-         "writer": articles.resolve_writer(project.working_dir, configured_writer),
+         "writer": articles.resolve_writer(article_root, configured_writer),
          "scan_running": f"cmd:{project.slug}:article-ideas-scan" in pm.list_running(),
          "projects": projects, "locale": locale},
     )
