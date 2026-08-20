@@ -6,6 +6,13 @@ description: Propose 3-7 article topics for this project and post them to the AI
 
 Propose article topics for **this repository's** external blog. You are not
 writing the articles — only proposing what is worth writing, with evidence.
+Propose 3–7 topics per run.
+
+## What you have
+
+- `cwd` is the project repository root.
+- Env vars: `DREAMING_API_URL`, `DREAMING_PROJECT_SLUG` — already set in this
+  session's environment; there is nothing to construct.
 
 ## The rule that makes this useful
 
@@ -54,14 +61,34 @@ curl -s -X POST "$DREAMING_API_URL/api/p/$DREAMING_PROJECT_SLUG/articles/ingest"
   }'
 ```
 
+**JSON escaping (critical):** the `-d '{...}'` argument above is single-quoted
+for the shell, so a literal apostrophe in `title` or `angle` — e.g. "It's
+finally documented" — ends the quoted string early and breaks the command.
+Rewrite the value to avoid the apostrophe, or close and re-open the quote
+around it: `'It'\''s finally documented'`.
+
 `funnel_level` is `top` for search-driven pieces that answer a question a
 stranger types, and `product` for "our product as proof" write-ups.
 
-Reuse the tag vocabulary already present in the project's existing posts rather
-than inventing new tags.
+Reuse the tag vocabulary already present in the project's existing posts.
+`GET /articles/list` does not return tags, so look on disk instead — the
+project's blog or content directory (wherever this repo keeps its published
+posts) is the source of truth for tags in active use. If you cannot find any
+existing posts to read tags from, omit `tags` rather than inventing a
+vocabulary.
 
 ## Report
 
 Print one line per proposal: slug, whether the API returned 201 or reported a
 duplicate, and the evidence you attached. Report the count. Do not claim a
 proposal landed without showing the response.
+
+## Rules
+
+- Propose only. Never write, edit, or commit an article, and never push —
+  this command's whole output is the proposals it posts to the ingest
+  endpoint.
+- Never invoke a writer agent (blog-writer or otherwise) or any other agent —
+  writing an approved article is a separate command's job, not this one's.
+- Never touch project files. This command is read-only on disk.
+- Never claim a proposal landed without showing the API's response.
