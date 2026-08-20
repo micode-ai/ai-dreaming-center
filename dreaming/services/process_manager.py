@@ -921,23 +921,26 @@ class ProcessManager:
                  session.session_id, key, exit_code)
         if self.db is None:
             return
-        # Prefer the stream-json result's own status over the exit code: the
-        # claude CLI can exit 0 after emitting a non-"success" terminal
-        # result (e.g. error_during_execution mid-write), which used to be
-        # recorded as a plain success. Only fall back to the exit code when
-        # the stream never produced a result event at all (killed, crashed,
-        # watchdog) — same mapping as before: 0 = success, anything else =
-        # failed.
-        if session.terminal_status is not None:
-            if session.terminal_status == "success":
-                target_status = "success"
-            else:
-                target_status = "failed"
-                error_message = error_message or (
-                    f"claude CLI ended with status={session.terminal_status}"
-                )
-        else:
-            target_status = "success" if exit_code == 0 else "failed"
+        # Map exit code → DB status. 0 = success; anything else = failed.
+        # Watchdog kills go through here too (exit code = negative signal
+        # on POSIX, large positive on Windows); those count as failed.
+        target_status = "success" if exit_code == 0 else "failed"
+        # The stream's own terminal status may only ever DOWNGRADE a clean
+        # exit to 'failed' — never upgrade a dirty exit back to 'success'.
+        # One-way on purpose: the claude CLI can exit 0 after emitting a
+        # non-"success" result (e.g. error_during_execution mid-write),
+        # which used to be recorded as a plain success, so an error subtype
+        # must still fail it. But in an interactive multi-turn session an
+        # earlier turn can report subtype=success before a later watchdog/
+        # hard-cap kill ends the process non-zero; letting a remembered
+        # success win there would resurrect exactly the bug this exists to
+        # fix, just pointed the other way. Do not turn this into a two-way
+        # override.
+        if target_status == "success" and session.terminal_status not in (None, "success"):
+            target_status = "failed"
+            error_message = error_message or (
+                f"claude CLI ended with status={session.terminal_status}"
+            )
         # Command-style entries ('cmd:...') don't have agent_learning_sessions
         # rows of their own — the row's `agent_name` IS the composite key.
         # Update by id (which is the claude session_id passed to start_session).

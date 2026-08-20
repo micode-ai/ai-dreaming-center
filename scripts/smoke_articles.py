@@ -325,6 +325,34 @@ async def main() -> int:
         print("ok: fix 1 -- no result event still follows the exit code "
               "(0 -> success, non-zero -> failed) unchanged")
 
+        # (c) a stored terminal status of 'success' must NOT overrule a
+        # non-zero exit code. This is the interactive multi-turn case: an
+        # earlier turn reports subtype=success, then the process is killed
+        # (watchdog silence timeout / hard cap) and exits non-zero. The
+        # downgrade is one-way only -- a remembered success can never turn
+        # a dirty exit back into 'success'.
+        sid_stale_success = await db.create_session(pid, "smoke-stale-success-agent", "sonnet")
+        session_stale_success = RunningSession(
+            session_id=sid_stale_success, agent_name="smoke-stale-success-agent",
+            project_id=pid, project_slug="demo", process=None,
+        )
+        pm._parse_stream_json(session_stale_success, json.dumps({
+            "type": "result", "subtype": "success",
+            "duration_ms": 1000, "total_cost_usd": 0.01,
+        }))
+        await pm._cleanup(session_stale_success, exit_code=1, error_message=None)
+        row = await db.fetch_one(
+            "SELECT status FROM agent_learning_sessions WHERE id=?",
+            (sid_stale_success,),
+        )
+        if row["status"] != "failed":
+            fail("a stored terminal status of 'success' overruled a "
+                 f"non-zero exit code: recorded status={row['status']!r}, "
+                 "want 'failed'")
+            return 1
+        print("ok: fix 1 -- a stored 'success' status never overrules a "
+              "non-zero exit code (one-way downgrade only)")
+
         # ── session-crash-visibility fix 2: reconcile_stranded_article_
         # proposals fails a 'writing' row whose dispatched session has
         # finished without a write-back. ────────────────────────────────
