@@ -29,6 +29,7 @@ from dreaming.routes.project_help import router as help_router
 from dreaming.routes.project_review import router as review_router
 from dreaming.routes.project_bulk import router as bulk_router
 from dreaming.routes.project_ai_radar import router as project_ai_radar_router
+from dreaming.routes.project_articles import router as articles_router
 
 
 router = APIRouter()
@@ -58,4 +59,5 @@ router.include_router(help_router)
 router.include_router(review_router)
 router.include_router(bulk_router)
 router.include_router(project_ai_radar_router)
+router.include_router(articles_router)
 router.include_router(project_settings_router)

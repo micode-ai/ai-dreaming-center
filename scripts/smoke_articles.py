@@ -187,6 +187,15 @@ async def main() -> int:
                 if again_back.status_code != 409:
                     fail(f"write-back guard: got {again_back.status_code}, want 409")
                     return 1
+
+                page = client.get("/p/ai-dreaming-center/articles")
+                if page.status_code != 200:
+                    fail(f"/articles page: {page.status_code}")
+                    return 1
+                if "smoke-pipeline-check" not in page.text:
+                    fail("the ingested proposal is not rendered on the page")
+                    return 1
+                print("ok: /p/{slug}/articles renders the proposal")
         finally:
             await real_db.close()
         print("ok: API ingest (201 fresh / 200 dedupe), detail, write-back, "

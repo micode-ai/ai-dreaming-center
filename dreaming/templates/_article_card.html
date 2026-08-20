@@ -1,0 +1,74 @@
+{# Карточка предложения. Параметры: a — enriched-строка, project, locale. #}
+<article class="card mb-3">
+  <header class="flex items-baseline gap-3 flex-wrap mb-2">
+    <span class="text-base font-semibold strong">{{ a.title }}</span>
+    <span class="badge badge-neutral">
+      {{ ("article.status." ~ a.status) | t(locale=locale) }}
+    </span>
+    <span class="text-xs font-mono faint">{{ a.slug_hint }}</span>
+    {% if a.status in ('drafted', 'published') %}
+      <span class="badge badge-neutral">
+        {{ ("article.verify." ~ a.verify_label) | t(locale=locale) }}
+      </span>
+    {% endif %}
+    <span class="text-xs faint ml-auto">{{ a.source }}{% if a.source_ref %} · {{ a.source_ref }}{% endif %}</span>
+  </header>
+
+  {% if a.angle %}<p class="text-sm mb-2">{{ a.angle }}</p>{% endif %}
+
+  <p class="text-xs mb-2 faint">
+    <span class="strong">{{ "article.evidence" | t(locale=locale) }}:</span>
+    {{ a.evidence }}
+  </p>
+
+  {% if a.tags %}
+    <div class="text-xs mb-2 faint">
+      {% for t in a.tags %}<span class="badge badge-neutral mr-1">#{{ t }}</span>{% endfor %}
+    </div>
+  {% endif %}
+
+  {% if a.draft_ref %}
+    <p class="text-xs font-mono faint mb-2">→ {{ a.draft_ref }}</p>
+  {% endif %}
+
+  {% if a.status == 'failed' and a.error_message %}
+    <pre class="text-xs mb-2 overflow-x-auto">{{ a.error_message }}</pre>
+  {% endif %}
+
+  {% if a.verify_output and a.status in ('drafted', 'failed') %}
+    <pre class="text-xs mb-2 overflow-x-auto">{{ a.verify_output }}</pre>
+  {% endif %}
+
+  <footer class="flex gap-2 items-center text-xs flex-wrap mt-2">
+    {% if a.status == 'proposed' %}
+      <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/approve" class="inline">
+        <button class="btn btn-sm btn-primary">{{ "article.btn.approve" | t(locale=locale) }}</button>
+      </form>
+      <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/reject" class="inline">
+        <button class="btn btn-sm">{{ "article.btn.reject" | t(locale=locale) }}</button>
+      </form>
+    {% elif a.status == 'rejected' %}
+      <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/restore" class="inline">
+        <button class="btn btn-sm">{{ "article.btn.restore" | t(locale=locale) }}</button>
+      </form>
+    {% elif a.status == 'failed' %}
+      <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/approve" class="inline">
+        <button class="btn btn-sm">{{ "article.btn.retry" | t(locale=locale) }}</button>
+      </form>
+    {% elif a.status == 'drafted' %}
+      {% if a.can_publish %}
+        <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/publish" class="inline">
+          <button class="btn btn-sm btn-primary">{{ "article.btn.publish" | t(locale=locale) }}</button>
+        </form>
+      {% else %}
+        <span class="faint">{{ ("article.gate." ~ a.gate_reason) | t(locale=locale) }}</span>
+      {% endif %}
+      <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/approve" class="inline">
+        <button class="btn btn-sm">{{ "article.btn.retry" | t(locale=locale) }}</button>
+      </form>
+    {% endif %}
+    {% if a.writer_agent %}
+      <span class="ml-auto font-mono faint">{{ a.writer_agent }}</span>
+    {% endif %}
+  </footer>
+</article>
