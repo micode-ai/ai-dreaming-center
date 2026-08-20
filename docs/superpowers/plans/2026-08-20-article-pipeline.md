@@ -768,7 +768,7 @@ Expected: `ok: resolve_writer …` and `ok: publish gate …`, then `PASS`
 
 Then confirm the keys reached the settings UI grouping:
 
-Run: `python -c "from dreaming.config import Settings; s=Settings(); print(s.article_publish_mode, s.article_max_turns, s.weekly_article_ideas_scan_enabled)"`
+Run: `python -c "from dreaming.config import AppSettings; s=AppSettings(); print(s.article_publish_mode, s.article_max_turns, s.weekly_article_ideas_scan_enabled)"`
 Expected: `off 300 False`
 
 - [ ] **Step 6: Commit**
