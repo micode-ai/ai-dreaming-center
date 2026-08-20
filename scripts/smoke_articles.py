@@ -668,6 +668,71 @@ async def main() -> int:
                 os.environ["DC_DB_PATH"] = prior_db_path_env
         print("ok: /p/{slug}/articles still renders with no article_blog_dir set")
 
+        # ── the NULL-venue case must be byte-identical, through the route ──
+        # Pins the regression that matters: a proposal with target_project_id
+        # NULL and no article_venue_project setting -- every real proposal in
+        # the live database is in this state. resolve_venue_id's own unit
+        # test above proves the pure function; this proves the route wiring
+        # actually uses it the way wave A always behaved -- own project, own
+        # blog dir inside its own repo, own writer agent, no venue anywhere.
+        os.environ["DC_DB_PATH"] = str(page_db_dir / "test.db")
+        try:
+            with TestClient(app) as page_client:
+                null_venue_dir = tmp / "null_venue_project"
+                _git_init(null_venue_dir)
+                (null_venue_dir / "content" / "blog").mkdir(parents=True)
+                (null_venue_dir / ".claude" / "agents").mkdir(parents=True)
+                (null_venue_dir / ".claude" / "agents" / "blog-writer.md").write_text(
+                    "---\nname: blog-writer\n---\n", encoding="utf-8",
+                )
+                null_venue_project = await ProjectsService(app.state.db).create(
+                    slug="smoke-null-venue", label="Smoke Null Venue",
+                    working_dir=str(null_venue_dir),
+                )
+                await ProjectsService(app.state.db).set_setting(
+                    null_venue_project.id, "article_blog_dir", "content/blog",
+                )
+                # Deliberately no article_venue_project setting -- this is
+                # the NULL-venue case, not an override.
+                await app.state.db.add_article_proposal(
+                    null_venue_project.id, source="manual", source_ref="",
+                    evidence="smoke: NULL target_project_id must equal wave A",
+                    title="Null venue smoke row", angle="…",
+                    slug_hint="smoke-null-venue-row",
+                )
+                resp = page_client.get("/p/smoke-null-venue/articles")
+                if resp.status_code != 200:
+                    fail(f"articles_page (NULL-venue equivalence): {resp.status_code}")
+                    return 1
+                # What the route's _venue_for/resolve_writer chain must
+                # produce for the *subject's own* article root -- computed
+                # from the same pure functions the route calls, not
+                # hardcoded, so this stays true if resolve_writer's autodetect
+                # logic changes.
+                expected_root = await articles.resolve_article_root(
+                    str(null_venue_dir), "content/blog",
+                )
+                expected_writer = articles.resolve_writer(expected_root, "")
+                if expected_writer not in resp.text:
+                    fail(f"NULL-venue writer label: expected {expected_writer!r} "
+                         f"to appear in the page, it did not")
+                    return 1
+                # The venue badge must stay invisible when venue == subject.
+                # The hint text is new, unique wording -- a much sharper
+                # signal than checking for the shared badge-brand CSS class,
+                # which other cards on this same page legitimately use.
+                if "Репозиторий, в который попадёт статья" in resp.text:
+                    fail("NULL-venue row rendered the venue badge, but venue "
+                         "equals the subject -- it must stay invisible")
+                    return 1
+        finally:
+            if prior_db_path_env is None:
+                os.environ.pop("DC_DB_PATH", None)
+            else:
+                os.environ["DC_DB_PATH"] = prior_db_path_env
+        print("ok: NULL target_project_id with no article_venue_project shows "
+              "the subject's own writer and no venue badge")
+
         gate_cases = [
             ({"verify_ok": 1, "status": "drafted"}, "npm run build", "commit", True),
             ({"verify_ok": 0, "status": "drafted"}, "npm run build", "commit", False),
@@ -1174,6 +1239,23 @@ async def main() -> int:
             return 1
         print("ok: target_project_id defaults to NULL, round-trips, and is "
               "settable only while proposed")
+
+        # ── pin_article_proposal_venue: the internal, status-guard-free pin ──
+        # Distinct from set_article_proposal_venue above: a retry dispatches
+        # from 'drafted' or 'failed', not just 'proposed', so this method
+        # must not refuse a row already moved past 'proposed'. `plain` is
+        # 'published' at this point -- the sharpest case available.
+        if not await db.pin_article_proposal_venue(plain, pid + 1000):
+            fail("pin_article_proposal_venue refused a non-'proposed' row -- "
+                 "it must carry no status guard")
+            return 1
+        pinned_row = await db.get_article_proposal(plain)
+        if pinned_row["target_project_id"] != pid + 1000:
+            fail(f"pin_article_proposal_venue did not persist: "
+                 f"{pinned_row['target_project_id']}")
+            return 1
+        print("ok: pin_article_proposal_venue records the resolved venue "
+              "regardless of status, unlike the user-facing setter")
 
         # ── schema-order regression pin ──────────────────────────────
         # article_proposals has two columns (verify_label, target_project_id)

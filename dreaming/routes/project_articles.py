@@ -302,6 +302,18 @@ async def articles_approve(request: Request, slug: str, proposal_id: int):
     blog_dir_for_session = articles.session_blog_dir(
         venue.working_dir, blog_dir, root,
     )
+    # Pin the resolved venue onto the row now, before any session is spawned
+    # — every guard above that could still refuse (status, starter-kit,
+    # blog_dir) has already passed, so this only ever records a decision
+    # that is actually about to be acted on. Without this, articles_publish
+    # re-resolving the venue from scratch could drift from what approve used
+    # here (e.g. the subject's article_venue_project setting changes between
+    # approve and publish) and derive a different working directory/article
+    # root than the one the writer actually wrote into. Pinned unconditionally
+    # — including when venue is the subject itself — so every dispatched row
+    # carries an explicit, recorded decision rather than an implicit one that
+    # could later resolve differently.
+    await db.pin_article_proposal_venue(proposal_id, venue.id)
     try:
         session_id = await pm.start_command(
             project,

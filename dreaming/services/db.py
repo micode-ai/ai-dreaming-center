@@ -1289,6 +1289,39 @@ class SqliteDB:
         await self._conn.commit()
         return n > 0
 
+    async def pin_article_proposal_venue(
+        self, proposal_id: int, target_project_id: int | None,
+    ) -> bool:
+        """Record the venue `articles_approve` actually resolved and is about
+        to dispatch into. This is NOT the user-facing venue setter — it
+        carries no status guard, on purpose: `set_article_proposal_venue`
+        above is deliberately `proposed`-only, but a retry dispatches from
+        `drafted` or `failed`, and the whole point of this method is that a
+        row must never sit in `writing` against a venue resolution nobody
+        recorded.
+
+        Without this, `articles_publish` re-resolving the venue from
+        scratch could drift from what approve actually used — e.g. the
+        subject's `article_venue_project` setting changes between approve
+        and publish — and publish would derive a different working
+        directory and article root than the one the writer actually wrote
+        into. Pinning the resolved id into the same `target_project_id`
+        column approve reads from means publish's own venue resolution
+        takes the override branch and reproduces approve's decision by
+        construction, rather than recomputing one that might no longer
+        match.
+
+        Call this after the venue is resolved and before the session is
+        spawned — including when the resolved venue is the subject itself,
+        so every dispatched row carries an explicit, recorded decision."""
+        async with self._conn.execute(
+            "UPDATE article_proposals SET target_project_id=? WHERE id=?",
+            (target_project_id, proposal_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
     async def set_article_proposal_status(
         self, proposal_id: int, status: str, *, error_message: str = "",
         session_id: str = "", expect_statuses: tuple[str, ...] | None = None,
