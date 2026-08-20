@@ -4,6 +4,7 @@
 здесь — список, отклонение и возврат в очередь.
 """
 from __future__ import annotations
+import hashlib
 import json
 import logging
 from datetime import datetime, timezone
@@ -168,7 +169,18 @@ async def articles_add(
     evidence = f"requested by hand on {stamp}"
     if prompt:
         evidence += f": {prompt[:300]}"
-    slug_hint = articles.slugify(topic) or f"manual-{int(datetime.now(timezone.utc).timestamp())}"
+    # slugify drops non-ASCII rather than transliterating, so an all-Cyrillic
+    # topic — the default case for this user, not an edge case — yields an
+    # empty slug. The fallback must be derived from the topic's own text, not
+    # the clock: a timestamp fallback makes two different topics submitted in
+    # the same UTC second collide (falsely reported as a duplicate) while the
+    # same topic submitted twice, seconds apart, does not collide (silently
+    # duplicated) — exactly backwards from what (project_id, slug_hint)
+    # dedup exists for. A digest of the normalised topic makes identical
+    # topics collide deterministically and distinct topics not.
+    slug_hint = articles.slugify(topic) or (
+        "manual-" + hashlib.sha1(topic.strip().lower().encode("utf-8")).hexdigest()[:10]
+    )
     new_id = await db.add_article_proposal(
         project.id, source="manual", source_ref="", evidence=evidence,
         title=topic[:300], angle=prompt, slug_hint=slug_hint,

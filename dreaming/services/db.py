@@ -1223,7 +1223,23 @@ class SqliteDB:
         target_project_id: int | None = None,
     ) -> int | None:
         """Вставить предложение. None — если (project_id, slug_hint) уже есть:
-        три фидера на один сюжет дают одну строку, а не три."""
+        три фидера на один сюжет дают одну строку, а не три.
+
+        A blank-after-strip `evidence` is refused here, not just at the
+        /articles/ingest HTTP boundary: this is the rule the whole feature
+        rests on (a queue of unfalsifiable suggestions is worse than an empty
+        one), and a future feeder that calls this method directly must not be
+        able to forget it. Every feeder today already composes a real,
+        non-empty evidence string, so this changes no observed behaviour —
+        it only turns a convention into an invariant.
+        """
+        if not evidence.strip():
+            raise ValueError(
+                "add_article_proposal: evidence must be non-blank — state "
+                "the fact this proposal traces to (a commit, a release, a "
+                "measurement, or a person's own request), never leave it "
+                "empty"
+            )
         now_iso = datetime.now(timezone.utc).isoformat()
         async with self._conn.execute(
             "INSERT OR IGNORE INTO article_proposals "

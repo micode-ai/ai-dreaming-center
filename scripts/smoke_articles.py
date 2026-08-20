@@ -60,6 +60,23 @@ async def main() -> int:
             return 1
         print("ok: insert + dedup on (project_id, slug_hint)")
 
+        # ── evidence is a structural guard, not a per-caller habit ──
+        # Promoted from the API boundary (articles_ingest's own 400) into
+        # add_article_proposal itself so every present and future caller —
+        # not just /articles/ingest — inherits the rule: a queue of
+        # unfalsifiable suggestions is worse than an empty one.
+        try:
+            await db.add_article_proposal(
+                pid, source="project_scan", source_ref="x",
+                evidence="   ", title="No evidence", angle="…",
+                slug_hint="smoke-blank-evidence",
+            )
+        except ValueError:
+            print("ok: add_article_proposal refuses blank-after-strip evidence")
+        else:
+            fail("add_article_proposal accepted blank evidence")
+            return 1
+
         # ── status transitions ─────────────────────────────────────
         row = await db.get_article_proposal(first)
         if row["status"] != "proposed":
@@ -353,6 +370,94 @@ async def main() -> int:
                     return 1
                 await real_db.execute("DELETE FROM article_proposals WHERE id=?", (made_row["id"],))
                 print("ok: manual add -- blank topic refused, row carries honest evidence")
+
+                # ── all-Cyrillic topics: the slug fallback must be
+                # deterministic on the topic's own text, not the clock ────
+                # slugify drops non-ASCII rather than transliterating, so an
+                # all-Cyrillic topic (this user's default case, not an edge
+                # case) always hits the fallback. A clock-based fallback gets
+                # dedup backwards both ways: two different topics posted in
+                # the same UTC second would falsely collide, and the same
+                # topic posted twice, seconds apart -- the normal human case
+                # -- would NOT collide. Pin both directions for real.
+                import json as _json
+                from urllib.parse import unquote
+                import time as _time
+                cyr_a = "Смок кириллица один"
+                cyr_b = "Смок кириллица два"
+
+                first_cyr = client.post("/p/ai-dreaming-center/articles/add",
+                                        data={"title": cyr_a, "angle": ""},
+                                        follow_redirects=False)
+                if first_cyr.status_code != 303:
+                    fail(f"manual add (cyrillic topic A): {first_cyr.status_code}, want 303")
+                    return 1
+                cyr_a_row = None
+                for r in await real_db.list_article_proposals(status="proposed"):
+                    if r["title"] == cyr_a:
+                        cyr_a_row = r
+                        break
+                if cyr_a_row is None:
+                    fail("cyrillic manual proposal (topic A) was not created")
+                    return 1
+                slug_a = cyr_a_row["slug_hint"]
+                suffix_a = slug_a[len("manual-"):]
+                if (not slug_a.startswith("manual-") or len(suffix_a) != 10
+                        or any(c not in "0123456789abcdef" for c in suffix_a)):
+                    fail(f"cyrillic fallback slug_hint malformed: {slug_a!r}")
+                    return 1
+
+                # A real gap (>1s) between two submissions of the SAME topic
+                # is exactly the case a clock-based fallback got wrong --
+                # forcing a real sleep here makes this a genuine regression
+                # pin, not an accident of two fast calls landing in the same
+                # UTC second.
+                _time.sleep(1.1)
+                second_cyr = client.post("/p/ai-dreaming-center/articles/add",
+                                         data={"title": cyr_a, "angle": ""},
+                                         follow_redirects=False)
+                if second_cyr.status_code != 303:
+                    fail(f"manual add (cyrillic topic A, repeat): {second_cyr.status_code}, want 303")
+                    return 1
+                dup_flash = _json.loads(unquote(second_cyr.cookies.get("flash", "")))
+                if dup_flash.get("level") != "info":
+                    fail("repeating the same cyrillic topic a second apart was "
+                         f"not reported as a duplicate: {dup_flash}")
+                    return 1
+                same_slug_rows = [
+                    r for r in await real_db.list_article_proposals(status="proposed")
+                    if r["slug_hint"] == slug_a
+                ]
+                if len(same_slug_rows) != 1:
+                    fail(f"same cyrillic topic, >1s apart, produced "
+                         f"{len(same_slug_rows)} rows instead of deduping to 1 "
+                         "-- the fallback slug is still clock-derived")
+                    return 1
+                print("ok: same all-Cyrillic topic, seconds apart, dedupes to "
+                      "one row (fallback slug derives from the topic, not the clock)")
+
+                different_cyr = client.post("/p/ai-dreaming-center/articles/add",
+                                            data={"title": cyr_b, "angle": ""},
+                                            follow_redirects=False)
+                if different_cyr.status_code != 303:
+                    fail(f"manual add (cyrillic topic B): {different_cyr.status_code}, want 303")
+                    return 1
+                cyr_b_row = None
+                for r in await real_db.list_article_proposals(status="proposed"):
+                    if r["title"] == cyr_b:
+                        cyr_b_row = r
+                        break
+                if cyr_b_row is None:
+                    fail("cyrillic manual proposal (topic B) was not created")
+                    return 1
+                if cyr_b_row["slug_hint"] == slug_a:
+                    fail("two DIFFERENT cyrillic topics collided on the same "
+                         f"fallback slug_hint: {slug_a!r}")
+                    return 1
+                print("ok: two different all-Cyrillic topics get different fallback slug_hints")
+
+                await real_db.execute("DELETE FROM article_proposals WHERE id=?", (cyr_a_row["id"],))
+                await real_db.execute("DELETE FROM article_proposals WHERE id=?", (cyr_b_row["id"],))
 
                 ai_dc_project = await ProjectsService(real_db).get_by_slug(
                     "ai-dreaming-center",
