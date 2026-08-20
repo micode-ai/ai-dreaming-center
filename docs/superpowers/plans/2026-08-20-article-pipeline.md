@@ -25,6 +25,7 @@
 - Modern Starlette signature: `templates.TemplateResponse(request, "name.html", {ctx_without_request})`.
 - Routes read `request.state.project`, never query by slug themselves.
 - There is no pytest in this repo. The test vehicle is `scripts/smoke_articles.py`, run manually; it must exit 0.
+- Keep smoke-script output inside cp1250: this machine's console encoding cannot represent arrows (`→`), check marks, or box drawing, and `print()` of such a character raises `UnicodeEncodeError` and aborts the run mid-way. Em dashes and Cyrillic are fine — the existing `scripts/smoke_ai_radar.py` prints both. Write `->` instead of `→`.
 
 ---
 
@@ -117,7 +118,7 @@ async def main() -> int:
             fail(f"after approve/writing: status={row['status']}, "
                  f"decided_at={row['decided_at']}")
             return 1
-        print("ok: proposed → approved → writing, decided_at stamped")
+        print("ok: proposed -> approved -> writing, decided_at stamped")
 
         # ── draft with verification ────────────────────────────────
         await db.mark_article_written(
