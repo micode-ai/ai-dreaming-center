@@ -394,7 +394,19 @@ async def main() -> int:
         # ── session-crash-visibility fix 2: reconcile_stranded_article_
         # proposals fails a 'writing' row whose dispatched session has
         # finished without a write-back. ────────────────────────────────
+        # `reconcile_stranded_article_proposals` scans ALL 'writing' rows
+        # globally (no project filter) and now decides liveness purely from
+        # `active_session_ids` (round 2 -- see below), so every call in this
+        # script must pass the full accumulated set of session ids meant to
+        # still read as "alive" at that point, or an earlier block's
+        # deliberately-still-running row would be collaterally failed by a
+        # later call that forgot to re-assert it. This mirrors production:
+        # the scheduler always passes the *whole* current live set, not one
+        # scoped to a single proposal.
+        still_alive_session_ids: set[str] = set()
+
         sid_running = await db.create_session(pid, "smoke-writer-running", "sonnet")
+        still_alive_session_ids.add(sid_running)
         stranded_running = await db.add_article_proposal(
             pid, source="smoke", source_ref="stranded-running",
             evidence="test", title="Stranded but session still running",
@@ -422,7 +434,9 @@ async def main() -> int:
         )
         await db.set_article_proposal_status(stranded_empty, "writing")
 
-        n_failed = await db.reconcile_stranded_article_proposals()
+        n_failed = await db.reconcile_stranded_article_proposals(
+            active_session_ids=still_alive_session_ids,
+        )
         if n_failed != 1:
             fail(f"reconcile_stranded_article_proposals: failed {n_failed} rows, want 1")
             return 1
@@ -455,11 +469,13 @@ async def main() -> int:
         # ── review fix 1: reconcile_stranded_article_proposals must not
         # fail a 'writing' proposal while its writer's process is still
         # running in ProcessManager, even though its session row already
-        # reads something else -- a live cmd: session's DB status column
-        # is not trustworthy (see the next block for why). ───────────────
+        # reads something else -- the DB status column is not consulted for
+        # liveness at all (round 2 hardened this further -- see the LEFT
+        # JOIN / no-active-set block below). ──────────────────────────────
         sid_live_but_cancelled = await db.create_session(
             pid, "cmd:demo:write-article", "sonnet",
         )
+        still_alive_session_ids.add(sid_live_but_cancelled)
         await db.execute(
             "UPDATE agent_learning_sessions SET status='cancelled', finished_at=? "
             "WHERE id=?",
@@ -473,7 +489,7 @@ async def main() -> int:
         await db.start_article_attempt(stranded_live, session_id=sid_live_but_cancelled)
 
         n_failed2 = await db.reconcile_stranded_article_proposals(
-            active_session_ids={sid_live_but_cancelled},
+            active_session_ids=still_alive_session_ids,
         )
         if n_failed2 != 0:
             fail("reconcile failed a proposal whose session_id is in the "
@@ -540,7 +556,9 @@ async def main() -> int:
         db_logger = logging.getLogger("dreaming.services.db")
         db_logger.addHandler(cap)
         try:
-            await db.reconcile_stranded_article_proposals()
+            await db.reconcile_stranded_article_proposals(
+                active_session_ids=still_alive_session_ids,
+            )
         finally:
             db_logger.removeHandler(cap)
         row = await db.get_article_proposal(stranded_no_row)
@@ -556,6 +574,54 @@ async def main() -> int:
         print("ok: fix 2 -- a 'writing' proposal whose session_id has no "
               "matching session row at all is logged (with its id) and "
               "left alone, not silently skipped and not auto-failed")
+
+        # ── round-2 review finding: after an ungraceful app death a cmd:
+        # session row can be stuck at status='running' forever -- nothing
+        # ever revisits it (reconcile_stale_sessions now correctly excludes
+        # cmd: rows, and there's no startup sweep). The status column must
+        # never be trusted for liveness: a session id absent from the live
+        # active set is failed regardless of a 'running' row. (The mirror
+        # assertion -- a session id PRESENT in the active set is left alone
+        # even though its row says 'cancelled' -- already exists above as
+        # "fix 1 -- a 'writing' proposal whose session is still in the
+        # active process set..."; not duplicated here.) ──────────────────
+        sid_stale_running = await db.create_session(
+            pid, "cmd:demo:write-article-2", "sonnet",
+        )
+        # Deliberately NOT added to still_alive_session_ids and left at its
+        # default status='running' -- this is the stale-row-after-a-hard-
+        # kill shape: the row still says 'running' but no process backs it.
+        stranded_stale_running = await db.add_article_proposal(
+            pid, source="smoke", source_ref="stranded-stale-running",
+            evidence="test", title="Session row says running but the process is long gone",
+            angle="…", slug_hint="stranded-stale-running",
+        )
+        await db.start_article_attempt(
+            stranded_stale_running, session_id=sid_stale_running,
+        )
+
+        n_failed4 = await db.reconcile_stranded_article_proposals(
+            active_session_ids=still_alive_session_ids,
+        )
+        if n_failed4 != 1:
+            fail(f"reconcile_stranded_article_proposals: failed {n_failed4} "
+                 "row(s) for the stale-'running'-row scenario, want 1")
+            return 1
+        row = await db.get_article_proposal(stranded_stale_running)
+        if row["status"] != "failed":
+            fail("a proposal whose session row still says 'running' but "
+                 f"whose id is absent from active_session_ids was left as "
+                 f"{row['status']!r}, want 'failed' -- the status column "
+                 "must never be trusted for liveness")
+            return 1
+        if sid_stale_running not in row["error_message"]:
+            fail("reconcile's error_message for the stale-'running' row "
+                 f"doesn't name the session id: {row['error_message']!r}")
+            return 1
+        print("ok: fix 1 (round 2) -- a proposal whose session row still "
+              "says 'running' is failed once its session id is absent from "
+              "the live active set; the status column alone is never "
+              "enough to call it alive")
 
         # ── API: ingest / dedupe / write-back ──────────────────────
         from starlette.testclient import TestClient

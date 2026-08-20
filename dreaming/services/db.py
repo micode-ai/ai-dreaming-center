@@ -1426,40 +1426,58 @@ class SqliteDB:
         `active_session_ids` — claude session-ids ProcessManager currently
         has running for cmd:* keys (the caller already builds this set for
         `cancel_stale_orchestration_runs`; pass the same one — see
-        scheduler._reconcile_job). This is the actual source of truth for
-        "is the writer still working", NOT `agent_learning_sessions.status`:
-        `reconcile_stale_sessions`' active_pairs sweep only ever knows about
-        non-cmd: (project_id, agent_name) pairs (a cmd: row's `agent_name`
-        IS the composite process-manager key, so it can never appear
-        there), so any cmd: row still 'running' — including the write-
-        article session backing this exact proposal — gets swept to
-        'cancelled' the moment some unrelated self-study session exits,
-        while its process is still streaming the article. A proposal whose
-        session_id is in `active_session_ids` is left alone regardless of
-        what its session row says.
+        scheduler._reconcile_job). This is the ONLY signal this method
+        consults to decide whether a dispatched session is still working.
+
+        `agent_learning_sessions.status` is NOT read for liveness at all —
+        do not reintroduce a "status='running' means still going" check
+        here as an "optimisation". Two reasons, both load-bearing:
+
+        - `reconcile_stale_sessions` correctly excludes cmd:* rows from its
+          own sweep (their `agent_name` IS the composite process-manager
+          key, so the sweep's (project_id, agent_name) `active_pairs`
+          contract cannot describe them) — but that sweep was also the only
+          thing that ever closed such a row when `_cleanup` never got to
+          run, e.g. the whole app dying ungracefully. There is no
+          startup-time reconciliation for cmd:* rows, so after a hard kill
+          one can sit at `status='running'` forever with no process behind
+          it and nothing else that will ever revisit it.
+        - Trusting that stale 'running' as "still alive" would leave the
+          proposal in 'writing' forever with no diagnostic at all — the
+          exact silent-skip outcome the LEFT JOIN below exists to
+          eliminate, just reached through a session row that exists and
+          looks superficially fine instead of one that's genuinely
+          missing.
+
+        So: a session id present in `active_session_ids` is alive, and the
+        proposal is left alone regardless of what its row's `status` column
+        says. A session id absent from it is over, whatever that column
+        claims — the proposal becomes 'failed'. This means a hard kill
+        self-heals on the reconcile job's very next tick; no separate
+        startup sweep is needed for article rows. The status column is
+        still read once a session id is known to be over, purely to word
+        the error_message.
 
         A row whose `session_id` is empty is left alone — it was never
         dispatched through a path that records one (e.g. hand-set via the
         API for a smoke/test), and guessing what happened to it would be
         worse than leaving it as-is.
 
-        A session still 'running' (or the legacy status IS NULL AND
-        finished_at IS NULL shape used elsewhere in this file) is not
-        stranded — its attempt may yet write back. This is a LEFT JOIN, not
-        an INNER JOIN: a proposal whose session_id has no matching row in
-        agent_learning_sessions at all (create_session failed and
-        start_command fell back to a generated uuid, or the row was deleted
-        later) used to be silently dropped by the INNER JOIN and sit in
-        'writing' forever with no diagnostic at all — the same invisibility
-        this whole fix exists to close. There's no reliable per-attempt
-        timestamp to gate an automatic fail on: `decided_at` is COALESCEd
-        across retries, so on any retried proposal it can be stale by
-        definition and would not describe how long *this* attempt has been
-        going. So rather than invent an unreliable age heuristic (or guess
-        wrong and throw away a proposal whose session row was merely
-        deleted while the writer was still running — already covered by the
-        active-set check above), such rows are logged with their ids and
-        left in 'writing' rather than auto-failed.
+        This is a LEFT JOIN, not an INNER JOIN: a proposal whose session_id
+        has no matching row in agent_learning_sessions at all
+        (create_session failed and start_command fell back to a generated
+        uuid, or the row was deleted later) used to be silently dropped by
+        the INNER JOIN and sit in 'writing' forever with no diagnostic at
+        all — the same invisibility this whole fix exists to close. There's
+        no reliable per-attempt timestamp to gate an automatic fail on:
+        `decided_at` is COALESCEd across retries, so on any retried
+        proposal it can be stale by definition and would not describe how
+        long *this* attempt has been going. So rather than invent an
+        unreliable age heuristic (or guess wrong and throw away a proposal
+        whose session row was merely deleted while the writer was still
+        running — already covered by the active-set check above), such
+        rows are logged with their ids and left in 'writing' rather than
+        auto-failed.
 
         Returns the count of proposals marked failed (rows with no matching
         session row at all are logged, not counted here).
@@ -1467,8 +1485,7 @@ class SqliteDB:
         active = set(active_session_ids or ())
         rows = await self.fetch_all(
             "SELECT ap.id AS id, ap.session_id AS session_id, "
-            "       s.id AS session_row_id, s.status AS session_status, "
-            "       s.finished_at AS session_finished_at "
+            "       s.id AS session_row_id, s.status AS session_status "
             "FROM article_proposals ap "
             "LEFT JOIN agent_learning_sessions s ON s.id = ap.session_id "
             "WHERE ap.status='writing' AND ap.session_id != ''"
@@ -1478,23 +1495,31 @@ class SqliteDB:
         for row in rows:
             if row["session_id"] in active:
                 # The process backing this attempt is still running right
-                # now per ProcessManager — decided from the live process
-                # table, not the session row (see docstring above).
+                # now per ProcessManager — the only liveness signal this
+                # method trusts. The status column is not consulted here,
+                # live or stale (see docstring).
                 continue
             if row["session_row_id"] is None:
                 no_session_row.append(row["id"])
                 continue
-            still_running = (
-                row["session_status"] == "running"
-                or (row["session_status"] is None and row["session_finished_at"] is None)
-            )
-            if still_running:
-                continue
+            # Not in the active set -> the writer is over, whatever this
+            # row's own status column says — including a stale 'running'
+            # left behind by an ungraceful app death that _cleanup never
+            # got to close (see docstring: that status is never trusted for
+            # liveness, only used below to word the message).
             session_status = row["session_status"] or "unknown"
-            message = (
-                f"session {row['session_id']} ended as {session_status} "
-                f"without reporting a draft"
-            )
+            if session_status in ("running", "unknown"):
+                message = (
+                    f"session {row['session_id']} is not in the live "
+                    f"process set (row still shows '{session_status}', "
+                    f"likely stale from an ungraceful shutdown) and never "
+                    f"reported a draft"
+                )
+            else:
+                message = (
+                    f"session {row['session_id']} ended as {session_status} "
+                    f"without reporting a draft"
+                )
             if await self.set_article_proposal_status(
                 row["id"], "failed", error_message=message,
                 expect_statuses=("writing",),
