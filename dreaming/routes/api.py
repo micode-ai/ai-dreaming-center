@@ -428,7 +428,14 @@ class ArticleIngestIn(BaseModel):
 
 
 class ArticleWrittenIn(BaseModel):
-    draft_ref: str
+    # Round-1 fix: write-article.md's documented failure report is
+    # `{"error_message": "<what failed>"}` with no other keys -- a required
+    # (no-default) draft_ref made that payload 422 before the handler ever
+    # ran, so a writer that failed honestly could never say so. The success
+    # branch already enforces non-blank draft_ref itself (422 there), so
+    # defaulting it to "" here only unblocks the failure report; it does
+    # not loosen the success contract.
+    draft_ref: str = ""
     verify_output: str = ""
     writer_agent: str = ""
     verify_ok: bool = False

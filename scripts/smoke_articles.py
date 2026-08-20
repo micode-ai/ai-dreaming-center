@@ -1431,6 +1431,84 @@ async def main() -> int:
                 print("ok: FIX3 -- the /written failure path dismisses the "
                       "failed proposal's own pending question")
 
+                # ── Round-1 fix: the /written failure report, EXACTLY as ──
+                # documented. write-article.md's own text: "On failure,
+                # POST the same endpoint with `{"error_message": "<what
+                # failed>"}`." -- no draft_ref, no other keys. Before this
+                # round, ArticleWrittenIn.draft_ref had no default, so
+                # Pydantic rejected that literal payload with 422 before
+                # the handler ever ran -- a writer that failed honestly
+                # could not say so. Pin the shape verbatim from the
+                # command's own text, not a shape convenient for the test.
+                r1_project = await fix_ps.create(
+                    slug="smoke-r1-failure-shape", label="Smoke R1 Failure Shape",
+                    working_dir=str(tmp),
+                )
+                r1_row = await fix_db.add_article_proposal(
+                    r1_project.id, source="manual", source_ref="",
+                    evidence="smoke: round-1 -- the documented failure "
+                    "payload must not 422",
+                    title="Smoke R1 failure-shape row", angle="…",
+                    slug_hint="smoke-r1-failure-shape-row",
+                )
+                await fix_db.set_article_proposal_status(r1_row, "approved")
+                await fix_db.set_article_proposal_status(r1_row, "writing")
+                r1_resp = fix_client.post(
+                    f"/api/articles/{r1_row}/written",
+                    json={"error_message": "npm run build exited 1"},
+                )
+                if r1_resp.status_code != 200:
+                    fail("round-1: the command's own documented failure "
+                         'payload ({"error_message": "..."}, no other '
+                         f"keys) got {r1_resp.status_code}, want 200: "
+                         f"{r1_resp.text[:300]}")
+                    return 1
+                r1_row_after = await fix_db.get_article_proposal(r1_row)
+                if r1_row_after["status"] != "failed":
+                    fail(f"round-1: status={r1_row_after['status']!r}, "
+                         "want 'failed'")
+                    return 1
+                if "npm run build exited 1" not in (r1_row_after["error_message"] or ""):
+                    fail("round-1: error_message not stored: "
+                         f"{r1_row_after['error_message']!r}")
+                    return 1
+                print("ok: round-1 -- the documented failure payload "
+                      '({"error_message": "..."}, no draft_ref, no other '
+                      "keys) is accepted (200), the row becomes 'failed', "
+                      "and the message is stored")
+
+                # The success branch must still refuse a blank draft_ref
+                # (422) -- the fix must not be readable as loosening that
+                # contract. An empty JSON body means both error_message and
+                # draft_ref default to "", which is unambiguously the
+                # success path with nothing to record.
+                r1_success_row = await fix_db.add_article_proposal(
+                    r1_project.id, source="manual", source_ref="",
+                    evidence="smoke: round-1 -- a blank draft_ref must "
+                    "still 422 on the success branch",
+                    title="Smoke R1 blank-draft-ref row", angle="…",
+                    slug_hint="smoke-r1-blank-draft-ref-row",
+                )
+                await fix_db.set_article_proposal_status(r1_success_row, "approved")
+                await fix_db.set_article_proposal_status(r1_success_row, "writing")
+                r1_blank_resp = fix_client.post(
+                    f"/api/articles/{r1_success_row}/written", json={},
+                )
+                if r1_blank_resp.status_code != 422:
+                    fail("round-1: a payload with no error_message and no "
+                         f"draft_ref got {r1_blank_resp.status_code}, want "
+                         "422 -- the success branch must still refuse a "
+                         "blank draft_ref")
+                    return 1
+                r1_success_row_after = await fix_db.get_article_proposal(r1_success_row)
+                if r1_success_row_after["status"] != "writing":
+                    fail("round-1: a refused write-back must not disturb "
+                         f"the row: status={r1_success_row_after['status']!r}")
+                    return 1
+                print("ok: round-1 -- the success branch still refuses a "
+                      "blank draft_ref with 422, unaffected by the "
+                      "failure-path fix")
+
                 # ── FIX 6: the venue can be re-pinned on a 'failed' row, ──
                 # and the failed card offers the venue <select>.
                 f6_subject = await fix_ps.create(
