@@ -571,6 +571,19 @@ async def main() -> int:
         print("ok: a rollback that itself fails says so honestly and leaves "
               "the paths visibly still staged")
 
+        # ── scheduler wiring ──────────────────────────────────────
+        from dreaming.services import scheduler as sched_mod
+        kinds = [row[0] for row in sched_mod._PER_PROJECT_JOBS]
+        if "weekly_article_ideas_scan" not in kinds:
+            fail(f"weekly_article_ideas_scan not registered; kinds={kinds}")
+            return 1
+        row = next(r for r in sched_mod._PER_PROJECT_JOBS
+                   if r[0] == "weekly_article_ideas_scan")
+        if row[4] is not False:
+            fail("the weekly article scan must default to disabled")
+            return 1
+        print("ok: weekly_article_ideas_scan registered, off by default")
+
         print("PASS")
         return 0
     finally:
