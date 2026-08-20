@@ -123,6 +123,51 @@ async def main() -> int:
             return 1
         print("ok: list filter + status counts")
 
+        # ── API: ingest / dedupe / write-back ──────────────────────
+        from starlette.testclient import TestClient
+        from dreaming.main import app
+        with TestClient(app) as client:
+            base = "/api/p/ai-dreaming-center/articles"
+            blank = client.post(f"{base}/ingest", json={
+                "title": "No evidence here", "angle": "…",
+                "slug_hint": "smoke-no-evidence", "evidence": "   ",
+                "source": "project_scan",
+            })
+            if blank.status_code != 400:
+                fail(f"blank evidence: got {blank.status_code}, want 400")
+                return 1
+            good = client.post(f"{base}/ingest", json={
+                "title": "Smoke article", "angle": "…",
+                "slug_hint": "smoke-pipeline-check",
+                "evidence": "commit 503ed08 shipped the density fix",
+                "source": "project_scan", "source_ref": "503ed08",
+            })
+            if good.status_code not in (200, 201):
+                fail(f"ingest failed: {good.status_code} {good.text[:200]}")
+                return 1
+            api_id = good.json()["id"]
+            again = client.post(f"{base}/ingest", json={
+                "title": "Smoke article dup", "angle": "…",
+                "slug_hint": "smoke-pipeline-check",
+                "evidence": "same subject", "source": "radar",
+            })
+            if not again.json().get("duplicate"):
+                fail(f"dedupe not reported: {again.status_code} {again.text[:200]}")
+                return 1
+            detail = client.get(f"/api/articles/{api_id}")
+            if detail.status_code != 200 or detail.json()["slug_hint"] != "smoke-pipeline-check":
+                fail(f"detail GET wrong: {detail.status_code} {detail.text[:200]}")
+                return 1
+            back = client.post(f"/api/articles/{api_id}/written", json={
+                "draft_ref": "content/blog/ru/smoke.md",
+                "verify_output": "no verify command configured",
+                "writer_agent": "self", "verify_ok": False,
+            })
+            if back.status_code != 200:
+                fail(f"write-back failed: {back.status_code} {back.text[:200]}")
+                return 1
+        print("ok: API ingest (400 on blank evidence), dedupe, detail, write-back")
+
         print("PASS")
         return 0
     finally:
