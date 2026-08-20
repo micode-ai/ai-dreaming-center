@@ -18,7 +18,7 @@
 - The weekly cron may create `proposed` rows only. It may never write and never publish.
 - A proposal arriving with blank `evidence` is rejected with HTTP 400.
 - With `article_verify_cmd` empty, publish stays available but card and commit message both say **unverified**. Never present an unrun verification as passed.
-- The write session spawns with `--permission-mode bypassPermissions`. Do not use `--allowedTools` — it silently breaks writes into `.claude/`.
+- The write session must spawn with permissions bypassed. `ProcessManager.start_command` already does this for every command it launches, via the session-wide hard override `--dangerously-skip-permissions` (see `_BYPASS_PERMISSION_FLAGS` and the comment block above it, which explains why that flag is used rather than `--permission-mode bypassPermissions`). Do not add a second mechanism, and never use `--allowedTools` — it silently breaks writes into `.claude/`.
 - User-facing strings go through `{{ "key" | t(locale=locale) }}`. Every new RU key needs its EN mirror; `scripts/check_i18n.py` enforces this.
 - Files with Cyrillic content must be written with the Write/Edit tool. PowerShell `Set-Content` defaults to UTF-16 LE and breaks the JSON parser.
 - Templates carry no colour utilities and no static `style=` attributes; `scripts/check_css_tokens.py` enforces this.
