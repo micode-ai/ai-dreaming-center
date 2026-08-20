@@ -408,6 +408,61 @@ async def main() -> int:
                 return 1
         print("ok: write-article command shipped in the starter kit")
 
+        # ── publish: real git repo in a temp dir ───────────────────
+        import subprocess
+        from dreaming.services import article_publish
+
+        repo = tmp / "repo"
+        (repo / "content").mkdir(parents=True)
+        def git(*args, cwd=repo):
+            return subprocess.run(["git", *args], cwd=str(cwd),
+                                  capture_output=True, text=True)
+        git("init", "-q")
+        git("config", "user.email", "smoke@example.test")
+        git("config", "user.name", "Smoke")
+        (repo / "README.md").write_text("seed\n", encoding="utf-8")
+        git("add", "README.md")
+        git("commit", "-q", "-m", "seed")
+
+        article = repo / "content" / "piece.md"
+        article.write_text("# Piece\n", encoding="utf-8")
+        noise = repo / "unrelated.txt"
+        noise.write_text("do not commit me\n", encoding="utf-8")
+
+        sha = await article_publish.publish(
+            str(repo), ["content/piece.md"],
+            message="publish: piece (unverified)", push=False,
+        )
+        if not sha or len(sha) < 7:
+            fail(f"publish returned no sha: {sha!r}")
+            return 1
+        listed = git("show", "--name-only", "--pretty=format:", sha).stdout.split()
+        if listed != ["content/piece.md"]:
+            fail(f"commit contains {listed}, want only content/piece.md")
+            return 1
+        if not noise.exists() or "do not commit me" not in noise.read_text(encoding="utf-8"):
+            fail("publish touched the unrelated working-tree file")
+            return 1
+        status_after = git("status", "--porcelain").stdout
+        if "unrelated.txt" not in status_after:
+            fail("the unrelated file left the working tree — stash or add -A happened")
+            return 1
+        print("ok: publish commits only draft paths, leaves the rest alone")
+
+        # A target path that someone else has already STAGED must refuse
+        # rather than sweep their index entry into our commit.
+        article.write_text("# Piece edited by hand\n", encoding="utf-8")
+        git("add", "content/piece.md")
+        try:
+            await article_publish.publish(
+                str(repo), ["content/piece.md"], message="second", push=False,
+            )
+        except article_publish.PublishError:
+            print("ok: dirty article path refuses to publish")
+        else:
+            fail("dirty article path published anyway")
+            return 1
+
         print("PASS")
         return 0
     finally:

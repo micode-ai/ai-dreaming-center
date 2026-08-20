@@ -204,3 +204,35 @@ async def articles_cancel(request: Request, slug: str, proposal_id: int):
         error_message="cancelled from the UI while writing",
     )
     return RedirectResponse(f"/p/{project.slug}/articles", status_code=303)
+
+
+@router.post("/p/{slug}/articles/{proposal_id}/publish")
+async def articles_publish(request: Request, slug: str, proposal_id: int):
+    """The second human gate. Commits only the article's own files."""
+    from dreaming.services import article_publish
+    project = request.state.project
+    db = request.app.state.db
+    resolver = request.app.state.resolver_factory(request)
+    row = await db.get_article_proposal(proposal_id)
+    if row is None or row["project_id"] != project.id:
+        raise HTTPException(status_code=404, detail="proposal not found")
+    verify_cmd = await resolver.get(project, "article_verify_cmd", "")
+    publish_mode = await resolver.get(project, "article_publish_mode", "off")
+    allowed, reason = articles.can_publish(row, verify_cmd, publish_mode)
+    if not allowed:
+        raise HTTPException(status_code=400, detail=f"publish refused: {reason}")
+    label = articles.publish_label(bool(row["verify_ok"]), verify_cmd)
+    try:
+        commit = await article_publish.publish(
+            project.working_dir,
+            article_publish.split_paths(row["draft_ref"]),
+            message=article_publish.build_message(row, label),
+            push=(publish_mode == "commit+push"),
+        )
+    except article_publish.PublishError as e:
+        await db.set_article_proposal_status(
+            proposal_id, "drafted", error_message=str(e)[:2000],
+        )
+        raise HTTPException(status_code=409, detail=str(e))
+    await db.mark_article_published(proposal_id, commit_ref=commit)
+    return RedirectResponse(f"/p/{project.slug}/articles", status_code=303)
