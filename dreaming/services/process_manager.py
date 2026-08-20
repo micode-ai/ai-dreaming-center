@@ -175,6 +175,16 @@ class RunningSession:
     _watchdog_task: asyncio.Task | None = None
     key: str = ""  # composite key in pm.running dict
     log_path: str | None = None  # absolute path to per-session stdout log file
+    # Status from the stream-json terminal `result` event's `subtype` alone
+    # (the display line separately falls back to `stop_reason` when
+    # `subtype` is missing, but that fallback must not feed this field —
+    # see _parse_stream_json), e.g. "success" / "error_during_execution" /
+    # "error_max_turns". None until (unless) that event arrives, or if it
+    # arrives without a `subtype` — the CLI can exit 0 after emitting a
+    # non-success result, which _cleanup must not mistake for a clean exit,
+    # but _cleanup only downgrades on a recognised error family (subtype
+    # starting with "error"). See _parse_stream_json / _cleanup.
+    terminal_status: str | None = None
 
     async def send_user_message(self, text: str) -> bool:
         """Записать stream-json user-message в stdin живого процесса.
@@ -580,7 +590,7 @@ class ProcessManager:
         )
         return session_id
 
-    def _parse_stream_json(self, raw_line: str) -> list[str]:
+    def _parse_stream_json(self, session: RunningSession, raw_line: str) -> list[str]:
         """Parse a stream-json line and return human-readable lines for display."""
         try:
             event = json.loads(raw_line)
@@ -659,6 +669,17 @@ class ProcessManager:
             lines.append(
                 f"[done] status={status} duration={duration}ms cost=${cost:.4f}"
             )
+            # Remember it for _cleanup: the process can still exit 0 after
+            # emitting a non-"success" terminal result (see module notes).
+            # Stored from `subtype` ALONE — not the `stop_reason` fallback
+            # used for the display line above. That fallback is a display-
+            # path leftover: a `result` event that omits `subtype` (some
+            # CLI versions do, e.g. a plain `stop_reason: "end_turn"`) would
+            # otherwise get remembered as a non-"success" terminal status
+            # and fail every clean session that hits this shape. `subtype`
+            # is the field the CLI actually defines as the terminal status.
+            if subtype:
+                session.terminal_status = subtype
 
         return lines
 
@@ -725,7 +746,7 @@ class ProcessManager:
                 if not raw:
                     continue
 
-                for line in self._parse_stream_json(raw):
+                for line in self._parse_stream_json(session, raw):
                     _emit(line)
                     produced += 1
                     tail.append(line)
@@ -915,6 +936,33 @@ class ProcessManager:
         # Watchdog kills go through here too (exit code = negative signal
         # on POSIX, large positive on Windows); those count as failed.
         target_status = "success" if exit_code == 0 else "failed"
+        # The stream's own terminal status may only ever DOWNGRADE a clean
+        # exit to 'failed' — never upgrade a dirty exit back to 'success'.
+        # One-way on purpose: the claude CLI can exit 0 after emitting a
+        # non-"success" result (e.g. error_during_execution mid-write),
+        # which used to be recorded as a plain success, so an error subtype
+        # must still fail it. But in an interactive multi-turn session an
+        # earlier turn can report subtype=success before a later watchdog/
+        # hard-cap kill ends the process non-zero; letting a remembered
+        # success win there would resurrect exactly the bug this exists to
+        # fix, just pointed the other way. Do not turn this into a two-way
+        # override.
+        # Only downgrade on a *recognised error family* (subtype starting
+        # with "error", e.g. error_during_execution / error_max_turns) —
+        # not merely "anything other than success". terminal_status is
+        # already subtype-only (see _parse_stream_json), but an unfamiliar
+        # future token that isn't an error subtype (e.g. some new benign
+        # terminal state) must not be able to invent a failure for what the
+        # exit code already called a clean run.
+        if (
+            target_status == "success"
+            and session.terminal_status is not None
+            and session.terminal_status.startswith("error")
+        ):
+            target_status = "failed"
+            error_message = error_message or (
+                f"claude CLI ended with status={session.terminal_status}"
+            )
         # Command-style entries ('cmd:...') don't have agent_learning_sessions
         # rows of their own — the row's `agent_name` IS the composite key.
         # Update by id (which is the claude session_id passed to start_session).

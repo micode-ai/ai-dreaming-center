@@ -2,7 +2,8 @@
 
 Global jobs:
 - `reconcile_stale_sessions` (interval, every 5 minutes) — closes orphan
-  sessions whose process has vanished.
+  sessions whose process has vanished, and fails 'writing' article
+  proposals whose dispatched session has finished without a write-back.
 
 Per-project jobs:
 - `nightly_learning_{slug}` (cron) — picks top-N agents and runs self-study.
@@ -46,6 +47,8 @@ async def _reconcile_job(app_state):
     """Close orphans across all process-backed tables:
       - agent_learning_sessions (self-study + cmd:* sessions)
       - orchestrator_runs (Roman runs whose claude process is gone)
+      - article_proposals stuck in 'writing' whose session has finished
+        without a write-back
     """
     pm = app_state.process_manager
     pairs: list[tuple[int, str]] = []
@@ -71,6 +74,19 @@ async def _reconcile_job(app_state):
         ) or 0
     except Exception as e:
         log.warning("reconcile_job orchestration error: %s", e)
+    try:
+        # Same cmd_session_ids set as cancel_stale_orchestration_runs above —
+        # a 'writing' proposal's session_id is a cmd: write-article session,
+        # and agent_learning_sessions.status for it can already have been
+        # corrupted by the sweep inside pm.reconcile_stale_sessions (it
+        # excludes all cmd: pairs from active_pairs by construction). The
+        # live process table, not that column, is what says whether the
+        # writer is still working.
+        closed += await app_state.db.reconcile_stranded_article_proposals(
+            cmd_session_ids,
+        ) or 0
+    except Exception as e:
+        log.warning("reconcile_job article error: %s", e)
     return closed
 
 

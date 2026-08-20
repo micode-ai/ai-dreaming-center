@@ -7,8 +7,11 @@
 """
 from __future__ import annotations
 import asyncio
+import json
+import logging
 import sys
 import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -240,6 +243,385 @@ async def main() -> int:
             fail(f"count_article_proposals for empty list: got {count_empty}, want 0")
             return 1
         print("ok: count_article_proposals counts correctly per project")
+
+        # ── session-crash-visibility fix 1: process_manager._cleanup must
+        # prefer the stream-json result's terminal status over the exit
+        # code -- a claude CLI process that hits error_during_execution
+        # mid-write still exits 0, and used to be recorded as 'success'. ──
+        from dreaming.services.process_manager import ProcessManager, RunningSession
+        import types as _types
+
+        pm = ProcessManager(
+            settings=_types.SimpleNamespace(), db=db, projects=ProjectsService(db),
+        )
+
+        # (a) a result event reporting an error, with exit code 0 (the
+        # exact shape from the real incident: "[done] status=
+        # error_during_execution ..." followed by "[exit] code=0") must be
+        # recorded 'failed', with the subtype surfacing in error_message.
+        sid_crash = await db.create_session(pid, "smoke-crash-agent", "sonnet")
+        session_crash = RunningSession(
+            session_id=sid_crash, agent_name="smoke-crash-agent",
+            project_id=pid, project_slug="demo", process=None,
+        )
+        pm._parse_stream_json(session_crash, json.dumps({
+            "type": "result", "subtype": "error_during_execution",
+            "duration_ms": 370909, "total_cost_usd": 2.8876,
+        }))
+        if session_crash.terminal_status != "error_during_execution":
+            fail("_parse_stream_json did not store the result subtype on "
+                 f"the session: {session_crash.terminal_status!r}")
+            return 1
+        await pm._cleanup(session_crash, exit_code=0, error_message=None)
+        row = await db.fetch_one(
+            "SELECT status, error_message FROM agent_learning_sessions WHERE id=?",
+            (sid_crash,),
+        )
+        if row["status"] != "failed":
+            fail(f"crashed-but-exit-0 session recorded status={row['status']!r}, "
+                 "want 'failed'")
+            return 1
+        if "error_during_execution" not in (row["error_message"] or ""):
+            fail("crashed session's error_message doesn't name the subtype: "
+                 f"{row['error_message']!r}")
+            return 1
+        print("ok: fix 1 -- exit code 0 with an error result subtype is "
+              "recorded 'failed', with the subtype in error_message")
+
+        # (b) no result event at all (stream never produced one -- killed,
+        # crashed before finishing, watchdog) must still fall back to the
+        # exit code exactly as before this fix.
+        sid_noresult = await db.create_session(pid, "smoke-noresult-agent", "sonnet")
+        session_noresult = RunningSession(
+            session_id=sid_noresult, agent_name="smoke-noresult-agent",
+            project_id=pid, project_slug="demo", process=None,
+        )
+        await pm._cleanup(session_noresult, exit_code=0, error_message=None)
+        row = await db.fetch_one(
+            "SELECT status FROM agent_learning_sessions WHERE id=?",
+            (sid_noresult,),
+        )
+        if row["status"] != "success":
+            fail("no-result-event session with exit code 0 recorded "
+                 f"status={row['status']!r}, want 'success' (exit-code fallback)")
+            return 1
+
+        sid_noresult_fail = await db.create_session(pid, "smoke-noresult-fail-agent", "sonnet")
+        session_noresult_fail = RunningSession(
+            session_id=sid_noresult_fail, agent_name="smoke-noresult-fail-agent",
+            project_id=pid, project_slug="demo", process=None,
+        )
+        await pm._cleanup(
+            session_noresult_fail, exit_code=1,
+            error_message="claude exited code=1: some line",
+        )
+        row = await db.fetch_one(
+            "SELECT status, error_message FROM agent_learning_sessions WHERE id=?",
+            (sid_noresult_fail,),
+        )
+        if row["status"] != "failed" or row["error_message"] != "claude exited code=1: some line":
+            fail("no-result-event session with exit code 1: "
+                 f"status={row['status']!r}, error_message={row['error_message']!r}")
+            return 1
+        print("ok: fix 1 -- no result event still follows the exit code "
+              "(0 -> success, non-zero -> failed) unchanged")
+
+        # (c) a stored terminal status of 'success' must NOT overrule a
+        # non-zero exit code. This is the interactive multi-turn case: an
+        # earlier turn reports subtype=success, then the process is killed
+        # (watchdog silence timeout / hard cap) and exits non-zero. The
+        # downgrade is one-way only -- a remembered success can never turn
+        # a dirty exit back into 'success'.
+        sid_stale_success = await db.create_session(pid, "smoke-stale-success-agent", "sonnet")
+        session_stale_success = RunningSession(
+            session_id=sid_stale_success, agent_name="smoke-stale-success-agent",
+            project_id=pid, project_slug="demo", process=None,
+        )
+        pm._parse_stream_json(session_stale_success, json.dumps({
+            "type": "result", "subtype": "success",
+            "duration_ms": 1000, "total_cost_usd": 0.01,
+        }))
+        await pm._cleanup(session_stale_success, exit_code=1, error_message=None)
+        row = await db.fetch_one(
+            "SELECT status FROM agent_learning_sessions WHERE id=?",
+            (sid_stale_success,),
+        )
+        if row["status"] != "failed":
+            fail("a stored terminal status of 'success' overruled a "
+                 f"non-zero exit code: recorded status={row['status']!r}, "
+                 "want 'failed'")
+            return 1
+        print("ok: fix 1 -- a stored 'success' status never overrules a "
+              "non-zero exit code (one-way downgrade only)")
+
+        # (d) [review fix 3] a `result` event that omits `subtype` and only
+        # carries `stop_reason` (the display-path fallback) must NOT be
+        # stored as the session's terminal status -- storing that fallback
+        # let a clean `stop_reason: "end_turn"` read as a non-"success"
+        # terminal status and fail every ordinary session. The [done]
+        # display line's own text is unaffected -- it still shows the
+        # stop_reason fallback for display only.
+        sid_stopreason = await db.create_session(pid, "smoke-stopreason-agent", "sonnet")
+        session_stopreason = RunningSession(
+            session_id=sid_stopreason, agent_name="smoke-stopreason-agent",
+            project_id=pid, project_slug="demo", process=None,
+        )
+        display_lines = pm._parse_stream_json(session_stopreason, json.dumps({
+            "type": "result", "stop_reason": "end_turn",
+            "duration_ms": 500, "total_cost_usd": 0.01,
+        }))
+        if session_stopreason.terminal_status is not None:
+            fail("a result event without a subtype was stored as the "
+                 f"session's terminal status: {session_stopreason.terminal_status!r}")
+            return 1
+        if not any("status=end_turn" in line for line in display_lines):
+            fail("the [done] display line lost its stop_reason fallback text: "
+                 f"{display_lines!r}")
+            return 1
+        await pm._cleanup(session_stopreason, exit_code=0, error_message=None)
+        row = await db.fetch_one(
+            "SELECT status FROM agent_learning_sessions WHERE id=?",
+            (sid_stopreason,),
+        )
+        if row["status"] != "success":
+            fail("a clean exit with a subtype-less result event (stop_reason "
+                 f"fallback only) was recorded status={row['status']!r}, want "
+                 "'success'")
+            return 1
+        print("ok: fix 3 -- a result event's stop_reason fallback is display-"
+              "only and never corrupts the stored terminal status")
+
+        # ── session-crash-visibility fix 2: reconcile_stranded_article_
+        # proposals fails a 'writing' row whose dispatched session has
+        # finished without a write-back. ────────────────────────────────
+        # `reconcile_stranded_article_proposals` scans ALL 'writing' rows
+        # globally (no project filter) and now decides liveness purely from
+        # `active_session_ids` (round 2 -- see below), so every call in this
+        # script must pass the full accumulated set of session ids meant to
+        # still read as "alive" at that point, or an earlier block's
+        # deliberately-still-running row would be collaterally failed by a
+        # later call that forgot to re-assert it. This mirrors production:
+        # the scheduler always passes the *whole* current live set, not one
+        # scoped to a single proposal.
+        still_alive_session_ids: set[str] = set()
+
+        sid_running = await db.create_session(pid, "smoke-writer-running", "sonnet")
+        still_alive_session_ids.add(sid_running)
+        stranded_running = await db.add_article_proposal(
+            pid, source="smoke", source_ref="stranded-running",
+            evidence="test", title="Stranded but session still running",
+            angle="…", slug_hint="stranded-running",
+        )
+        await db.start_article_attempt(stranded_running, session_id=sid_running)
+
+        sid_done = await db.create_session(pid, "smoke-writer-done", "sonnet")
+        await db.execute(
+            "UPDATE agent_learning_sessions SET status='failed', finished_at=? "
+            "WHERE id=?",
+            (datetime.now(timezone.utc).isoformat(), sid_done),
+        )
+        stranded_done = await db.add_article_proposal(
+            pid, source="smoke", source_ref="stranded-done",
+            evidence="test", title="Stranded, session finished",
+            angle="…", slug_hint="stranded-done",
+        )
+        await db.start_article_attempt(stranded_done, session_id=sid_done)
+
+        stranded_empty = await db.add_article_proposal(
+            pid, source="smoke", source_ref="stranded-empty",
+            evidence="test", title="Stranded, no session_id at all",
+            angle="…", slug_hint="stranded-empty",
+        )
+        await db.set_article_proposal_status(stranded_empty, "writing")
+
+        n_failed = await db.reconcile_stranded_article_proposals(
+            active_session_ids=still_alive_session_ids,
+        )
+        if n_failed != 1:
+            fail(f"reconcile_stranded_article_proposals: failed {n_failed} rows, want 1")
+            return 1
+
+        row = await db.get_article_proposal(stranded_running)
+        if row["status"] != "writing":
+            fail("reconcile touched a proposal whose session is still "
+                 f"'running': status={row['status']!r}")
+            return 1
+
+        row = await db.get_article_proposal(stranded_done)
+        if row["status"] != "failed":
+            fail("reconcile left a stranded proposal (finished session) "
+                 f"as {row['status']!r}, want 'failed'")
+            return 1
+        if sid_done not in row["error_message"] or "failed" not in row["error_message"]:
+            fail("reconcile's error_message doesn't name the session/status: "
+                 f"{row['error_message']!r}")
+            return 1
+
+        row = await db.get_article_proposal(stranded_empty)
+        if row["status"] != "writing":
+            fail("reconcile touched a proposal with an empty session_id: "
+                 f"status={row['status']!r}")
+            return 1
+        print("ok: fix 2 -- reconcile_stranded_article_proposals fails a "
+              "'writing' row whose session has finished, leaves a still-"
+              "running session and an empty session_id untouched")
+
+        # ── review fix 1: reconcile_stranded_article_proposals must not
+        # fail a 'writing' proposal while its writer's process is still
+        # running in ProcessManager, even though its session row already
+        # reads something else -- the DB status column is not consulted for
+        # liveness at all (round 2 hardened this further -- see the LEFT
+        # JOIN / no-active-set block below). ──────────────────────────────
+        sid_live_but_cancelled = await db.create_session(
+            pid, "cmd:demo:write-article", "sonnet",
+        )
+        still_alive_session_ids.add(sid_live_but_cancelled)
+        await db.execute(
+            "UPDATE agent_learning_sessions SET status='cancelled', finished_at=? "
+            "WHERE id=?",
+            (datetime.now(timezone.utc).isoformat(), sid_live_but_cancelled),
+        )
+        stranded_live = await db.add_article_proposal(
+            pid, source="smoke", source_ref="stranded-live",
+            evidence="test", title="Session row says cancelled but is still running",
+            angle="…", slug_hint="stranded-live",
+        )
+        await db.start_article_attempt(stranded_live, session_id=sid_live_but_cancelled)
+
+        n_failed2 = await db.reconcile_stranded_article_proposals(
+            active_session_ids=still_alive_session_ids,
+        )
+        if n_failed2 != 0:
+            fail("reconcile failed a proposal whose session_id is in the "
+                 f"active set: {n_failed2} row(s) failed, want 0")
+            return 1
+        row = await db.get_article_proposal(stranded_live)
+        if row["status"] != "writing":
+            fail("reconcile touched a 'writing' proposal whose session is "
+                 f"still in the active process set: status={row['status']!r}")
+            return 1
+        print("ok: fix 1 -- a 'writing' proposal whose session is still in "
+              "the active process set is left alone even though its "
+              "session row reads 'cancelled'")
+
+        # ── review fix 1 (db half): reconcile_stale_sessions must never
+        # touch a cmd: row -- it isn't describable by the (project_id,
+        # agent_name) active_pairs contract, and _cleanup owns its
+        # lifecycle directly. This is the corruption that makes the above
+        # scenario routine on master: any unrelated session exiting sweeps
+        # every live cmd: row older than 2 minutes to 'cancelled'. ───────
+        sid_cmd_row = await db.create_session(pid, "cmd:demo:roman-x", "sonnet")
+        old_iso = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
+        await db.execute(
+            "UPDATE agent_learning_sessions SET started_at=? WHERE id=?",
+            (old_iso, sid_cmd_row),
+        )
+        await db.reconcile_stale_sessions(active_pairs=[])
+        row = await db.fetch_one(
+            "SELECT status FROM agent_learning_sessions WHERE id=?",
+            (sid_cmd_row,),
+        )
+        if row["status"] != "running":
+            fail("reconcile_stale_sessions touched a cmd: row: "
+                 f"status={row['status']!r}, want unchanged 'running'")
+            return 1
+        print("ok: fix 1 -- reconcile_stale_sessions never touches a cmd: "
+              "row (its agent_name IS the composite key, not a "
+              "(project_id, agent_name) pair)")
+
+        # ── review fix 2: a proposal whose session_id has no matching
+        # agent_learning_sessions row at all (create_session failed and
+        # start_command fell back to a generated uuid, or the row was
+        # deleted) must be logged, not silently skipped -- and not
+        # auto-failed either, since there's no reliable way to tell how
+        # long the row has looked like this. ─────────────────────────────
+        stranded_no_row = await db.add_article_proposal(
+            pid, source="smoke", source_ref="stranded-no-row",
+            evidence="test", title="session_id with no session row at all",
+            angle="…", slug_hint="stranded-no-row",
+        )
+        await db.start_article_attempt(
+            stranded_no_row, session_id="ghost-session-id-not-in-db",
+        )
+
+        class _CaptureHandler(logging.Handler):
+            def __init__(self):
+                super().__init__()
+                self.messages: list[str] = []
+
+            def emit(self, record):
+                self.messages.append(record.getMessage())
+
+        cap = _CaptureHandler()
+        db_logger = logging.getLogger("dreaming.services.db")
+        db_logger.addHandler(cap)
+        try:
+            await db.reconcile_stranded_article_proposals(
+                active_session_ids=still_alive_session_ids,
+            )
+        finally:
+            db_logger.removeHandler(cap)
+        row = await db.get_article_proposal(stranded_no_row)
+        if row["status"] != "writing":
+            fail("reconcile auto-failed a proposal with no matching session "
+                 f"row at all: status={row['status']!r}, want it left as "
+                 "'writing' and merely logged")
+            return 1
+        if not any(str(stranded_no_row) in m for m in cap.messages):
+            fail("reconcile did not log a warning naming the id of the "
+                 f"proposal with no session row: {cap.messages!r}")
+            return 1
+        print("ok: fix 2 -- a 'writing' proposal whose session_id has no "
+              "matching session row at all is logged (with its id) and "
+              "left alone, not silently skipped and not auto-failed")
+
+        # ── round-2 review finding: after an ungraceful app death a cmd:
+        # session row can be stuck at status='running' forever -- nothing
+        # ever revisits it (reconcile_stale_sessions now correctly excludes
+        # cmd: rows, and there's no startup sweep). The status column must
+        # never be trusted for liveness: a session id absent from the live
+        # active set is failed regardless of a 'running' row. (The mirror
+        # assertion -- a session id PRESENT in the active set is left alone
+        # even though its row says 'cancelled' -- already exists above as
+        # "fix 1 -- a 'writing' proposal whose session is still in the
+        # active process set..."; not duplicated here.) ──────────────────
+        sid_stale_running = await db.create_session(
+            pid, "cmd:demo:write-article-2", "sonnet",
+        )
+        # Deliberately NOT added to still_alive_session_ids and left at its
+        # default status='running' -- this is the stale-row-after-a-hard-
+        # kill shape: the row still says 'running' but no process backs it.
+        stranded_stale_running = await db.add_article_proposal(
+            pid, source="smoke", source_ref="stranded-stale-running",
+            evidence="test", title="Session row says running but the process is long gone",
+            angle="…", slug_hint="stranded-stale-running",
+        )
+        await db.start_article_attempt(
+            stranded_stale_running, session_id=sid_stale_running,
+        )
+
+        n_failed4 = await db.reconcile_stranded_article_proposals(
+            active_session_ids=still_alive_session_ids,
+        )
+        if n_failed4 != 1:
+            fail(f"reconcile_stranded_article_proposals: failed {n_failed4} "
+                 "row(s) for the stale-'running'-row scenario, want 1")
+            return 1
+        row = await db.get_article_proposal(stranded_stale_running)
+        if row["status"] != "failed":
+            fail("a proposal whose session row still says 'running' but "
+                 f"whose id is absent from active_session_ids was left as "
+                 f"{row['status']!r}, want 'failed' -- the status column "
+                 "must never be trusted for liveness")
+            return 1
+        if sid_stale_running not in row["error_message"]:
+            fail("reconcile's error_message for the stale-'running' row "
+                 f"doesn't name the session id: {row['error_message']!r}")
+            return 1
+        print("ok: fix 1 (round 2) -- a proposal whose session row still "
+              "says 'running' is failed once its session id is absent from "
+              "the live active set; the status column alone is never "
+              "enough to call it alive")
 
         # ── API: ingest / dedupe / write-back ──────────────────────
         from starlette.testclient import TestClient
