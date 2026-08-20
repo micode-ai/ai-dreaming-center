@@ -225,6 +225,44 @@ async def articles_restore(request: Request, slug: str, proposal_id: int):
     return RedirectResponse(f"/p/{project.slug}/articles", status_code=303)
 
 
+@router.post("/p/{slug}/articles/{proposal_id}/venue")
+async def articles_set_venue(
+    request: Request, slug: str, proposal_id: int, venue: str = Form(""),
+):
+    """Change a proposal's venue before it is approved. An empty `venue`
+    clears the override (falls back to the subject's `article_venue_project`
+    setting, then the subject itself) -- that is not an error.
+
+    Mirrors articles_reject's guard shape: 404 when the row is missing or
+    belongs to another project.
+    """
+    project = request.state.project
+    db = request.app.state.db
+    row = await db.get_article_proposal(proposal_id)
+    if row is None or row["project_id"] != project.id:
+        raise HTTPException(status_code=404, detail="proposal not found")
+    venue_id = None
+    if venue.strip():
+        enabled = await request.app.state.projects.list_all(only_enabled=True)
+        match = next((p for p in enabled if p.slug == venue.strip()), None)
+        if match is None:
+            raise HTTPException(status_code=404, detail=f"project {venue} not found")
+        venue_id = match.id
+    # set_article_proposal_venue's WHERE status='proposed' means its
+    # rowcount==0 is ambiguous between "no such row" and "wrong status" --
+    # but the 404 check above already established this row exists, so by the
+    # time we get here a False can only mean the row is no longer 'proposed'.
+    if not await db.set_article_proposal_venue(proposal_id, venue_id):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"proposal is '{row['status']}' — its venue was decided at "
+                "dispatch and is no longer the user's to change"
+            ),
+        )
+    return RedirectResponse(f"/p/{project.slug}/articles", status_code=303)
+
+
 async def dispatch_article_scan(request: Request, project) -> None:
     """Dispatch /article-ideas-scan into `project`. Proposes only — this
     session never writes an article and never publishes.

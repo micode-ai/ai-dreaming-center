@@ -608,5 +608,6 @@
   "article.add.topic": "Тема",
   "article.add.prompt": "Вводный промпт — что важно сказать, на что опереться",
   "article.add.submit": "Предложить",
-  "article.venue.default": "по умолчанию для проекта"
+  "article.venue.default": "по умолчанию для проекта",
+  "article.venue.set": "Площадка"
 }

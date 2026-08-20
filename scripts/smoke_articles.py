@@ -358,6 +358,79 @@ async def main() -> int:
                     "ai-dreaming-center",
                 )
 
+                # ── venue route: settable while proposed, refused afterwards ──
+                # Task 1's set_article_proposal_venue already proves the DB
+                # setter's own status guard (see the round-trip check further
+                # below); this proves the route wraps it correctly: 404 for a
+                # missing row, 303 while 'proposed' (both setting and clearing
+                # the override), and 409 once the row has moved past
+                # 'proposed' -- the venue is no longer the user's to change.
+                vroute_id = await real_db.add_article_proposal(
+                    ai_dc_project.id, source="manual", source_ref="",
+                    evidence="smoke: venue route", title="Smoke venue route",
+                    angle="…", slug_hint="smoke-venue-route",
+                )
+                try:
+                    missing = client.post(
+                        "/p/ai-dreaming-center/articles/999999999/venue",
+                        data={"venue": ""}, follow_redirects=False,
+                    )
+                    if missing.status_code != 404:
+                        fail(f"venue route on a missing row: "
+                             f"{missing.status_code}, want 404")
+                        return 1
+
+                    set_resp = client.post(
+                        f"/p/ai-dreaming-center/articles/{vroute_id}/venue",
+                        data={"venue": ai_dc_project.slug},
+                        follow_redirects=False,
+                    )
+                    if set_resp.status_code != 303:
+                        fail(f"venue route on a proposed row: "
+                             f"{set_resp.status_code}, want 303")
+                        return 1
+                    vrow = await real_db.get_article_proposal(vroute_id)
+                    if vrow["target_project_id"] != ai_dc_project.id:
+                        fail("venue route did not persist the override: "
+                             f"{vrow['target_project_id']!r}")
+                        return 1
+
+                    clear_resp = client.post(
+                        f"/p/ai-dreaming-center/articles/{vroute_id}/venue",
+                        data={"venue": ""}, follow_redirects=False,
+                    )
+                    if clear_resp.status_code != 303:
+                        fail(f"venue route clearing the override: "
+                             f"{clear_resp.status_code}, want 303")
+                        return 1
+                    vrow = await real_db.get_article_proposal(vroute_id)
+                    if vrow["target_project_id"] is not None:
+                        fail("venue route did not clear a previously set "
+                             f"override: {vrow['target_project_id']!r}")
+                        return 1
+
+                    await real_db.set_article_proposal_status(vroute_id, "writing")
+                    dispatched_resp = client.post(
+                        f"/p/ai-dreaming-center/articles/{vroute_id}/venue",
+                        data={"venue": ai_dc_project.slug},
+                        follow_redirects=False,
+                    )
+                    if dispatched_resp.status_code != 409:
+                        fail(f"venue route on a 'writing' row: "
+                             f"{dispatched_resp.status_code}, want 409")
+                        return 1
+                    vrow = await real_db.get_article_proposal(vroute_id)
+                    if vrow["target_project_id"] is not None:
+                        fail("venue route's refused 409 still changed the "
+                             f"row: {vrow['target_project_id']!r}")
+                        return 1
+                finally:
+                    await real_db.execute(
+                        "DELETE FROM article_proposals WHERE id=?", (vroute_id,),
+                    )
+                print("ok: venue route -- 404 missing row, 303 set/clear "
+                      "while proposed, 409 once dispatched")
+
                 # C1, route level: a stale Approve/Retry POST against an
                 # already-'published' row must be refused (409) and must not
                 # disturb the row -- the same regression pinned at the DB

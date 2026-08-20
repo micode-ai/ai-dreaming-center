@@ -52,6 +52,15 @@
       <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/reject" class="inline">
         <button class="btn btn-sm">{{ "article.btn.reject" | t(locale=locale) }}</button>
       </form>
+      <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/venue"
+            class="inline flex items-center gap-1">
+        <select name="venue" class="text-xs rounded px-1 py-1 bg-elevated">
+          <option value="">{{ "article.venue.default" | t(locale=locale) }}</option>
+          {% for p in projects %}<option value="{{ p.slug }}"
+            {% if a.venue_slug == p.slug %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
+        </select>
+        <button class="btn btn-sm">{{ "article.venue.set" | t(locale=locale) }}</button>
+      </form>
     {% elif a.status == 'rejected' %}
       <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/restore" class="inline">
         <button class="btn btn-sm">{{ "article.btn.restore" | t(locale=locale) }}</button>

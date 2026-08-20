@@ -608,5 +608,6 @@
   "article.add.topic": "Topic",
   "article.add.prompt": "Intro prompt — what matters, what to build on",
   "article.add.submit": "Propose",
-  "article.venue.default": "the project's default"
+  "article.venue.default": "the project's default",
+  "article.venue.set": "Set venue"
 }
