@@ -5,7 +5,6 @@
 """
 from __future__ import annotations
 import json
-import os
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
@@ -252,13 +251,13 @@ async def articles_approve(request: Request, slug: str, proposal_id: int):
     # DC_ARTICLE_BLOG_DIR must be relative to the session's own cwd (`root`),
     # not to project.working_dir — once the session runs inside a nested
     # repo, "micode-landing-page/blog" from the project's perspective is
-    # just "blog" from the session's. os.path.relpath is a lexical
-    # computation, not a filesystem one, so it works even when blog_dir does
-    # not exist yet (resolve_article_root already fell back to
-    # project.working_dir in that case, making this a no-op).
-    blog_dir_for_session = os.path.relpath(
-        os.path.join(project.working_dir, blog_dir), root,
-    ).replace("\\", "/")
+    # just "blog" from the session's. session_blog_dir only re-derives that
+    # when root actually moved; every case where resolve_article_root fell
+    # back to project.working_dir unchanged (unset, escaping, non-existent,
+    # non-git, or ancestor-escaping blog_dir) leaves blog_dir untouched too.
+    blog_dir_for_session = articles.session_blog_dir(
+        project.working_dir, blog_dir, root,
+    )
     try:
         session_id = await pm.start_command(
             project,

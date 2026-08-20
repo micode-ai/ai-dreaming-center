@@ -91,7 +91,16 @@ async def resolve_article_root(working_dir: str | Path, blog_dir: str) -> str:
         already refuses an unset article_blog_dir, and that is the only
         refusal this feature makes; a configured-but-not-yet-created blog
         dir just falls back quietly here;
-      * the blog directory is not inside a git repository at all.
+      * the blog directory is not inside a git repository at all;
+      * git's toplevel for the blog directory turns out to be an ANCESTOR
+        of `working_dir` rather than `working_dir` itself or a descendant
+        of it. This is an ordinary layout, not a pathological one: a
+        project can be registered on a subdirectory of a larger checkout
+        (`working_dir` itself holds no `.git`), in which case
+        `git rev-parse --show-toplevel` from anywhere under it returns
+        that outer checkout's root — a real git repository, but one that
+        is not this project's own. Following it would run the session,
+        and commit the publish, into a repository above the project.
     """
     wd = Path(working_dir)
     blog = (blog_dir or "").strip()
@@ -113,14 +122,58 @@ async def resolve_article_root(working_dir: str | Path, blog_dir: str) -> str:
     # git prints forward slashes even on Windows, while the stored
     # working_dir uses backslashes — comparing the raw strings would make
     # the same-repo case look "different" and misreport it as nested.
-    # Resolving both to Path first is what makes the comparison meaningful;
-    # on a match, return `working_dir` verbatim (not the resolved form) so
-    # the two projects whose blog already lives in their own repo see
-    # byte-for-byte the same value they always have.
+    # Resolving both to Path first is what makes every comparison below
+    # meaningful; on an exact match, return `working_dir` verbatim (not the
+    # resolved form) so the two projects whose blog already lives in their
+    # own repo see byte-for-byte the same value they always have.
     top = Path(out.strip()).resolve()
-    if top == wd.resolve():
+    wd_resolved = wd.resolve()
+    if top == wd_resolved:
+        return str(wd)
+    try:
+        # Succeeds only when `top` is `wd_resolved` or lies inside it (a
+        # nested repo, deeper in the tree) — the containment guarantee this
+        # function promises. Raises ValueError when `top` is instead an
+        # ancestor of `wd_resolved` (working_dir sits inside a larger
+        # checkout that isn't its own repo) or otherwise unrelated; either
+        # way that is outside the project, so fall back rather than follow it.
+        top.relative_to(wd_resolved)
+    except ValueError:
         return str(wd)
     return str(top)
+
+
+def session_blog_dir(working_dir: str | Path, blog_dir: str, root: str | Path) -> str:
+    """`blog_dir` as a session running with cwd `root` should see it in
+    DC_ARTICLE_BLOG_DIR.
+
+    Only re-derived when `root` actually moved away from `working_dir` (the
+    nested-repo case) — checked by comparing *resolved* paths, since a raw
+    string compare would call the two working projects' own
+    already-matching `working_dir`/`root` "different" over a mere
+    backslash/forward-slash mismatch. When it did not move — including
+    every fallback `resolve_article_root` takes: an unset, `..`-laden,
+    absolute, non-existent, non-git, or ancestor-escaping `blog_dir` —
+    `blog_dir` is returned exactly as configured, untouched.
+
+    That untouched path matters for correctness, not just tidiness: a
+    cross-drive absolute `blog_dir` makes `Path.relative_to` raise
+    `ValueError` (no relative path exists between different drives), and a
+    `..`-laden `blog_dir` would otherwise get silently re-derived into a
+    value that `resolve_article_root` already decided was unsafe to follow
+    as a real path at all — in both cases `resolve_article_root` already
+    fell `root` back to `working_dir`, so recomputing anything here is not
+    just risky, it is pointless: there is no move to express.
+    """
+    wd_resolved = Path(working_dir).resolve()
+    root_resolved = Path(root).resolve()
+    if root_resolved == wd_resolved:
+        return blog_dir
+    try:
+        rel = (Path(working_dir) / blog_dir).resolve().relative_to(root_resolved)
+    except (ValueError, OSError):
+        return blog_dir
+    return str(rel).replace("\\", "/")
 
 
 def publish_label(verify_ok: bool, verify_cmd: str) -> str:

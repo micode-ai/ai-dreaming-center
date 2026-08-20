@@ -487,6 +487,78 @@ async def main() -> int:
         print("ok: resolve_article_root falls back to working_dir when it "
               "is not inside a git repository")
 
+        # Review finding 2: the containment guarantee is asymmetric if only
+        # the lexical '..'/absolute checks exist. A project can be
+        # registered on a subdirectory of a larger checkout -- working_dir
+        # itself holds no .git -- so `git rev-parse --show-toplevel` from
+        # under it returns an ANCESTOR of working_dir, not working_dir or a
+        # descendant of it. Reproduced for real: before the fix this
+        # returned the outer repo's root, a directory strictly above the
+        # project. Must fall back to working_dir instead of following it.
+        ancestor_outer = tmp / "ancestor_outer"
+        _git_init(ancestor_outer)
+        ancestor_project = ancestor_outer / "some" / "project"
+        (ancestor_project / "content" / "blog").mkdir(parents=True)
+        got_root = await articles.resolve_article_root(
+            str(ancestor_project), "content/blog",
+        )
+        if got_root != str(ancestor_project):
+            fail(f"resolve_article_root (ancestor escape): got {got_root!r}, "
+                 f"want unchanged working_dir {str(ancestor_project)!r} -- "
+                 "the derived root escaped the project into a repository "
+                 "above it")
+            return 1
+        print("ok: resolve_article_root refuses an ancestor repo, staying "
+              "inside the project's own working_dir")
+
+        # ── session_blog_dir: only re-derive when the root actually moved ──
+        # Review finding 1: the DC_ARTICLE_BLOG_DIR reduction used to
+        # recompute unconditionally from the raw blog_dir, which broke on
+        # exactly the inputs resolve_article_root is built to tolerate --
+        # a cross-drive absolute blog_dir raised ValueError out of the path
+        # math (an unhandled 500 from the approve route, which only catches
+        # RuntimeError), and a '..'-laden blog_dir got silently handed to
+        # the write session anyway even though resolve_article_root had
+        # already decided it was unsafe to follow. Pin the reduction
+        # function itself, not just resolve_article_root's fallback --
+        # that gap is exactly what let this regression through the first
+        # round of smoke coverage.
+        sbd_wd = str(rar_single)  # a real git repo from the block above
+        cross_drive = "E:\\evil\\path" if sbd_wd[:1].upper() != "E" else "D:\\evil\\path"
+        for bad_blog, why in [
+            (cross_drive, "cross-drive absolute blog_dir"),
+            ("../escape", "'..'-laden blog_dir"),
+        ]:
+            fallback_root = await articles.resolve_article_root(sbd_wd, bad_blog)
+            if fallback_root != sbd_wd:
+                fail(f"session_blog_dir setup ({why}): resolve_article_root "
+                     f"did not fall back, got {fallback_root!r}")
+                return 1
+            got_session_dir = articles.session_blog_dir(sbd_wd, bad_blog, fallback_root)
+            if got_session_dir != bad_blog:
+                fail(f"session_blog_dir ({why}): got {got_session_dir!r}, "
+                     f"want the raw blog_dir {bad_blog!r} untouched")
+                return 1
+        print("ok: session_blog_dir leaves a cross-drive-absolute or "
+              "'..'-laden blog_dir untouched and raises nothing, when "
+              "resolve_article_root did not move the root")
+
+        # And the positive case: when the root DOES move (the nested-repo
+        # shape), session_blog_dir must actually reduce the path, not just
+        # pass everything through untouched.
+        sbd_nested_root = await articles.resolve_article_root(
+            str(rar_parent), "nested/blog",
+        )
+        got_nested_session_dir = articles.session_blog_dir(
+            str(rar_parent), "nested/blog", sbd_nested_root,
+        )
+        if got_nested_session_dir != "blog":
+            fail(f"session_blog_dir (nested repo): got {got_nested_session_dir!r}, "
+                 "want 'blog' (blog_dir made relative to the moved root)")
+            return 1
+        print("ok: session_blog_dir reduces blog_dir relative to the root "
+              "when the root actually moved")
+
         # ── articles_page: the writer label must reflect the resolved root ──
         # Regression pin for the exact bug this follow-up fixed: the page's
         # "writer" label used to resolve from project.working_dir even
