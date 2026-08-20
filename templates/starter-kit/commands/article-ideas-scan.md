@@ -1,5 +1,5 @@
 ---
-description: Propose 3-7 article topics for this project and post them to the AI Dreaming Center.
+description: Propose 3–7 article topics for this project and post them to the AI Dreaming Center.
 ---
 
 # Article ideas scan
@@ -32,8 +32,12 @@ in one pass").
    written rationale is the best article material this repo has.
 3. Product pages / README features that no article covers yet.
 4. If `docs/seo/ai-visibility/REPORT.md` exists, read it. Its `page-not-cited`
-   and `dead-language` lines are already evidence-backed content gaps — turn
-   each into a proposal and quote the report line as the evidence.
+   and `dead-language` lines are already evidence-backed content gaps — some
+   of the best candidates this repo has. The 3–7 cap above still governs: if
+   the report lists more gaps than you have slots left, take the ones where
+   the gap is widest and most clearly this project's to close, quote the
+   report line as the evidence for each, and leave the rest for the next run
+   rather than dropping them without saying so.
 
 ## Skip what is already proposed
 
