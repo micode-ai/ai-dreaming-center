@@ -169,7 +169,8 @@ async def ai_radar_propose_article(
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
     resp = RedirectResponse(_back_to(request), status_code=303)
     key = "article.flash.duplicate" if new_id is None else "article.flash.proposed"
-    set_flash(resp, request.app.state.i18n.t(key, locale=locale), level="success")
+    level = "info" if new_id is None else "success"
+    set_flash(resp, request.app.state.i18n.t(key, locale=locale), level=level)
     return resp
 
 

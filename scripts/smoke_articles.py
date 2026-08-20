@@ -324,14 +324,13 @@ async def main() -> int:
             return 1
         print("ok: publish gate — verified / failed / unverified / off")
 
-        from dreaming.services import articles as _art
         cases = [
             ("What GLM-5.3 changes for our agents", "what-glm-5-3-changes-for-our"),
             ("Автозаполнение по NIP", "nip"),
             ("   ", ""),
         ]
         for raw, want_prefix in cases:
-            got = _art.slugify(raw)
+            got = articles.slugify(raw)
             if want_prefix and not got.startswith(want_prefix.split("-")[0]):
                 fail(f"slugify({raw!r}) = {got!r}, expected to start like {want_prefix!r}")
                 return 1
@@ -339,6 +338,25 @@ async def main() -> int:
                 fail(f"slugify({raw!r}) = {got!r}: spaces or uppercase left")
                 return 1
         print("ok: slugify produces hyphenated lowercase slugs")
+
+        # Truncation must never let two distinct titles collide: a shared
+        # 6-word prefix must not produce one slug_hint for two proposals.
+        title_a = "Improve error handling in the parser today"
+        title_b = "Improve error handling in the parser tomorrow"
+        slug_a = articles.slugify(title_a)
+        slug_b = articles.slugify(title_b)
+        if slug_a == slug_b:
+            fail(f"slugify collision: {title_a!r} and {title_b!r} both gave {slug_a!r}")
+            return 1
+        prefix = "improve-error-handling-in-the-parser-"
+        if not slug_a.startswith(prefix) or not slug_b.startswith(prefix):
+            fail(f"slugify truncation prefix wrong: {slug_a!r}, {slug_b!r}")
+            return 1
+        short = articles.slugify("Ship it")
+        if short != "ship-it":
+            fail(f"slugify short title must have no suffix: got {short!r}")
+            return 1
+        print("ok: slugify appends a hash suffix only when truncation would collide")
 
         print("PASS")
         return 0

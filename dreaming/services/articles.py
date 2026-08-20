@@ -6,6 +6,7 @@ decisions it does own: which agent to hand the brief to, and whether the
 publish button is allowed to claim the draft was verified.
 """
 from __future__ import annotations
+import hashlib
 import re
 from pathlib import Path
 
@@ -78,7 +79,20 @@ def slugify(text: str, *, max_words: int = _SLUG_WORDS) -> str:
     agent picks the real keyword slug, and this is only a seed for the proposal
     row. An all-Cyrillic title therefore yields a short or empty slug, and the
     caller must fall back to the id.
+
+    `slug_hint` is only a seed for the writer, not the published slug, so
+    uniqueness matters more than prettiness here. Truncating to `max_words`
+    would otherwise let two distinct titles that share their first
+    `max_words` words collide on the same slug — and since
+    (project_id, slug_hint) is unique, the second proposal would come back
+    as a silently swallowed "duplicate" it never was. So when truncation
+    actually drops words, a short hash of the full (untruncated) title is
+    appended to keep distinct titles apart; a title that fits within
+    `max_words` is left exactly as clean as before, with no suffix.
     """
     low = (text or "").strip().lower()
     words = [w for w in _SLUG_DROP.sub(" ", low).split() if w]
-    return "-".join(words[:max_words])
+    if len(words) > max_words:
+        digest = hashlib.sha1(low.encode("utf-8")).hexdigest()[:6]
+        return "-".join(words[:max_words] + [digest])
+    return "-".join(words)

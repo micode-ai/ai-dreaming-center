@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
+from dreaming.lib.flash import set_flash
 from dreaming.services import autoconfig
 from dreaming.services.frontmatter_io import set_frontmatter_field, find_md_file
 
@@ -205,13 +206,18 @@ async def ideas_propose_article(request: Request, slug: str, item_id: str):
     if target is None:
         raise HTTPException(status_code=404, detail=f"idea {item_id} not found")
     title = str(target.get("title") or item_id)
-    await request.app.state.db.add_article_proposal(
+    new_id = await request.app.state.db.add_article_proposal(
         project.id, source="center", source_ref=item_id,
         evidence=f"product idea “{title}” at {target.get('file_path') or ideas_dir}",
         title=title[:300], angle="",
         slug_hint=articles_svc.slugify(title) or f"idea-{item_id}",
     )
-    return RedirectResponse(f"/p/{project.slug}/articles", status_code=303)
+    locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
+    resp = RedirectResponse(f"/p/{project.slug}/articles", status_code=303)
+    key = "article.flash.duplicate" if new_id is None else "article.flash.proposed"
+    level = "info" if new_id is None else "success"
+    set_flash(resp, request.app.state.i18n.t(key, locale=locale), level=level)
+    return resp
 
 
 @router.post("/p/{slug}/ideas/{item_id}/status")
