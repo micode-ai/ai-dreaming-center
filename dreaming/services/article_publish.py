@@ -186,22 +186,35 @@ async def publish(
         # by design from a human's staged work -- and refuse forever. The reset
         # is safe here specifically because the pre-check above refused unless
         # these paths were clean, so nothing but our own `git add` is undone.
-        await _run(
+        # But the reset itself can fail too (lock file, permissions) -- check
+        # its own return code rather than asserting a rollback that may not
+        # have happened.
+        reset_rc, reset_out, reset_err = await _run(
             [git, "--literal-pathspecs", "reset", "-q", "--", *paths], str(wd),
         )
+        commit_detail = (err or out).strip() or str(rc)
+        if reset_rc == 0:
+            raise PublishError(
+                f"git commit failed (staged changes rolled back): {commit_detail}"
+            )
         raise PublishError(
-            f"git commit failed (staged changes rolled back): "
-            f"{(err or out).strip() or rc}"
+            f"git commit failed: {commit_detail}\n"
+            "the staging could not be rolled back -- these paths are still "
+            f"staged, run `git reset -- <path>` yourself for: "
+            f"{', '.join(paths)}\n"
+            f"reset error: {(reset_err or reset_out).strip() or str(reset_rc)}"
         )
 
     rc, sha, err = await _run([git, "rev-parse", "HEAD"], str(wd))
     if rc != 0:
-        await _run(
-            [git, "--literal-pathspecs", "reset", "-q", "--", *paths], str(wd),
-        )
+        # The commit already landed -- resetting the index now would be a
+        # content no-op, not a rollback, and claiming one would be false. The
+        # sha is unknown, so a retry will (correctly) refuse with "nothing
+        # staged: the draft paths match HEAD already"; say why up front.
         raise PublishError(
-            f"git rev-parse failed (staged changes rolled back): "
-            f"{err.strip() or rc}"
+            "git commit succeeded but its sha could not be read; nothing was "
+            "rolled back -- the commit is already in the project's history, "
+            f"find it with `git log`: {err.strip() or str(rc)}"
         )
     commit = sha.strip()
 

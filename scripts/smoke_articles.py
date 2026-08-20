@@ -526,6 +526,51 @@ async def main() -> int:
             fail("dirty article path published anyway")
             return 1
 
+        # ── a rollback that itself fails must say so honestly ──────────
+        # A separate throwaway repo so this doesn't disturb `repo`'s state.
+        # Forced deterministically: the pre-commit hook fails the commit AND
+        # leaves .git/index.lock behind as a side effect, so the reset that
+        # follows the failed commit collides with that stale lock and fails
+        # too -- no flakiness, nothing outside this repo is touched.
+        lockfail_repo = tmp / "repo_lockfail"
+        (lockfail_repo / "content").mkdir(parents=True)
+        def git2(*args, cwd=lockfail_repo):
+            return subprocess.run(["git", *args], cwd=str(cwd),
+                                  capture_output=True, text=True)
+        git2("init", "-q")
+        git2("config", "user.email", "smoke@example.test")
+        git2("config", "user.name", "Smoke")
+        (lockfail_repo / "README.md").write_text("seed\n", encoding="utf-8")
+        git2("add", "README.md")
+        git2("commit", "-q", "-m", "seed")
+        (lockfail_repo / "content" / "piece.md").write_text(
+            "# piece\n", encoding="utf-8",
+        )
+        hooks = lockfail_repo / ".git" / "hooks"
+        (hooks / "pre-commit").write_text(
+            "#!/bin/sh\ntouch .git/index.lock\nexit 1\n", encoding="utf-8",
+        )
+        try:
+            await article_publish.publish(
+                str(lockfail_repo), ["content/piece.md"],
+                message="should fail and fail to roll back", push=False,
+            )
+        except article_publish.PublishError as e:
+            msg = str(e)
+            if "could not be rolled back" not in msg or "content/piece.md" not in msg:
+                fail(f"reset-failure message did not say so honestly: {msg!r}")
+                return 1
+        else:
+            fail("publish succeeded despite a failing pre-commit hook")
+            return 1
+        still_staged = git2("diff", "--cached", "--name-only").stdout
+        if "content/piece.md" not in still_staged:
+            fail("reset failed but the path is no longer staged in reality -- "
+                 "the message and reality disagree")
+            return 1
+        print("ok: a rollback that itself fails says so honestly and leaves "
+              "the paths visibly still staged")
+
         print("PASS")
         return 0
     finally:
