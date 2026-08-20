@@ -6,9 +6,12 @@ decisions it does own: which agent to hand the brief to, and whether the
 publish button is allowed to claim the draft was verified.
 """
 from __future__ import annotations
+import asyncio
 import hashlib
 import re
-from pathlib import Path
+import shutil
+import subprocess
+from pathlib import Path, PurePath
 
 
 # Substrings that mark an agent as one that writes prose, most specific first.
@@ -19,6 +22,11 @@ _WRITER_HINTS = (
 )
 # An agent whose name matches a hint but is not a prose writer.
 _WRITER_EXCLUDE = ("test-author", "component-author", "test-runner")
+
+# Mirrors article_publish._DRIVE_RE: pathlib's PurePath.is_absolute() alone
+# says False for a bare '\foo' or '/foo' on Windows (no drive letter), which
+# would let a rooted-but-driveless path slip past an is_absolute()-only check.
+_DRIVE_RE = re.compile(r"^[a-zA-Z]:[\\/]?")
 
 
 def resolve_writer(working_dir: str | Path, configured: str = "") -> str:
@@ -40,6 +48,79 @@ def resolve_writer(working_dir: str | Path, configured: str = "") -> str:
             if hint in low and not any(bad in low for bad in _WRITER_EXCLUDE):
                 return name
     return "self"
+
+
+async def _run(cmd: list[str], cwd: str) -> tuple[int, str, str]:
+    """subprocess in a thread: create_subprocess_exec needs a ProactorEventLoop
+    on Windows and uvicorn --reload does not always provide one.
+
+    Mirrors article_publish._run exactly. Duplicated rather than imported —
+    this module's only reason to touch git is this one lookup, and it should
+    stay a self-contained fact about the module rather than a dependency on
+    the publish module's internals."""
+    def _do() -> tuple[int, str, str]:
+        try:
+            r = subprocess.run(
+                cmd, cwd=cwd, capture_output=True, check=False, shell=False,
+            )
+            return (r.returncode,
+                    r.stdout.decode("utf-8", errors="replace"),
+                    r.stderr.decode("utf-8", errors="replace"))
+        except OSError as e:
+            return -1, "", str(e)
+    return await asyncio.to_thread(_do)
+
+
+async def resolve_article_root(working_dir: str | Path, blog_dir: str) -> str:
+    """The git repository that actually owns the blog — not always
+    `working_dir`. Some projects nest a second repository (its own `.git`,
+    its own remote, e.g. a landing-page repo checked out inside the parent)
+    and the blog lives inside that nested repo. Deriving this root once
+    means the writer autodetect, the article session's cwd, and the publish
+    commit all agree on which repository the article belongs to.
+
+    Falls back to `working_dir` unchanged — this must never return a
+    directory outside the project — whenever there is nothing safer to do:
+
+      * `blog_dir` is empty (nothing to derive from);
+      * `blog_dir` would escape `working_dir` (an absolute path or a `..`
+        segment) — the same containment rule article_publish._validate_paths
+        applies to draft paths; a blog directory outside the project is not
+        something to silently follow;
+      * `blog_dir` does not exist yet on disk — the approve route's own 400
+        already refuses an unset article_blog_dir, and that is the only
+        refusal this feature makes; a configured-but-not-yet-created blog
+        dir just falls back quietly here;
+      * the blog directory is not inside a git repository at all.
+    """
+    wd = Path(working_dir)
+    blog = (blog_dir or "").strip()
+    if not blog:
+        return str(wd)
+    if (blog.startswith(("/", "\\")) or _DRIVE_RE.match(blog)
+            or PurePath(blog).is_absolute()
+            or ".." in re.split(r"[\\/]+", blog)):
+        return str(wd)
+    target = wd / blog
+    if not target.is_dir():
+        return str(wd)
+    git = shutil.which("git") or "git"
+    rc, out, _err = await _run(
+        [git, "rev-parse", "--show-toplevel"], str(target),
+    )
+    if rc != 0 or not out.strip():
+        return str(wd)
+    # git prints forward slashes even on Windows, while the stored
+    # working_dir uses backslashes — comparing the raw strings would make
+    # the same-repo case look "different" and misreport it as nested.
+    # Resolving both to Path first is what makes the comparison meaningful;
+    # on a match, return `working_dir` verbatim (not the resolved form) so
+    # the two projects whose blog already lives in their own repo see
+    # byte-for-byte the same value they always have.
+    top = Path(out.strip()).resolve()
+    if top == wd.resolve():
+        return str(wd)
+    return str(top)
 
 
 def publish_label(verify_ok: bool, verify_cmd: str) -> str:

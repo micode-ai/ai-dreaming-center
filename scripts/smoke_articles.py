@@ -421,6 +421,72 @@ async def main() -> int:
             return 1
         print("ok: resolve_writer — configured > autodetect > self")
 
+        # ── resolve_article_root: nested-repo blog vs in-repo blog ──
+        import subprocess as _subprocess
+        def _git_init(path: Path) -> None:
+            path.mkdir(parents=True, exist_ok=True)
+            _subprocess.run(["git", "init", "-q"], cwd=str(path), check=True)
+            _subprocess.run(["git", "config", "user.email", "smoke@example.test"],
+                            cwd=str(path), check=True)
+            _subprocess.run(["git", "config", "user.name", "Smoke"],
+                            cwd=str(path), check=True)
+
+        # A parent repo containing a nested repo with its own blog dir --
+        # this is the mi-code-ai / micode-landing-page shape: the parent is
+        # a git repo, and a wholly separate git repo (own .git, own remote
+        # in the real case) sits nested inside it with the blog underneath.
+        rar_parent = tmp / "rar_parent"
+        _git_init(rar_parent)
+        rar_nested = rar_parent / "nested"
+        _git_init(rar_nested)
+        (rar_nested / "blog").mkdir(parents=True)
+        got_root = await articles.resolve_article_root(str(rar_parent), "nested/blog")
+        if Path(got_root) != rar_nested.resolve():
+            fail(f"resolve_article_root (nested repo): got {got_root!r}, "
+                 f"want {rar_nested.resolve()!r}")
+            return 1
+        print("ok: resolve_article_root finds the nested repo's own root")
+
+        # A single repo with the blog inside it -- the regression guard for
+        # accounting-ai-agent and ai-budget-assistant, whose blog sits in
+        # their own repository. Must equal working_dir exactly, unchanged.
+        rar_single = tmp / "rar_single"
+        _git_init(rar_single)
+        (rar_single / "content" / "blog").mkdir(parents=True)
+        got_root = await articles.resolve_article_root(str(rar_single), "content/blog")
+        if got_root != str(rar_single):
+            fail(f"resolve_article_root (in-repo blog): got {got_root!r}, "
+                 f"want unchanged working_dir {str(rar_single)!r}")
+            return 1
+        print("ok: resolve_article_root — in-repo blog returns working_dir unchanged")
+
+        # Safe-fallback cases: each must return working_dir unchanged.
+        fallback_cases = [
+            ("", "empty blog_dir"),
+            ("../escape", "'..' segment"),
+            (str(Path(rar_single.anchor) / "somewhere" / "else"), "absolute blog_dir"),
+            ("does/not/exist", "non-existent blog_dir"),
+        ]
+        for bad_blog, why in fallback_cases:
+            got_root = await articles.resolve_article_root(str(rar_single), bad_blog)
+            if got_root != str(rar_single):
+                fail(f"resolve_article_root fallback ({why}): got {got_root!r}, "
+                     f"want unchanged {str(rar_single)!r}")
+                return 1
+        print("ok: resolve_article_root falls back to working_dir for "
+              "empty/'..'/absolute/non-existent blog_dir")
+
+        # A directory that is not a git repository at all.
+        rar_nogit = tmp / "rar_nogit"
+        (rar_nogit / "content" / "blog").mkdir(parents=True)
+        got_root = await articles.resolve_article_root(str(rar_nogit), "content/blog")
+        if got_root != str(rar_nogit):
+            fail(f"resolve_article_root (not a git repo): got {got_root!r}, "
+                 f"want unchanged {str(rar_nogit)!r}")
+            return 1
+        print("ok: resolve_article_root falls back to working_dir when it "
+              "is not inside a git repository")
+
         gate_cases = [
             ({"verify_ok": 1, "status": "drafted"}, "npm run build", "commit", True),
             ({"verify_ok": 0, "status": "drafted"}, "npm run build", "commit", False),

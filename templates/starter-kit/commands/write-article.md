@@ -65,11 +65,13 @@ curl -s -X POST "$DREAMING_API_URL/api/articles/<proposal-id>/written" \
 anything, and there is no UI to fix a bad value afterwards — a rejected
 `draft_ref` means another paid session to correct it):
 
-- Every path is **relative to the repository root** — not to
-  `$DC_ARTICLE_BLOG_DIR`. If the blog directory is itself a subdirectory
-  (e.g. `src/data/`), still report the full path from the repo root (e.g.
-  `src/data/blog-posts.json`), never just the filename or a path relative to
-  that subdirectory.
+- Every path is **relative to your cwd** — the root of the repository this
+  session is running in, which is always the repository that contains
+  `$DC_ARTICLE_BLOG_DIR` (for most projects that is the project root itself).
+  Not relative to `$DC_ARTICLE_BLOG_DIR` — if the blog directory is itself a
+  subdirectory (e.g. `src/data/`), still report the full path from your cwd
+  (e.g. `src/data/blog-posts.json`), never just the filename or a path
+  relative to that subdirectory.
 - **Comma-separated** for more than one file — `"a.md, b.ts"` — never a JSON
   array; the API accepts a string and a JSON array is rejected outright.
 - Each entry must be an **existing regular file**, not a directory and not a

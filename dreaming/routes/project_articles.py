@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 import json
+import os
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
@@ -229,19 +230,36 @@ async def articles_approve(request: Request, slug: str, proposal_id: int):
             status_code=400,
             detail="article_blog_dir is not set — nowhere to put the article",
         )
+    # The blog does not always live in the project's own repository (e.g. a
+    # nested landing-page repo with its own .git and remote). Deriving the
+    # containing repo's root once means the writer autodetect, the session's
+    # cwd, and the publish commit (in articles_publish below) all agree on
+    # which repository owns the article. For the two projects whose blog is
+    # inside their own repo this equals project.working_dir unchanged.
+    root = await articles.resolve_article_root(project.working_dir, blog_dir)
     writer = articles.resolve_writer(
-        project.working_dir,
+        root,
         await resolver.get(project, "article_writer_agent", ""),
     )
     verify_cmd = await resolver.get(project, "article_verify_cmd", "")
     locales = await resolver.get(project, "article_locales", "")
+    # DC_ARTICLE_BLOG_DIR must be relative to the session's own cwd (`root`),
+    # not to project.working_dir — once the session runs inside a nested
+    # repo, "micode-landing-page/blog" from the project's perspective is
+    # just "blog" from the session's. os.path.relpath is a lexical
+    # computation, not a filesystem one, so it works even when blog_dir does
+    # not exist yet (resolve_article_root already fell back to
+    # project.working_dir in that case, making this a no-op).
+    blog_dir_for_session = os.path.relpath(
+        os.path.join(project.working_dir, blog_dir), root,
+    ).replace("\\", "/")
     try:
         session_id = await pm.start_command(
             project,
             command_name="write-article",
             prompt=f"/write-article {proposal_id}",
             claude_path=await resolver.get(project, "claude_path", "claude"),
-            working_dir=project.working_dir,
+            working_dir=root,
             model=await resolver.get(project, "model", "sonnet"),
             max_turns=int(await resolver.get(project, "article_max_turns", 300)),
             timeout_minutes=int(
@@ -251,7 +269,7 @@ async def articles_approve(request: Request, slug: str, proposal_id: int):
                 "DREAMING_PROJECT_SLUG": project.slug,
                 "DREAMING_API_URL": f"http://localhost:{settings.port}",
                 "DC_ARTICLE_WRITER": writer,
-                "DC_ARTICLE_BLOG_DIR": blog_dir,
+                "DC_ARTICLE_BLOG_DIR": blog_dir_for_session,
                 "DC_ARTICLE_VERIFY_CMD": verify_cmd,
                 "DC_ARTICLE_LOCALES": locales or row["locales"],
             },
@@ -337,10 +355,16 @@ async def articles_publish(request: Request, slug: str, proposal_id: int):
     )
     mode = articles.normalize_publish_mode(publish_mode)  # M4
     articles_url = f"/p/{project.slug}/articles"
+    # Same derivation as articles_approve: draft_ref paths are relative to
+    # the repository that owns the blog, which is not always
+    # project.working_dir. Publishing against the wrong root would validate
+    # and commit paths in a repository that never saw the write.
+    blog_dir = await resolver.get(project, "article_blog_dir", "")
+    root = await articles.resolve_article_root(project.working_dir, blog_dir)
     try:
         commit = await article_publish.publish(
-            project.working_dir,
-            article_publish.split_paths(row["draft_ref"], project.working_dir),
+            root,
+            article_publish.split_paths(row["draft_ref"], root),
             message=article_publish.build_message(row, label),
             push=(mode == "commit+push"),
         )
