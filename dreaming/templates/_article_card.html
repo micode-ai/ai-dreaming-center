@@ -3,7 +3,7 @@
   <header class="flex items-baseline gap-3 flex-wrap mb-2">
     <span class="text-base font-semibold strong">{{ a.title }}</span>
     <span class="badge badge-neutral">
-      {{ ("article.status." ~ a.status) | t(locale=locale) }}
+      {% if a.status_known %}{{ ("article.status." ~ a.status) | t(locale=locale) }}{% else %}{{ a.status }}{% endif %}
     </span>
     <span class="text-xs font-mono faint">{{ a.slug_hint }}</span>
     {% if a.status in ('drafted', 'published') %}

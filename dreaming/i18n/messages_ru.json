@@ -570,6 +570,7 @@
 
   "article.title": "Статьи",
   "article.total": "предложений",
+  "article.capped": "показано {shown} из {total} — список ограничен",
   "article.empty": "Предложений пока нет. Запустите скан идей или предложите статью из радара.",
   "article.status.proposed": "предложено",
   "article.status.approved": "согласовано",
@@ -578,6 +579,7 @@
   "article.status.published": "опубликовано",
   "article.status.rejected": "отклонено",
   "article.status.failed": "ошибка",
+  "article.status.other": "прочее",
   "article.evidence": "Почему сейчас",
   "article.writer": "Пишет",
   "article.writer.self": "команда центра (агента-писателя в проекте нет)",

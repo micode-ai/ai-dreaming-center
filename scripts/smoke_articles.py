@@ -196,6 +196,37 @@ async def main() -> int:
                     fail("the ingested proposal is not rendered on the page")
                     return 1
                 print("ok: /p/{slug}/articles renders the proposal")
+
+                # A status outside the seven the page groups by must still
+                # show up (in the catch-all "other" group) instead of
+                # silently vanishing -- status has no CHECK constraint.
+                ai_dc_project = await ProjectsService(real_db).get_by_slug(
+                    "ai-dreaming-center",
+                )
+                weird_id = await real_db.add_article_proposal(
+                    ai_dc_project.id, source="project_scan",
+                    source_ref="weird-status",
+                    evidence="smoke: a status outside _ORDER must not vanish",
+                    title="Smoke weird-status row", angle="…",
+                    slug_hint="smoke-weird-status",
+                )
+                if weird_id is None:
+                    fail("weird-status smoke row failed to insert")
+                    return 1
+                try:
+                    await real_db.set_article_proposal_status(weird_id, "weird")
+                    weird_page = client.get("/p/ai-dreaming-center/articles")
+                    if weird_page.status_code != 200:
+                        fail(f"/articles page (weird status): {weird_page.status_code}")
+                        return 1
+                    if "smoke-weird-status" not in weird_page.text:
+                        fail("a row with a status outside _ORDER vanished from the page")
+                        return 1
+                finally:
+                    await real_db.execute(
+                        "DELETE FROM article_proposals WHERE id=?", (weird_id,),
+                    )
+                print("ok: a status outside _ORDER lands in the catch-all group")
         finally:
             await real_db.close()
         print("ok: API ingest (201 fresh / 200 dedupe), detail, write-back, "

@@ -570,6 +570,7 @@
 
   "article.title": "Articles",
   "article.total": "proposals",
+  "article.capped": "showing {shown} of {total} — list is capped",
   "article.empty": "No proposals yet. Run the idea scan or propose an article from the radar.",
   "article.status.proposed": "proposed",
   "article.status.approved": "approved",
@@ -578,6 +579,7 @@
   "article.status.published": "published",
   "article.status.rejected": "rejected",
   "article.status.failed": "failed",
+  "article.status.other": "other",
   "article.evidence": "Why now",
   "article.writer": "Writer",
   "article.writer.self": "the center's own command (no writer agent in this project)",

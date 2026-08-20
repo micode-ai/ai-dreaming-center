@@ -15,6 +15,10 @@
   </form>
 </header>
 
+{% if capped %}
+<p class="text-xs faint mb-4">{{ "article.capped" | t(locale=locale, shown=shown, total=total) }}</p>
+{% endif %}
+
 {% if not blog_dir %}
 <div class="banner banner-warn mb-4">
   <p class="text-sm">{{ "article.blog_dir_missing" | t(locale=locale) }}</p>

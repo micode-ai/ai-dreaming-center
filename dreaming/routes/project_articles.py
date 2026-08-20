@@ -27,6 +27,10 @@ def _enrich(row: dict, *, verify_cmd: str, publish_mode: str) -> dict:
     d["can_publish"] = allowed
     d["gate_reason"] = reason
     d["verify_label"] = articles.publish_label(bool(d.get("verify_ok")), verify_cmd)
+    # `status` has no CHECK constraint; a row this route doesn't recognise
+    # must still render (in the "other" catch-all) with its real status text
+    # rather than through a missing article.status.<value> i18n key.
+    d["status_known"] = d.get("status") in _ORDER
     return d
 
 
@@ -39,11 +43,23 @@ async def articles_page(request: Request, slug: str):
     publish_mode = await resolver.get(project, "article_publish_mode", "off")
     blog_dir = await resolver.get(project, "article_blog_dir", "")
     configured_writer = await resolver.get(project, "article_writer_agent", "")
+    # `list_article_proposals` caps at 200 rows; `article_status_counts` does
+    # not, so it — not len(enriched) — is the source of truth for how many
+    # proposals actually exist. Both numbers go to the template pre-computed
+    # so nothing about "is this page complete" is decided in Jinja.
     rows = await db.list_article_proposals(project_id=project.id)
     enriched = [_enrich(r, verify_cmd=verify_cmd, publish_mode=publish_mode)
                 for r in rows]
     groups = [(st, [r for r in enriched if r["status"] == st]) for st in _ORDER]
+    # A status outside _ORDER (no CHECK constraint stops one existing) would
+    # otherwise silently vanish from every group above; catch it in one more
+    # bucket instead of dropping it.
+    other = [r for r in enriched if not r["status_known"]]
+    if other:
+        groups.append(("other", other))
     counts = {r["status"]: r["n"] for r in await db.article_status_counts(project.id)}
+    true_total = sum(counts.values())
+    shown = len(enriched)
     locale = request.cookies.get(
         "dc_locale", request.app.state.settings.default_locale,
     )
@@ -53,7 +69,8 @@ async def articles_page(request: Request, slug: str):
         request, "project_articles.html",
         {"project": project,
          "groups": [(st, items) for st, items in groups if items],
-         "counts": counts, "total": len(enriched),
+         "counts": counts, "total": true_total, "shown": shown,
+         "capped": shown < true_total,
          "blog_dir": blog_dir,
          "writer": articles.resolve_writer(project.working_dir, configured_writer),
          "scan_running": f"cmd:{project.slug}:article-ideas-scan" in pm.list_running(),
