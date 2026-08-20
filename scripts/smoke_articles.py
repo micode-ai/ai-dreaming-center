@@ -396,6 +396,26 @@ async def main() -> int:
                         "DELETE FROM article_proposals WHERE id=?", (weird_id,),
                     )
                 print("ok: a status outside _ORDER lands in the catch-all group")
+
+                # A proposal whose venue has no article_blog_dir must be
+                # refused with 400 naming the venue, not silently dispatched.
+                # `api_id` has no target_project_id and ai-dreaming-center has
+                # no article_venue_project setting, so its venue is itself --
+                # this is the NULL-venue regression case, not a new one.
+                r = client.post(
+                    f"/p/ai-dreaming-center/articles/{api_id}/approve",
+                    follow_redirects=False,
+                )
+                if r.status_code not in (400, 409):
+                    fail(f"approve without a venue blog dir: {r.status_code}, "
+                         "want 400/409")
+                    return 1
+                if r.status_code == 400 and "venue" not in r.json().get("detail", ""):
+                    fail("400 for a missing blog dir must name the venue: "
+                         f"{r.text[:200]}")
+                    return 1
+                print("ok: approve refuses before dispatch when the venue "
+                      "has no blog dir, naming it")
         finally:
             await real_db.close()
         print("ok: API ingest (201 fresh / 200 dedupe), detail, write-back, "
@@ -1111,6 +1131,16 @@ async def main() -> int:
                 fail(f"resolve_venue_id(1, {override}, {configured!r}) = {got}, want {want}")
                 return 1
         print("ok: resolve_venue_id -- override > setting > subject, unknown falls back")
+
+        # ── the venue's settings are the ones that count ───────────
+        # A subject with no blog dir but a venue that has one must be
+        # approvable; the reverse must not be.
+        venue_enabled = [_P(pid, "subject"), _P(pid + 1000, "venue")]
+        venue_id = articles.resolve_venue_id(pid, pid + 1000, "", venue_enabled)
+        if venue_id != pid + 1000:
+            fail(f"venue_id = {venue_id}, want {pid + 1000}")
+            return 1
+        print("ok: venue id resolves for a subject that is not the venue")
 
         # ── target_project_id round-trip ───────────────────────────
         vid = await db.add_article_proposal(

@@ -50,29 +50,65 @@ def _enrich(row: dict, *, verify_cmd: str, publish_mode: str) -> dict:
     return d
 
 
+async def _venue_for(request: Request, project, row: dict | None) -> tuple[object, str]:
+    """Resolve a proposal's venue project and that venue's blog dir.
+
+    The subject owns the card, the queue row and the questions; the venue owns
+    the repository the article lands in, so every article setting from here on
+    is read against the venue. With no override and no `article_venue_project`
+    this returns the subject itself, which is exactly wave A's behaviour.
+    """
+    resolver = request.app.state.resolver_factory(request)
+    enabled = await request.app.state.projects.list_all(only_enabled=True)
+    configured = await resolver.get(project, "article_venue_project", "")
+    venue_id = articles.resolve_venue_id(
+        project.id, row.get("target_project_id") if row else None,
+        configured, enabled,
+    )
+    venue = next((p for p in enabled if p.id == venue_id), project)
+    blog_dir = await resolver.get(venue, "article_blog_dir", "")
+    return venue, blog_dir
+
+
 @router.get("/p/{slug}/articles")
 async def articles_page(request: Request, slug: str):
     project = request.state.project
     db = request.app.state.db
     resolver = request.app.state.resolver_factory(request)
-    verify_cmd = await resolver.get(project, "article_verify_cmd", "")
-    publish_mode = await resolver.get(project, "article_publish_mode", "off")
-    blog_dir = await resolver.get(project, "article_blog_dir", "")
-    configured_writer = await resolver.get(project, "article_writer_agent", "")
+    # The page banner and the writer label use the project's *default* venue
+    # (no per-proposal override) — a project with no proposals yet still has
+    # to show something truthful about what an /approve would resolve to.
+    default_venue, blog_dir = await _venue_for(request, project, None)
+    configured_writer = await resolver.get(default_venue, "article_writer_agent", "")
     # The writer label is a claim about what articles_approve will actually
     # dispatch, not decoration — it must be resolved from the same root
-    # (resolve_article_root falls back to project.working_dir when blog_dir
-    # is unset/nested-escaping/missing/non-git, so this renders fine for
-    # projects with no article_blog_dir configured at all).
-    article_root = await articles.resolve_article_root(project.working_dir, blog_dir)
+    # (resolve_article_root falls back to the venue's working_dir when
+    # blog_dir is unset/nested-escaping/missing/non-git, so this renders fine
+    # for projects with no article_blog_dir configured at all).
+    article_root = await articles.resolve_article_root(
+        default_venue.working_dir, blog_dir,
+    )
     # `list_article_proposals` caps at 200 rows; `count_article_proposals`
     # does not, so it — not len(enriched) — is the source of truth for how
     # many proposals actually exist. Both numbers go to the template
     # pre-computed so nothing about "is this page complete" is decided in
     # Jinja.
     rows = await db.list_article_proposals(project_id=project.id)
-    enriched = [_enrich(r, verify_cmd=verify_cmd, publish_mode=publish_mode)
-                for r in rows]
+    enriched = []
+    for r in rows:
+        # list_article_proposals returns raw sqlite3.Row objects — dict()
+        # them once so _venue_for's row.get("target_project_id") works (Row
+        # has no .get) and so the same dict feeds _enrich below.
+        row_dict = dict(r)
+        # Each row may name its own venue (target_project_id override, or
+        # the subject's article_venue_project setting) — the gate a card
+        # shows must reflect *that* row's venue, not the page's default one.
+        row_venue, _row_blog_dir = await _venue_for(request, project, row_dict)
+        row_verify_cmd = await resolver.get(row_venue, "article_verify_cmd", "")
+        row_publish_mode = await resolver.get(row_venue, "article_publish_mode", "off")
+        d = _enrich(row_dict, verify_cmd=row_verify_cmd, publish_mode=row_publish_mode)
+        d["venue_slug"] = row_venue.slug
+        enriched.append(d)
     groups = [(st, [r for r in enriched if r["status"] == st]) for st in _ORDER]
     # A status outside _ORDER (no CHECK constraint stops one existing) would
     # otherwise silently vanish from every group above; catch it in one more
@@ -222,61 +258,76 @@ async def articles_approve(request: Request, slug: str, proposal_id: int):
                 "be cancelled first."
             ),
         )
-    if not starter_kit.command_installed(project.working_dir, "write-article"):
+    # Wave B: the article lands in the venue's repository, not necessarily
+    # the subject's — every setting from here on is read against the venue.
+    # With no override and no article_venue_project setting this resolves to
+    # `project` itself, which is byte-identical to wave A's behaviour.
+    venue, blog_dir = await _venue_for(request, project, row)
+    # write-article has to exist where the session will actually run, so the
+    # starter-kit check targets the venue's working directory, not the
+    # subject's.
+    if not starter_kit.command_installed(venue.working_dir, "write-article"):
         raise HTTPException(
             status_code=400,
-            detail="write-article is not installed for this project — "
+            detail=f"write-article is not installed for venue '{venue.slug}' — "
             "re-run the starter-kit install to add "
             ".claude/commands/write-article.md",
         )
-    blog_dir = await resolver.get(project, "article_blog_dir", "")
     if not blog_dir:
         raise HTTPException(
             status_code=400,
-            detail="article_blog_dir is not set — nowhere to put the article",
+            detail=f"article_blog_dir is not set for venue '{venue.slug}' — "
+            "nowhere to put the article",
         )
-    # The blog does not always live in the project's own repository (e.g. a
+    # The blog does not always live in the venue's own repository (e.g. a
     # nested landing-page repo with its own .git and remote). Deriving the
     # containing repo's root once means the writer autodetect, the session's
     # cwd, and the publish commit (in articles_publish below) all agree on
     # which repository owns the article. For the two projects whose blog is
-    # inside their own repo this equals project.working_dir unchanged.
-    root = await articles.resolve_article_root(project.working_dir, blog_dir)
+    # inside their own repo this equals venue.working_dir unchanged.
+    root = await articles.resolve_article_root(venue.working_dir, blog_dir)
     writer = articles.resolve_writer(
         root,
-        await resolver.get(project, "article_writer_agent", ""),
+        await resolver.get(venue, "article_writer_agent", ""),
     )
-    verify_cmd = await resolver.get(project, "article_verify_cmd", "")
-    locales = await resolver.get(project, "article_locales", "")
+    verify_cmd = await resolver.get(venue, "article_verify_cmd", "")
+    locales = await resolver.get(venue, "article_locales", "")
     # DC_ARTICLE_BLOG_DIR must be relative to the session's own cwd (`root`),
-    # not to project.working_dir — once the session runs inside a nested
-    # repo, "micode-landing-page/blog" from the project's perspective is
-    # just "blog" from the session's. session_blog_dir only re-derives that
-    # when root actually moved; every case where resolve_article_root fell
-    # back to project.working_dir unchanged (unset, escaping, non-existent,
-    # non-git, or ancestor-escaping blog_dir) leaves blog_dir untouched too.
+    # not to venue.working_dir — once the session runs inside a nested repo,
+    # "micode-landing-page/blog" from the venue's perspective is just "blog"
+    # from the session's. session_blog_dir only re-derives that when root
+    # actually moved; every case where resolve_article_root fell back to
+    # venue.working_dir unchanged (unset, escaping, non-existent, non-git, or
+    # ancestor-escaping blog_dir) leaves blog_dir untouched too.
     blog_dir_for_session = articles.session_blog_dir(
-        project.working_dir, blog_dir, root,
+        venue.working_dir, blog_dir, root,
     )
     try:
         session_id = await pm.start_command(
             project,
             command_name="write-article",
             prompt=f"/write-article {proposal_id}",
-            claude_path=await resolver.get(project, "claude_path", "claude"),
+            claude_path=await resolver.get(venue, "claude_path", "claude"),
             working_dir=root,
-            model=await resolver.get(project, "model", "sonnet"),
-            max_turns=int(await resolver.get(project, "article_max_turns", 300)),
+            model=await resolver.get(venue, "model", "sonnet"),
+            max_turns=int(await resolver.get(venue, "article_max_turns", 300)),
             timeout_minutes=int(
-                await resolver.get(project, "article_timeout_minutes", 120)
+                await resolver.get(venue, "article_timeout_minutes", 120)
             ),
             env_overrides={
+                # DREAMING_PROJECT_SLUG stays the subject's slug even though
+                # the session's cwd is the venue's article root: the
+                # write-back and any question the writer asks must reach the
+                # proposal's own project — the page the user is looking at —
+                # not the venue's.
                 "DREAMING_PROJECT_SLUG": project.slug,
                 "DREAMING_API_URL": f"http://localhost:{settings.port}",
                 "DC_ARTICLE_WRITER": writer,
                 "DC_ARTICLE_BLOG_DIR": blog_dir_for_session,
                 "DC_ARTICLE_VERIFY_CMD": verify_cmd,
                 "DC_ARTICLE_LOCALES": locales or row["locales"],
+                "DC_ARTICLE_SUBJECT_DIR": project.working_dir,
+                "DC_ARTICLE_SUBJECT_SLUG": project.slug,
             },
         )
     except RuntimeError as e:
@@ -347,8 +398,12 @@ async def articles_publish(request: Request, slug: str, proposal_id: int):
     row = await db.get_article_proposal(proposal_id)
     if row is None or row["project_id"] != project.id:
         raise HTTPException(status_code=404, detail="proposal not found")
-    verify_cmd = await resolver.get(project, "article_verify_cmd", "")
-    publish_mode = await resolver.get(project, "article_publish_mode", "off")
+    # Wave B: publish reads the same venue approve dispatched into — the
+    # article landed in the venue's repository, so the verify command, the
+    # publish mode and the article root all have to come from there too.
+    venue, blog_dir = await _venue_for(request, project, row)
+    verify_cmd = await resolver.get(venue, "article_verify_cmd", "")
+    publish_mode = await resolver.get(venue, "article_publish_mode", "off")
     allowed, reason = articles.can_publish(row, verify_cmd, publish_mode)
     if not allowed:
         raise HTTPException(status_code=400, detail=f"publish refused: {reason}")
@@ -362,10 +417,9 @@ async def articles_publish(request: Request, slug: str, proposal_id: int):
     articles_url = f"/p/{project.slug}/articles"
     # Same derivation as articles_approve: draft_ref paths are relative to
     # the repository that owns the blog, which is not always
-    # project.working_dir. Publishing against the wrong root would validate
+    # venue.working_dir. Publishing against the wrong root would validate
     # and commit paths in a repository that never saw the write.
-    blog_dir = await resolver.get(project, "article_blog_dir", "")
-    root = await articles.resolve_article_root(project.working_dir, blog_dir)
+    root = await articles.resolve_article_root(venue.working_dir, blog_dir)
     try:
         commit = await article_publish.publish(
             root,

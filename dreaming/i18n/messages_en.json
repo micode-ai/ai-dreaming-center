@@ -601,5 +601,7 @@
   "article.blog_dir_missing": "article_blog_dir is not set — the writer has nowhere to put the piece.",
   "article.btn.propose": "Propose an article",
   "article.flash.proposed": "Article proposal created.",
-  "article.flash.duplicate": "That subject is already proposed."
+  "article.flash.duplicate": "That subject is already proposed.",
+  "article.venue": "venue",
+  "article.venue.hint": "The repository the article lands in"
 }

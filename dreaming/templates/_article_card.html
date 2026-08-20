@@ -11,6 +11,11 @@
         {{ ("article.verify." ~ a.verify_label) | t(locale=locale) }}
       </span>
     {% endif %}
+    {% if a.venue_slug and a.venue_slug != project.slug %}
+      <span class="badge badge-brand" title="{{ 'article.venue.hint' | t(locale=locale) }}">
+        {{ "article.venue" | t(locale=locale) }}: {{ a.venue_slug }}
+      </span>
+    {% endif %}
     <span class="text-xs faint ml-auto">{{ a.source }}{% if a.source_ref %} · {{ a.source_ref }}{% endif %}</span>
   </header>
 

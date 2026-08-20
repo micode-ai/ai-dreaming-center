@@ -601,5 +601,7 @@
   "article.blog_dir_missing": "Не задан article_blog_dir — писателю некуда положить статью.",
   "article.btn.propose": "Предложить статью",
   "article.flash.proposed": "Предложение статьи создано.",
-  "article.flash.duplicate": "Такой сюжет уже предложен."
+  "article.flash.duplicate": "Такой сюжет уже предложен.",
+  "article.venue": "площадка",
+  "article.venue.hint": "Репозиторий, в который попадёт статья"
 }
