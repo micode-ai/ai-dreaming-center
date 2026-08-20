@@ -308,7 +308,6 @@ CREATE TABLE IF NOT EXISTS article_proposals (
     draft_ref       TEXT NOT NULL DEFAULT '',
     verify_output   TEXT NOT NULL DEFAULT '',
     verify_ok       INTEGER NOT NULL DEFAULT 0,
-    verify_label    TEXT NOT NULL DEFAULT '',
     commit_ref      TEXT NOT NULL DEFAULT '',
     session_id      TEXT NOT NULL DEFAULT '',
     error_message   TEXT NOT NULL DEFAULT '',
@@ -316,11 +315,16 @@ CREATE TABLE IF NOT EXISTS article_proposals (
     decided_at      TEXT,
     written_at      TEXT,
     published_at    TEXT,
-    -- Kept last, not next to project_id: ALTER TABLE ADD COLUMN can only
-    -- append, so a database migrated from before this column existed would
-    -- get it at the end regardless. Putting it anywhere else here would
-    -- make a fresh database's column order diverge from a migrated one for
-    -- no benefit -- the two paths must not disagree about column order.
+    -- Both of these were added after this table's first release, via
+    -- ALTER TABLE ADD COLUMN in _migrate_orchestration -- which can only
+    -- append, so a database migrated from before either column existed
+    -- gets them at the end, in the order they were appended (verify_label
+    -- first, then target_project_id). Declaring them anywhere else here
+    -- would make a fresh database's column order diverge from a migrated
+    -- one for no benefit; the two paths must not disagree about column
+    -- order, so any future ALTER TABLE ADD COLUMN addition belongs here
+    -- too, appended in the same order it is appended live.
+    verify_label    TEXT NOT NULL DEFAULT '',
     target_project_id INTEGER
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_article_project_slug

@@ -1145,6 +1145,44 @@ async def main() -> int:
         print("ok: target_project_id defaults to NULL, round-trips, and is "
               "settable only while proposed")
 
+        # ── schema-order regression pin ──────────────────────────────
+        # article_proposals has two columns (verify_label, target_project_id)
+        # that were added after the table's first release via ALTER TABLE
+        # ADD COLUMN in _migrate_orchestration, which can only append -- so a
+        # database migrated from before either column existed ends up with
+        # them at the end, in append order. The CREATE TABLE string has to
+        # declare them in that same trailing order, or a fresh database and
+        # a migrated one silently disagree about column order (harmless
+        # today since every reader uses name-based access, but a footgun for
+        # anything that ever reads positionally). Pin the full column list
+        # against a throwaway fresh database so a future column added in the
+        # wrong spot fails loudly here instead of staying invisible.
+        order_tmp = Path(tempfile.mkdtemp(prefix="dc_smoke_articles_order_"))
+        order_db = SqliteDB(str(order_tmp / "order.db"))
+        await order_db.connect()
+        try:
+            async with order_db._conn.execute(
+                "PRAGMA table_info(article_proposals)"
+            ) as cur:
+                fresh_cols = [row[1] for row in await cur.fetchall()]
+        finally:
+            await order_db.close()
+        want_cols = [
+            "id", "project_id", "source", "source_ref", "evidence", "title",
+            "angle", "slug_hint", "funnel_level", "locales", "tags_json",
+            "related_product", "status", "writer_agent", "draft_ref",
+            "verify_output", "verify_ok", "commit_ref", "session_id",
+            "error_message", "created_at", "decided_at", "written_at",
+            "published_at", "verify_label", "target_project_id",
+        ]
+        if fresh_cols != want_cols:
+            fail(f"article_proposals column order: got {fresh_cols}, "
+                 f"want {want_cols}")
+            return 1
+        print("ok: article_proposals column order matches a migrated "
+              "database's (verify_label, target_project_id trail in "
+              "append order)")
+
         print("PASS")
         return 0
     finally:
