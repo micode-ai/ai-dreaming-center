@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% set active = 'g_articles' %}
+{% block content %}
+<header class="page-header">
+  <div class="page-header__titles">
+    <h1 class="page-header__title">{{ "article.queue.title" | t(locale=locale) }}</h1>
+    <span class="text-xs faint">{{ items|length }} {{ "article.total" | t(locale=locale) }}</span>
+  </div>
+</header>
+
+{% if items %}
+  {% for a in items %}
+  <article class="card mb-3">
+    <header class="flex items-baseline gap-3 flex-wrap mb-2">
+      <a href="/p/{{ a.project_slug }}/articles" class="text-base font-semibold strong">{{ a.title }}</a>
+      <span class="badge badge-brand">{{ a.project_label }}</span>
+      <span class="text-xs font-mono faint">{{ a.slug_hint }}</span>
+      <span class="text-xs faint ml-auto">{{ a.source }}</span>
+    </header>
+    {% if a.angle %}<p class="text-sm mb-2">{{ a.angle }}</p>{% endif %}
+    <p class="text-xs faint">
+      <span class="strong">{{ "article.evidence" | t(locale=locale) }}:</span> {{ a.evidence }}
+    </p>
+  </article>
+  {% endfor %}
+{% else %}
+  <p class="muted text-sm">{{ "article.queue.empty" | t(locale=locale) }}</p>
+{% endif %}
+{% endblock %}

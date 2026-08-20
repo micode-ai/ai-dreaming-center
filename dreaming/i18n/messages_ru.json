@@ -570,6 +570,8 @@
 
   "article.title": "Статьи",
   "article.total": "предложений",
+  "article.queue.title": "Очередь статей",
+  "article.queue.empty": "Нечего согласовывать.",
   "article.capped": "показано {shown} из {total} — список ограничен",
   "article.empty": "Предложений пока нет. Запустите скан идей или предложите статью из радара.",
   "article.status.proposed": "предложено",

@@ -25,6 +25,7 @@ from dreaming.routes.projects import router as projects_router
 from dreaming.routes.settings import router as settings_router
 from dreaming.routes.api import router as api_router
 from dreaming.routes.ai_radar import router as ai_radar_router
+from dreaming.routes.articles import router as articles_router
 from dreaming.routes.project_router import router as project_router
 
 log = logging.getLogger(__name__)
@@ -100,5 +101,6 @@ app.include_router(projects_router)
 app.include_router(settings_router)
 app.include_router(api_router)
 app.include_router(ai_radar_router)
+app.include_router(articles_router)
 app.include_router(project_router)
 app.mount("/static", StaticFiles(directory="dreaming/static"), name="static")

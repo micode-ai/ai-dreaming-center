@@ -197,6 +197,12 @@ async def main() -> int:
                     return 1
                 print("ok: /p/{slug}/articles renders the proposal")
 
+                queue = client.get("/articles")
+                if queue.status_code != 200:
+                    fail(f"/articles queue: {queue.status_code}")
+                    return 1
+                print("ok: cross-project /articles queue renders")
+
                 # A status outside the seven the page groups by must still
                 # show up (in the catch-all "other" group) instead of
                 # silently vanishing -- status has no CHECK constraint.

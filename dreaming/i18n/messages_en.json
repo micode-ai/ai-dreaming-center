@@ -570,6 +570,8 @@
 
   "article.title": "Articles",
   "article.total": "proposals",
+  "article.queue.title": "Article queue",
+  "article.queue.empty": "Nothing to approve.",
   "article.capped": "showing {shown} of {total} — list is capped",
   "article.empty": "No proposals yet. Run the idea scan or propose an article from the radar.",
   "article.status.proposed": "proposed",
