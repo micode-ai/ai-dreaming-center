@@ -1092,6 +1092,59 @@ async def main() -> int:
             return 1
         print("ok: weekly_article_ideas_scan registered, off by default")
 
+        # ── venue resolution (pure) ────────────────────────────────
+        class _P:
+            def __init__(self, pid, slug): self.id, self.slug = pid, slug
+        enabled = [_P(1, "subject"), _P(2, "venue"), _P(3, "other")]
+        cases = [
+            # (override, configured slug, expected)
+            (2,    "other",   2),  # override wins over the setting
+            (None, "venue",   2),  # setting used when no override
+            (None, "",        1),  # neither -> the subject itself
+            (None, "missing", 1),  # unknown slug -> subject, not an error
+            (99,   "venue",   2),  # override naming no enabled project -> setting
+            (99,   "",        1),  # ... and then the subject
+        ]
+        for override, configured, want in cases:
+            got = articles.resolve_venue_id(1, override, configured, enabled)
+            if got != want:
+                fail(f"resolve_venue_id(1, {override}, {configured!r}) = {got}, want {want}")
+                return 1
+        print("ok: resolve_venue_id -- override > setting > subject, unknown falls back")
+
+        # ── target_project_id round-trip ───────────────────────────
+        vid = await db.add_article_proposal(
+            pid, source="manual", source_ref="",
+            evidence="controller smoke: venue column round-trip",
+            title="Venue column", angle="", slug_hint="smoke-venue-column",
+            target_project_id=pid,
+        )
+        row = await db.get_article_proposal(vid)
+        if row["target_project_id"] != pid:
+            fail(f"target_project_id not persisted: {row['target_project_id']}")
+            return 1
+        plain = await db.add_article_proposal(
+            pid, source="manual", source_ref="",
+            evidence="controller smoke: default venue is NULL",
+            title="No venue", angle="", slug_hint="smoke-venue-null",
+        )
+        row = await db.get_article_proposal(plain)
+        if row["target_project_id"] is not None:
+            fail(f"default target_project_id = {row['target_project_id']!r}, want None")
+            return 1
+        if not await db.set_article_proposal_venue(plain, pid):
+            fail("set_article_proposal_venue returned False on a proposed row")
+            return 1
+        if (await db.get_article_proposal(plain))["target_project_id"] != pid:
+            fail("set_article_proposal_venue did not persist")
+            return 1
+        await db.set_article_proposal_status(plain, "published")
+        if await db.set_article_proposal_venue(plain, None):
+            fail("set_article_proposal_venue must refuse a non-proposed row")
+            return 1
+        print("ok: target_project_id defaults to NULL, round-trips, and is "
+              "settable only while proposed")
+
         print("PASS")
         return 0
     finally:

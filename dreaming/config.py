@@ -79,6 +79,7 @@ class AppSettings(BaseSettings):
     article_publish_mode: str = "off"
     article_max_turns: int = 300
     article_timeout_minutes: int = 120
+    article_venue_project: str = ""
 
     # === Scheduling — nightly ===
     cron_expression: str = "0 2 * * *"
@@ -193,6 +194,7 @@ SETTINGS_GROUPS: list[tuple[str, list[str]]] = [
         "article_writer_agent", "article_blog_dir", "article_locales",
         "article_verify_cmd", "article_publish_mode",
         "article_max_turns", "article_timeout_minutes",
+        "article_venue_project",
     ]),
     ("Scheduling — nightly", [
         "cron_expression", "cron_enabled", "agents_per_night",

@@ -293,6 +293,7 @@ CREATE INDEX IF NOT EXISTS idx_radar_status_discovered
 CREATE TABLE IF NOT EXISTS article_proposals (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     project_id      INTEGER NOT NULL,
+    target_project_id INTEGER,
     source          TEXT NOT NULL,
     source_ref      TEXT NOT NULL DEFAULT '',
     evidence        TEXT NOT NULL,
@@ -443,6 +444,19 @@ class SqliteDB:
                 )
             except Exception as e:
                 log.warning("Failed to add verify_label column: %s", e)
+
+        # --- articles: target_project_id is the proposal's venue override
+        # (Wave B) -- NULL means "same as the subject", i.e. Wave A's
+        # behaviour unchanged. Same reason as verify_label above: CREATE
+        # TABLE IF NOT EXISTS is a no-op on a table that already exists. ---
+        if "target_project_id" not in article_cols:
+            try:
+                await self._conn.execute(
+                    "ALTER TABLE article_proposals ADD COLUMN "
+                    "target_project_id INTEGER"
+                )
+            except Exception as e:
+                log.warning("Failed to add target_project_id column: %s", e)
 
         try:
             await self._conn.execute(
@@ -1197,6 +1211,7 @@ class SqliteDB:
         self, project_id: int, *, source: str, source_ref: str, evidence: str,
         title: str, angle: str, slug_hint: str, funnel_level: str = "top",
         locales: str = "", tags_json: str = "[]", related_product: str = "",
+        target_project_id: int | None = None,
     ) -> int | None:
         """Вставить предложение. None — если (project_id, slug_hint) уже есть:
         три фидера на один сюжет дают одну строку, а не три."""
@@ -1204,10 +1219,12 @@ class SqliteDB:
         async with self._conn.execute(
             "INSERT OR IGNORE INTO article_proposals "
             "(project_id, source, source_ref, evidence, title, angle, slug_hint, "
-            " funnel_level, locales, tags_json, related_product, status, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?)",
+            " funnel_level, locales, tags_json, related_product, target_project_id, "
+            " status, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?)",
             (project_id, source, source_ref, evidence, title, angle, slug_hint,
-             funnel_level, locales, tags_json, related_product, now_iso),
+             funnel_level, locales, tags_json, related_product, target_project_id,
+             now_iso),
         ) as cur:
             if cur.rowcount == 0:
                 await self._conn.commit()
@@ -1246,6 +1263,22 @@ class SqliteDB:
             (project_id, slug_hint),
         )
         return dict(row) if row else None
+
+    async def set_article_proposal_venue(
+        self, proposal_id: int, target_project_id: int | None,
+    ) -> bool:
+        """Point a proposal at a venue. Only while it is still `proposed`:
+        once a writer has been dispatched the venue decided where it ran and
+        what format it learned, so moving it afterwards would describe a
+        different article than the one on disk."""
+        async with self._conn.execute(
+            "UPDATE article_proposals SET target_project_id=? "
+            "WHERE id=? AND status='proposed'",
+            (target_project_id, proposal_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
 
     async def set_article_proposal_status(
         self, proposal_id: int, status: str, *, error_message: str = "",
