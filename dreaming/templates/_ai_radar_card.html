@@ -111,6 +111,16 @@
         {{ "radar.btn.apply_note" | t(locale=locale) }}
       </button>
     </form>
+
+    <form method="post" action="/ai-radar/{{ f.id }}/propose-article"
+          class="inline flex items-center gap-1">
+      <select name="target_project" class="text-xs rounded px-1 py-1 bg-elevated">
+        {% for p in projects %}<option value="{{ p.slug }}">{{ p.label }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-sm">
+        {{ "article.btn.propose" | t(locale=locale) }}
+      </button>
+    </form>
     {% endif %}
 
     {% if f.applied_to_kind %}

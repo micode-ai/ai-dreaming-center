@@ -324,6 +324,22 @@ async def main() -> int:
             return 1
         print("ok: publish gate — verified / failed / unverified / off")
 
+        from dreaming.services import articles as _art
+        cases = [
+            ("What GLM-5.3 changes for our agents", "what-glm-5-3-changes-for-our"),
+            ("Автозаполнение по NIP", "nip"),
+            ("   ", ""),
+        ]
+        for raw, want_prefix in cases:
+            got = _art.slugify(raw)
+            if want_prefix and not got.startswith(want_prefix.split("-")[0]):
+                fail(f"slugify({raw!r}) = {got!r}, expected to start like {want_prefix!r}")
+                return 1
+            if " " in got or got != got.lower():
+                fail(f"slugify({raw!r}) = {got!r}: spaces or uppercase left")
+                return 1
+        print("ok: slugify produces hyphenated lowercase slugs")
+
         print("PASS")
         return 0
     finally:

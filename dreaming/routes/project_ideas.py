@@ -185,6 +185,35 @@ async def ideas_create_jira(request: Request, slug: str, item_id: str):
     return RedirectResponse(f"/p/{project.slug}/ideas", status_code=303)
 
 
+@router.post("/p/{slug}/ideas/{item_id}/propose-article")
+async def ideas_propose_article(request: Request, slug: str, item_id: str):
+    """Product idea → article proposal. Evidence is the idea's own title and
+    file, which is checkable: it exists on disk."""
+    from dreaming.services import articles as articles_svc
+    from dreaming.services.product_ideas import list_product_ideas
+    project = request.state.project
+    resolver = request.app.state.resolver_factory(request)
+    ideas_dir = await resolver.get(project, "product_ideas_dir", "")
+    if not ideas_dir:
+        raise HTTPException(status_code=400, detail="product_ideas_dir not set")
+    target = None
+    for it in list_product_ideas(ideas_dir):
+        obj = it.__dict__ if hasattr(it, "__dict__") else (it if isinstance(it, dict) else {})
+        if obj.get("id") == item_id or obj.get("slug") == item_id:
+            target = obj
+            break
+    if target is None:
+        raise HTTPException(status_code=404, detail=f"idea {item_id} not found")
+    title = str(target.get("title") or item_id)
+    await request.app.state.db.add_article_proposal(
+        project.id, source="center", source_ref=item_id,
+        evidence=f"product idea “{title}” at {target.get('file_path') or ideas_dir}",
+        title=title[:300], angle="",
+        slug_hint=articles_svc.slugify(title) or f"idea-{item_id}",
+    )
+    return RedirectResponse(f"/p/{project.slug}/articles", status_code=303)
+
+
 @router.post("/p/{slug}/ideas/{item_id}/status")
 async def ideas_set_status(
     request: Request, slug: str, item_id: str, status: str = Form(...),

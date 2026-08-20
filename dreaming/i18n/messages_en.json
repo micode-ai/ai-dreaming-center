@@ -597,5 +597,8 @@
   "article.gate.mode_off": "Publishing is off: set article_publish_mode in the project settings.",
   "article.gate.not_drafted": "There is no draft yet.",
   "article.gate.verify_failed": "Verification did not pass — publishing is blocked.",
-  "article.blog_dir_missing": "article_blog_dir is not set — the writer has nowhere to put the piece."
+  "article.blog_dir_missing": "article_blog_dir is not set — the writer has nowhere to put the piece.",
+  "article.btn.propose": "Propose an article",
+  "article.flash.proposed": "Article proposal created.",
+  "article.flash.duplicate": "That subject is already proposed."
 }

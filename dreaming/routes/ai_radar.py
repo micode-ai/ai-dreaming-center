@@ -140,6 +140,39 @@ async def ai_radar_pin(
     return RedirectResponse(_back_to(request), status_code=303)
 
 
+@router.post("/ai-radar/{finding_id}/propose-article")
+async def ai_radar_propose_article(
+    request: Request, finding_id: int, target_project: str = Form(...),
+):
+    """Radar finding → article proposal. Evidence is assembled from the finding
+    itself, so it is a fact by construction (title, source, date)."""
+    from dreaming.services import articles as articles_svc
+    project = await request.app.state.projects.get_by_slug(target_project)
+    if project is None:
+        raise HTTPException(status_code=404, detail=f"project {target_project} not found")
+    db = request.app.state.db
+    finding = await db.get_radar_finding(finding_id)
+    if finding is None:
+        raise HTTPException(status_code=404, detail="finding not found")
+    when = (finding.get("published_at") or finding["discovered_at"])[:10]
+    evidence = (
+        f"{finding['source_key']} published “{finding['title']}” on {when}: "
+        f"{finding['url']}"
+    )
+    slug = articles_svc.slugify(finding["title"]) or f"radar-{finding_id}"
+    new_id = await db.add_article_proposal(
+        project.id, source="radar", source_ref=str(finding_id),
+        evidence=evidence, title=finding["title"][:300],
+        angle="", slug_hint=slug,
+        tags_json=finding.get("tags_json") or "[]",
+    )
+    locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
+    resp = RedirectResponse(_back_to(request), status_code=303)
+    key = "article.flash.duplicate" if new_id is None else "article.flash.proposed"
+    set_flash(resp, request.app.state.i18n.t(key, locale=locale), level="success")
+    return resp
+
+
 @router.post("/ai-radar/scan-now")
 async def ai_radar_scan_now(request: Request):
     """Run the live RSS/Atom scanner against the watchlist and merge new

@@ -597,5 +597,8 @@
   "article.gate.mode_off": "Публикация выключена: задайте article_publish_mode в настройках проекта.",
   "article.gate.not_drafted": "Черновика ещё нет.",
   "article.gate.verify_failed": "Верификация не прошла — публикация заблокирована.",
-  "article.blog_dir_missing": "Не задан article_blog_dir — писателю некуда положить статью."
+  "article.blog_dir_missing": "Не задан article_blog_dir — писателю некуда положить статью.",
+  "article.btn.propose": "Предложить статью",
+  "article.flash.proposed": "Предложение статьи создано.",
+  "article.flash.duplicate": "Такой сюжет уже предложен."
 }

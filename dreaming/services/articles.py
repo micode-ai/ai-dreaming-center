@@ -6,6 +6,7 @@ decisions it does own: which agent to hand the brief to, and whether the
 publish button is allowed to claim the draft was verified.
 """
 from __future__ import annotations
+import re
 from pathlib import Path
 
 
@@ -64,3 +65,20 @@ def can_publish(
     if verify_cmd.strip() and not row.get("verify_ok"):
         return False, "verify_failed"
     return True, "ok"
+
+
+_SLUG_DROP = re.compile(r"[^a-z0-9]+")
+_SLUG_WORDS = 6
+
+
+def slugify(text: str, *, max_words: int = _SLUG_WORDS) -> str:
+    """Short hyphenated ASCII slug, mirroring blog-writer.md's slug rule.
+
+    Cyrillic characters drop out rather than being transliterated: the writer
+    agent picks the real keyword slug, and this is only a seed for the proposal
+    row. An all-Cyrillic title therefore yields a short or empty slug, and the
+    caller must fall back to the id.
+    """
+    low = (text or "").strip().lower()
+    words = [w for w in _SLUG_DROP.sub(" ", low).split() if w]
+    return "-".join(words[:max_words])
