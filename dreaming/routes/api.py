@@ -524,6 +524,12 @@ async def article_written(
                 detail=f"proposal {proposal_id} changed status before the "
                 "failure could be recorded",
             )
+        # FIX 3: this row is leaving 'writing' without a human ever
+        # answering — an abandoned question of its own must not stay
+        # 'pending' forever (the watchdog would keep excusing the project's
+        # silence, and a dead attempt's card would keep claiming it is
+        # waiting on an answer).
+        await db.dismiss_article_proposal_questions(proposal_id)
         return JSONResponse({"status": "failed"})
     if not payload.draft_ref.strip():
         raise HTTPException(status_code=422, detail="draft_ref required on success")
@@ -532,9 +538,24 @@ async def article_written(
     # re-derive later from whatever article_verify_cmd happens to read at
     # that later moment. project_id comes off the row itself since this
     # endpoint has no /p/{slug} in its path to resolve one from.
-    project = await request.app.state.projects.get_by_id(row["project_id"])
+    #
+    # FIX 1: every other article setting on this branch is read from the
+    # VENUE, not the subject — this one must be too. The row's own
+    # target_project_id already carries the venue articles_approve resolved
+    # and pinned before dispatch (pin_article_proposal_venue always records
+    # one, even when the resolved venue was the subject itself), so a NULL
+    # here only ever means a pre-cross-project row or one that predates the
+    # pin; falling back to the subject in that case reproduces wave A's
+    # single-project behaviour exactly.
+    subject = await request.app.state.projects.get_by_id(row["project_id"])
+    venue = subject
+    target_id = row.get("target_project_id")
+    if target_id is not None:
+        pinned_venue = await request.app.state.projects.get_by_id(target_id)
+        if pinned_venue is not None:
+            venue = pinned_venue
     resolver = request.app.state.resolver_factory(request)
-    verify_cmd = await resolver.get(project, "article_verify_cmd", "") if project else ""
+    verify_cmd = await resolver.get(venue, "article_verify_cmd", "") if venue else ""
     verify_label = articles_svc.publish_label(payload.verify_ok, verify_cmd)
     ok = await db.mark_article_written(
         proposal_id, draft_ref=payload.draft_ref.strip(),

@@ -699,16 +699,32 @@ class SqliteDB:
     ) -> str:
         """Insert a pending question. Returns the question id.
 
-        `tool_use_id` is UNIQUE — if claude calls AskUserQuestion with the same
-        tool_use_id twice (e.g. on resume), we return the existing row's id
-        instead of erroring.
+        `tool_use_id` is UNIQUE. If claude calls AskUserQuestion with the same
+        tool_use_id twice while the existing row is still `pending`, that is
+        the same ask (e.g. a session resumed mid-question) and we return the
+        existing row's id instead of erroring.
+
+        FIX 5: once that row has moved past `pending` (answered or
+        dismissed), a repeated tool_use_id is a *different* ask that happens
+        to collide with an old one — normally because the caller forgot the
+        run-tag rule write-article.md documents — and hand it the old row's
+        `answer_text` would silently let this new question consume a
+        previous attempt's answer to something else. That is exactly the
+        fabrication class this channel exists to prevent, so the stale row
+        is discarded (`tool_use_id` is UNIQUE, so it must go before a fresh
+        row can take its place) and a genuinely fresh, pending row — a new
+        id — is inserted instead.
         """
         existing = await self.fetch_one(
-            "SELECT id FROM orchestrator_questions WHERE tool_use_id=?",
+            "SELECT id, status FROM orchestrator_questions WHERE tool_use_id=?",
             (tool_use_id,),
         )
-        if existing:
+        if existing and existing["status"] == "pending":
             return existing["id"]
+        if existing:
+            await self._conn.execute(
+                "DELETE FROM orchestrator_questions WHERE id=?", (existing["id"],),
+            )
         from uuid import uuid4
         qid = str(uuid4())
         now = datetime.now(timezone.utc).isoformat()
@@ -1292,13 +1308,18 @@ class SqliteDB:
     async def set_article_proposal_venue(
         self, proposal_id: int, target_project_id: int | None,
     ) -> bool:
-        """Point a proposal at a venue. Only while it is still `proposed`:
-        once a writer has been dispatched the venue decided where it ran and
-        what format it learned, so moving it afterwards would describe a
-        different article than the one on disk."""
+        """Point a proposal at a venue. Only while it is `proposed` or
+        `failed`: those are the only two statuses where no draft exists on
+        disk anywhere yet. From `drafted`, `writing`, or `published`, a
+        writer has already been dispatched against a resolved venue and
+        either is producing or has produced a draft — moving the venue
+        afterwards would describe a different article than the one on disk
+        (or in flight). `failed` never got that far — the write-back never
+        landed a draft_ref — so a first attempt that pinned the wrong venue
+        can be corrected before Retry instead of being welded to it."""
         async with self._conn.execute(
             "UPDATE article_proposals SET target_project_id=? "
-            "WHERE id=? AND status='proposed'",
+            "WHERE id=? AND status IN ('proposed', 'failed')",
             (target_project_id, proposal_id),
         ) as cur:
             n = cur.rowcount
@@ -1367,6 +1388,38 @@ class SqliteDB:
             n = cur.rowcount
         await self._conn.commit()
         return n > 0
+
+    async def dismiss_article_proposal_questions(self, proposal_id: int) -> int:
+        """Dismiss every still-pending question this proposal itself asked.
+
+        write-article.md passes the proposal id as `run_id` on every ask, so
+        `orchestrator_questions.run_id == str(proposal_id)` identifies this
+        proposal's own questions. Call this whenever the row leaves
+        'writing' without a human ever answering — from `articles_cancel`,
+        from the `/written` failure path, and from the re-dispatch path
+        (`start_article_attempt`'s caller) before a fresh attempt begins.
+
+        Without this, an abandoned question stays 'pending' forever: the
+        process watchdog treats a pending question for the project as "not
+        silence" and keeps every session on that project alive up to the
+        hard cap, and the card keeps showing "the writer is waiting for
+        your answer" for an attempt that is already dead.
+
+        Reuses `answer_question`'s own dismissal semantics (its `WHERE
+        status='pending'` guard) rather than a second UPDATE path. A row
+        with no matching pending questions is a no-op, not an error —
+        returns 0.
+        """
+        rows = await self.fetch_all(
+            "SELECT id FROM orchestrator_questions "
+            "WHERE run_id=? AND status='pending'",
+            (str(proposal_id),),
+        )
+        n = 0
+        for r in rows:
+            if await self.answer_question(r["id"], answer_text="", status="dismissed"):
+                n += 1
+        return n
 
     # Statuses from which (re)dispatching a writer is legal: the first
     # approve ('proposed', and the unreachable-today 'approved'), and a

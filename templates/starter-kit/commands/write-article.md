@@ -142,17 +142,36 @@ inside the same run still get distinct ids via the `-q1`/`-q2` suffix.
 Do not simplify this back down to a proposal-scoped id — that is exactly
 the collision this paragraph exists to prevent.
 
-The response is `{"id": "...", "status": "pending"}`. Poll it, sleeping
-between attempts:
+The response is `{"id": "...", "status": "pending"}`. Poll it from a
+**single** Bash call that loops internally — each `curl` you run is its own
+Bash tool call and its own turn, and this session shares one turn budget
+(`article_max_turns`) across reading the repo, writing the piece, verifying
+it, and this wait. A one-`curl`-per-turn poll loop can burn most of that
+budget on waiting alone and die of `error_max_turns` before it ever gets to
+write anything — the fix is one Bash call that sleeps and re-polls inside
+itself, so the whole wait costs a single turn no matter how long it runs:
 
 ```bash
-curl -s "$DREAMING_API_URL/api/questions/<id>/poll"
+for i in $(seq 90); do
+  resp=$(curl -s "$DREAMING_API_URL/api/questions/<id>/poll")
+  case "$resp" in
+    *'"status":"pending"'*) sleep 20 ;;
+    *) echo "$resp"; break ;;
+  esac
+done
 ```
 
-Keep polling every 20–30 seconds (`sleep 20` between calls) until `status`
-is no longer `"pending"`. While a question is pending, the center's watchdog
-does not count this session's silence against it, so waiting for an answer
-is safe — it will not get the session killed.
+That loop is bounded (90 tries × 20s ≈ 30 minutes) — adjust the count if you
+need to wait longer, but it must stay inside this one call, never split
+back into one `curl` per turn. While a question is pending, the center's
+watchdog does not count this session's silence against it, but that only
+stops the *watchdog* from killing the session — it does not extend
+`article_max_turns` or the session's own timeout ceiling. **Waiting is not
+unconditionally safe**: if the loop above ends and `status` is still
+`"pending"`, or the session is approaching its own turn/time ceiling either
+way, do not keep waiting indefinitely and do not proceed as if answered —
+report through `error_message` at step 5, naming the question that went
+unanswered, same as the `"dismissed"` case below.
 
 - On `"answered"`, use `answer_text` as the fact and keep writing.
 - On `"dismissed"`, or if the session ends before an answer ever arrives,

@@ -505,6 +505,14 @@ async def articles_approve(request: Request, slug: str, proposal_id: int):
                 f"check the session log for {session_id}"
             ),
         )
+    # FIX 3: a retry re-dispatches from 'failed' or 'drafted', either of
+    # which may still carry a pending question from a prior, abandoned
+    # attempt (one that was never cancelled through the UI, e.g. the host
+    # restarted before /written arrived). A fresh attempt starts clean —
+    # that stale question must not keep the watchdog treating this
+    # project's silence as excused, nor keep an old "waiting for your
+    # answer" line on a row that has already moved on to a new session.
+    await db.dismiss_article_proposal_questions(proposal_id)
     return RedirectResponse(f"/p/{project.slug}/live", status_code=303)
 
 
@@ -540,6 +548,10 @@ async def articles_cancel(request: Request, slug: str, proposal_id: int):
             detail="proposal is no longer 'writing' — it resolved before "
             "the cancel could apply",
         )
+    # FIX 3: this row is leaving 'writing' without a human ever answering
+    # whatever it may have asked — an abandoned question of its own must
+    # not stay 'pending' forever.
+    await db.dismiss_article_proposal_questions(proposal_id)
     return RedirectResponse(f"/p/{project.slug}/articles", status_code=303)
 
 
@@ -553,6 +565,34 @@ async def articles_publish(request: Request, slug: str, proposal_id: int):
     row = await db.get_article_proposal(proposal_id)
     if row is None or row["project_id"] != project.id:
         raise HTTPException(status_code=404, detail="proposal not found")
+    # FIX 2: by publish time the row already carries a PINNED venue
+    # (pin_article_proposal_venue records one at dispatch, even when the
+    # resolved venue was the subject itself) — the pin exists precisely to
+    # reproduce approve's decision, not to be re-resolved. _venue_for's
+    # fallback-to-subject is correct for resolving a proposal *before*
+    # dispatch (resolve_venue_id's own contract), but applying that same
+    # fallback here, to an already-pinned row, would silently redirect
+    # publish at the SUBJECT's repository if the venue was disabled or
+    # deleted between approve and publish — reading the subject's verify
+    # command and publish mode, and committing a venue-written draft into
+    # the wrong repo. Refuse instead, naming the venue, before any of that
+    # is read. Checked directly against the enabled-projects id set rather
+    # than through resolve_venue_id, which exists for the different,
+    # fallback-is-correct case and must stay untouched.
+    pinned_target_id = row.get("target_project_id")
+    if pinned_target_id is not None:
+        enabled_projects = await request.app.state.projects.list_all(only_enabled=True)
+        if pinned_target_id not in {p.id for p in enabled_projects}:
+            pinned_project = await request.app.state.projects.get_by_id(pinned_target_id)
+            pinned_label = pinned_project.slug if pinned_project else f"project #{pinned_target_id}"
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"this proposal's venue ('{pinned_label}') is no longer "
+                    "enabled — publish refuses rather than falling back to "
+                    "the subject's repository"
+                ),
+            )
     # Wave B: publish reads the same venue approve dispatched into — the
     # article landed in the venue's repository, so the verify command, the
     # publish mode and the article root all have to come from there too.
