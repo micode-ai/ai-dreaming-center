@@ -4,10 +4,7 @@
 один запрос вместо обхода одиннадцати рабочих каталогов.
 """
 from __future__ import annotations
-from fastapi import APIRouter, Request, Form, HTTPException
-from fastapi.responses import RedirectResponse
-
-from dreaming.routes.project_articles import dispatch_article_scan
+from fastapi import APIRouter, Request
 
 
 router = APIRouter()
@@ -44,15 +41,3 @@ async def articles_queue(request: Request):
             "total": true_total, "shown": shown, "capped": shown < true_total,
         },
     )
-
-
-@router.post("/articles/scan")
-async def articles_queue_scan(request: Request, target_project: str = Form(...)):
-    """Manual scan dispatch from the cross-project queue — an operator can
-    kick off /article-ideas-scan for a project straight from here, without
-    first navigating into that project's own /articles page."""
-    project = await request.app.state.projects.get_by_slug(target_project)
-    if project is None:
-        raise HTTPException(status_code=404, detail=f"project {target_project} not found")
-    await dispatch_article_scan(request, project)
-    return RedirectResponse(f"/p/{project.slug}/live", status_code=303)
