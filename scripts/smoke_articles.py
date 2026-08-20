@@ -370,6 +370,17 @@ async def main() -> int:
                 return 1
         print("ok: article-ideas-scan command shipped in the starter kit")
 
+        kit2 = ROOT / "templates" / "starter-kit" / "commands" / "write-article.md"
+        if not kit2.exists():
+            fail("write-article.md missing from the starter kit")
+            return 1
+        body2 = kit2.read_text(encoding="utf-8")
+        for needle in ("/api/articles/", "/written", "verify_ok", "draft_ref"):
+            if needle not in body2:
+                fail(f"write-article.md does not mention {needle!r}")
+                return 1
+        print("ok: write-article command shipped in the starter kit")
+
         print("PASS")
         return 0
     finally:

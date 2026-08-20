@@ -126,3 +126,58 @@ async def articles_scan(request: Request, slug: str):
     except RuntimeError as e:
         raise HTTPException(status_code=409, detail=str(e))
     return RedirectResponse(f"/p/{project.slug}/live", status_code=303)
+
+
+@router.post("/p/{slug}/articles/{proposal_id}/approve")
+async def articles_approve(request: Request, slug: str, proposal_id: int):
+    """The first human gate: approve a proposal and dispatch the writer.
+
+    bypassPermissions is required — with --allowedTools the session silently
+    loses the ability to write into the repo (settled on self-study)."""
+    project = request.state.project
+    db = request.app.state.db
+    pm = request.app.state.process_manager
+    settings = request.app.state.settings
+    resolver = request.app.state.resolver_factory(request)
+    row = await db.get_article_proposal(proposal_id)
+    if row is None or row["project_id"] != project.id:
+        raise HTTPException(status_code=404, detail="proposal not found")
+    blog_dir = await resolver.get(project, "article_blog_dir", "")
+    if not blog_dir:
+        raise HTTPException(
+            status_code=400,
+            detail="article_blog_dir is not set — nowhere to put the article",
+        )
+    writer = articles.resolve_writer(
+        project.working_dir,
+        await resolver.get(project, "article_writer_agent", ""),
+    )
+    verify_cmd = await resolver.get(project, "article_verify_cmd", "")
+    locales = await resolver.get(project, "article_locales", "")
+    try:
+        session_id = await pm.start_command(
+            project,
+            command_name="write-article",
+            prompt=f"/write-article {proposal_id}",
+            claude_path=await resolver.get(project, "claude_path", "claude"),
+            working_dir=project.working_dir,
+            model=await resolver.get(project, "model", "sonnet"),
+            max_turns=int(await resolver.get(project, "article_max_turns", 300)),
+            timeout_minutes=int(
+                await resolver.get(project, "article_timeout_minutes", 120)
+            ),
+            env_overrides={
+                "DREAMING_PROJECT_SLUG": project.slug,
+                "DREAMING_API_URL": f"http://localhost:{settings.port}",
+                "DC_ARTICLE_WRITER": writer,
+                "DC_ARTICLE_BLOG_DIR": blog_dir,
+                "DC_ARTICLE_VERIFY_CMD": verify_cmd,
+                "DC_ARTICLE_LOCALES": locales or row["locales"],
+            },
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    await db.set_article_proposal_status(
+        proposal_id, "writing", session_id=session_id or "",
+    )
+    return RedirectResponse(f"/p/{project.slug}/live", status_code=303)
