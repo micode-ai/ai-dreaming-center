@@ -570,6 +570,21 @@ Blank evidence is a 400 — the rule imported from advice.mjs.
 Refs #34"
 ```
 
+**Amended during execution (two defects in the code above, both found in review):**
+
+1. `article_written` as written has no state precondition, and neither db method
+   guards either — so a duplicate or out-of-order call can fast-forward a
+   `proposed` row to `drafted`, or drag a `published` article back. The spec makes
+   `published` terminal, so the endpoint must require the row to be in `writing`
+   and return **409** otherwise, on both the success and the error branch. The
+   smoke script asserts the 409 by posting the same write-back twice.
+2. The smoke additions stop exercising the fresh-insert path after their first
+   ever run: the `smoke-` slug persists in the real database, later runs get
+   200/duplicate, and an assertion accepting `(200, 201)` keeps printing `ok:`
+   while proving nothing. The script must delete its own `smoke-%` rows from the
+   configured database before the `TestClient` block, then assert exactly 201 on
+   the fresh insert and exactly 200 on the duplicate.
+
 ---
 
 ### Task 3: Settings keys and writer resolution
