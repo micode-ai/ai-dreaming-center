@@ -507,6 +507,11 @@ async def article_written(
     row = await db.get_article_proposal(proposal_id)
     if row is None:
         raise HTTPException(status_code=404, detail="proposal not found")
+    if row["status"] != "writing":
+        raise HTTPException(
+            status_code=409,
+            detail=f"proposal {proposal_id} is '{row['status']}', not 'writing'",
+        )
     if payload.error_message.strip():
         await db.set_article_proposal_status(
             proposal_id, "failed", error_message=payload.error_message.strip()[:2000],
