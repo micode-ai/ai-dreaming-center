@@ -203,6 +203,54 @@ async def main() -> int:
                     return 1
                 print("ok: cross-project /articles queue renders")
 
+                # Test count_article_proposals with project filter
+                smoke_p1 = await ProjectsService(real_db).create(
+                    slug="smoke-count-p1", label="Smoke Count P1", working_dir=str(tmp),
+                )
+                smoke_p2 = await ProjectsService(real_db).create(
+                    slug="smoke-count-p2", label="Smoke Count P2", working_dir=str(tmp),
+                )
+                await real_db.add_article_proposal(
+                    smoke_p1.id, source="smoke", source_ref="1",
+                    evidence="test", title="Smoke count 1", angle="…",
+                    slug_hint="smoke-count-1",
+                )
+                await real_db.add_article_proposal(
+                    smoke_p2.id, source="smoke", source_ref="2",
+                    evidence="test", title="Smoke count 2", angle="…",
+                    slug_hint="smoke-count-2",
+                )
+                count_p1 = await real_db.count_article_proposals(
+                    status="proposed", project_ids=[smoke_p1.id],
+                )
+                if count_p1 != 1:
+                    fail(f"count_article_proposals for p1: got {count_p1}, want 1")
+                    return 1
+                count_both = await real_db.count_article_proposals(
+                    status="proposed", project_ids=[smoke_p1.id, smoke_p2.id],
+                )
+                if count_both != 2:
+                    fail(f"count_article_proposals for both: got {count_both}, want 2")
+                    return 1
+                count_empty = await real_db.count_article_proposals(
+                    status="proposed", project_ids=[],
+                )
+                if count_empty != 0:
+                    fail(f"count_article_proposals for empty list: got {count_empty}, want 0")
+                    return 1
+                try:
+                    await real_db.execute(
+                        "DELETE FROM projects WHERE id IN (?, ?)",
+                        (smoke_p1.id, smoke_p2.id),
+                    )
+                    await real_db.execute(
+                        "DELETE FROM article_proposals WHERE project_id IN (?, ?)",
+                        (smoke_p1.id, smoke_p2.id),
+                    )
+                finally:
+                    pass
+                print("ok: count_article_proposals counts correctly per project")
+
                 # A status outside the seven the page groups by must still
                 # show up (in the catch-all "other" group) instead of
                 # silently vanishing -- status has no CHECK constraint.

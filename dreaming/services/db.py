@@ -1282,3 +1282,22 @@ class SqliteDB:
             params = (project_id,)
         sql += " GROUP BY status ORDER BY n DESC"
         return await self.fetch_all(sql, params)
+
+    async def count_article_proposals(
+        self, *, status: str | None = None, project_ids: list[int] | None = None,
+    ) -> int:
+        """Count article proposals, optionally filtered by status and/or project list."""
+        # Empty list means zero, not "no filter".
+        if project_ids is not None and len(project_ids) == 0:
+            return 0
+        sql = "SELECT COUNT(*) AS n FROM article_proposals WHERE 1=1"
+        params: list = []
+        if status is not None:
+            sql += " AND status=?"
+            params.append(status)
+        if project_ids is not None:
+            placeholders = ",".join("?" * len(project_ids))
+            sql += f" AND project_id IN ({placeholders})"
+            params.extend(project_ids)
+        row = await self.fetch_one(sql, tuple(params))
+        return int(row["n"]) if row else 0

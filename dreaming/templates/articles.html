@@ -4,9 +4,13 @@
 <header class="page-header">
   <div class="page-header__titles">
     <h1 class="page-header__title">{{ "article.queue.title" | t(locale=locale) }}</h1>
-    <span class="text-xs faint">{{ items|length }} {{ "article.total" | t(locale=locale) }}</span>
+    <span class="text-xs faint">{{ total }} {{ "article.total" | t(locale=locale) }}</span>
   </div>
 </header>
+
+{% if capped %}
+<p class="text-xs faint mb-4">{{ "article.capped" | t(locale=locale, shown=shown, total=total) }}</p>
+{% endif %}
 
 {% if items %}
   {% for a in items %}
