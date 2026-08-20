@@ -375,7 +375,7 @@ History of AI Dreaming Center development: what was done in each wave, the git t
 
 ## Wave B — Article cross-project
 
-**Branch**: `feature/article-cross-project`, range `cec9010`..`5faa7e7` — 13 commits, 10 files, +1111/−57.
+**Branch**: `feature/article-cross-project`, range `cec9010`..`d57cf01` — 15 commits, 12 files, +1307/−57.
 
 **Spec**: [`docs/superpowers/specs/2026-08-20-article-cross-project-design.md`](../superpowers/specs/2026-08-20-article-cross-project-design.md)
 **Plan**: [`docs/superpowers/plans/2026-08-20-article-cross-project.md`](../superpowers/plans/2026-08-20-article-cross-project.md)
@@ -408,6 +408,8 @@ Two capabilities were also missing outright. `source="manual"` existed in the da
 - The blank-evidence rule lived only at the `/articles/ingest` HTTP boundary, resting on every feeder composing a non-empty string by convention. Promoted into `add_article_proposal` itself so a future feeder inherits the rule structurally.
 - The venue `<select>` on the card compared its options against the *resolved* venue slug — which, by `resolve_venue_id`'s own fallback chain, always lands on some real project — making the "project's default" option effectively unreachable and silently pinning an unpinned row on save. Fixed by threading the raw per-row override to the template instead of the resolved value.
 
+- A question's `tool_use_id` was derived from the proposal id, and `create_question` returns the **existing** row for a repeated key without updating its text. So a retry of a failed article would have read the *first* attempt's answer as the answer to its own question — or, if that question had been dismissed, been denied any chance to ask. Fixed by tagging the key with the run.
+- The "writer is waiting" indicator was computed once per project and shared by every card, while the questions table serves every session for that project. So a question from an unrelated scan would have made **every** in-progress article claim it was waiting on you. Fixed by scoping the question to the proposal.
 **Acceptance**: [`scripts/smoke_articles.py`](../../scripts/smoke_articles.py) — 57 checks, exit 0. `scripts/smoke_ai_radar.py`, `check_i18n.py`, `check_css_tokens.py` all green; `python -c "import dreaming.main"` exits 0. Nine touched pages return 200 via `TestClient`, including `/p/budlog/articles` (the one project deliberately configured with a cross-project `article_venue_project`). The regression that matters most: a proposal with `target_project_id` NULL and no `article_venue_project` set was confirmed, project by project, to resolve its venue to the subject itself and read the subject's own `article_blog_dir` and article root, for all three currently-configured projects (`test`, `accounting-ai-agent`, `ai-budget-assistant`) — reproducing Wave A's behaviour exactly. `budlog`'s deliberately different result (`article_venue_project=test`, resolving to `test`) was confirmed as the intended cross-project demonstration, not a regression.
 
 **Deferred**:
