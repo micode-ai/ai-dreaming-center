@@ -22,11 +22,13 @@ async def project_ai_radar(
     request: Request, slug: str,
     status: str | None = Query(default=None),
     since_days: int | None = Query(default=None),
+    show_hidden: int = Query(default=0),
 ):
     project = request.state.project
     db = request.app.state.db
     rows = await db.list_radar_findings(
         status=status or None, since_days=since_days, project_slug=project.slug,
+        include_dismissed=bool(show_hidden),
     )
     findings = []
     for r in rows:
@@ -44,5 +46,6 @@ async def project_ai_radar(
         request, "project_ai_radar.html",
         {"project": project, "findings": findings,
          "filter_status": status or "", "filter_since_days": since_days,
+         "filter_show_hidden": bool(show_hidden),
          "projects": projects, "locale": locale},
     )

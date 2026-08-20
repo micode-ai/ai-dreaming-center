@@ -78,6 +78,14 @@
         {{ "radar.btn.dismiss" | t(locale=locale) }}
       </button>
     </form>
+    {% else %}
+    {# Скрытую карточку видно только с «показывать скрытые» — даём путь назад. #}
+    <form method="post" action="/ai-radar/{{ f.id }}/status" class="inline">
+      <input type="hidden" name="status" value="new">
+      <button class="btn btn-sm">
+        {{ "radar.btn.undismiss" | t(locale=locale) }}
+      </button>
+    </form>
     {% endif %}
 
     {# Pin to project — short form #}

@@ -190,6 +190,29 @@ async def main() -> int:
             return 1
         print("ok: set_status + status filter")
 
+        # ── dismissed скрыт из дефолтной ленты ─────────────────────
+        default_ids = [r["id"] for r in await db.list_radar_findings()]
+        if other_id in default_ids:
+            fail(f"dismissed id={other_id} still in default feed: {default_ids}")
+            return 1
+        if len(default_ids) != len(all_rows) - 1:
+            fail(f"default feed: expected {len(all_rows) - 1} rows, got {len(default_ids)}")
+            return 1
+        with_hidden = [
+            r["id"] for r in await db.list_radar_findings(include_dismissed=True)
+        ]
+        if other_id not in with_hidden or len(with_hidden) != len(all_rows):
+            fail(f"include_dismissed=True: expected {len(all_rows)} rows with "
+                 f"id={other_id}, got {with_hidden}")
+            return 1
+        # Возврат в ленту — кнопка «Вернуть в ленту» (status='new').
+        await db.set_radar_finding_status(other_id, "new")
+        if other_id not in [r["id"] for r in await db.list_radar_findings()]:
+            fail(f"undismiss: id={other_id} did not come back to the feed")
+            return 1
+        print("ok: dismissed hidden by default, shown with include_dismissed, "
+              "restorable via status='new'")
+
         print("PASS")
         return 0
     finally:

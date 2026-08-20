@@ -1038,15 +1038,24 @@ class SqliteDB:
         source_key: str | None = None,
         since_days: int | None = None,
         project_slug: str | None = None,
+        include_dismissed: bool = False,
         limit: int = 200,
     ) -> list:
         """Лента findings с фильтрами. project_slug — фильтр по relevance_hint
-        ИЛИ pinned_projects (substring match — оба поля хранят CSV-список slug-ов)."""
+        ИЛИ pinned_projects (substring match — оба поля хранят CSV-список slug-ов).
+
+        `dismissed` по умолчанию не отдаём: кнопка «Скрыть» должна убирать
+        карточку из ленты, иначе она бессмысленна. include_dismissed=True
+        возвращает их обратно (переключатель «показывать скрытые»); явный
+        status= (в т.ч. status='dismissed') всегда сильнее этого правила.
+        """
         sql = "SELECT * FROM ai_radar_findings WHERE 1=1"
         params: list = []
         if status:
             sql += " AND status=?"
             params.append(status)
+        elif not include_dismissed:
+            sql += " AND status <> 'dismissed'"
         if source_key:
             sql += " AND source_key=?"
             params.append(source_key)

@@ -50,7 +50,15 @@
           </option>
         {% endfor %}
       </select>
+      <label class="flex items-center gap-1 cursor-pointer">
+        <input type="checkbox" name="show_hidden" value="1"
+               onchange="this.form.submit()"
+               {% if filter_show_hidden %}checked{% endif %}>
+        {{ "radar.filter.show_hidden" | t(locale=locale) }}
+      </label>
       {% if filter_source %}
+        {# Держим source в форме, иначе смена любого фильтра сбрасывает его. #}
+        <input type="hidden" name="source" value="{{ filter_source }}">
         <span class="badge badge-brand font-mono">
           source: {{ filter_source }}
         </span>

@@ -53,12 +53,14 @@ async def ai_radar_index(
     status: str | None = Query(default=None),
     source: str | None = Query(default=None),
     since_days: int | None = Query(default=None),
+    show_hidden: int = Query(default=0),
 ):
     db = request.app.state.db
     rows = await db.list_radar_findings(
         status=status or None,
         source_key=source or None,
         since_days=since_days,
+        include_dismissed=bool(show_hidden),
         # table-tools filters client-side over this capped set (default limit=200 in list_radar_findings); see docs/superpowers/plans re: table-tools
     )
     source_counts = await db.radar_source_counts(since_days=7)
@@ -79,6 +81,7 @@ async def ai_radar_index(
             "filter_status": status or "",
             "filter_source": source or "",
             "filter_since_days": since_days,
+            "filter_show_hidden": bool(show_hidden),
             "locale": locale,
         },
     )
