@@ -503,25 +503,6 @@ class SqliteDB:
         async with self._conn.execute(sql, params) as cur:
             return list(await cur.fetchall())
 
-    # ── Projects ───────────────────────────────────────────────────
-
-    async def create_project(
-        self, slug: str, label: str, working_dir: str,
-        enabled: bool = True, is_default: bool = False,
-        sort_order: int = 0, color: str | None = None,
-    ) -> int:
-        """Вставить проект и вернуть его ID."""
-        now_iso = datetime.now(timezone.utc).isoformat()
-        await self.execute(
-            """INSERT INTO projects
-               (slug, label, working_dir, enabled, is_default, sort_order, color, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (slug, label, working_dir, int(enabled), int(is_default),
-             sort_order, color, now_iso, now_iso),
-        )
-        row = await self.fetch_one("SELECT id FROM projects WHERE slug=?", (slug,))
-        return row["id"] if row else 0
-
     # ── Orchestration node skills ─────────────────────────────────
 
     async def add_node_skill(

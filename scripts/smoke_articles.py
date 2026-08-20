@@ -14,7 +14,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+# Windows console here is cp1250: an unencodable char in print() aborts the
+# run mid-way. Force UTF-8 on both streams (fail() writes to stderr).
+sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")
+sys.stderr.reconfigure(encoding="utf-8", errors="backslashreplace")
+
 from dreaming.services.db import SqliteDB  # noqa: E402
+from dreaming.services.projects import ProjectsService  # noqa: E402
 
 
 def fail(msg: str) -> None:
@@ -26,9 +32,10 @@ async def main() -> int:
     db = SqliteDB(str(tmp / "test.db"))
     await db.connect()
     try:
-        pid = await db.create_project(
+        project = await ProjectsService(db).create(
             slug="demo", label="Demo", working_dir=str(tmp),
         )
+        pid = project.id
 
         # ── insert + dedup ─────────────────────────────────────────
         first = await db.add_article_proposal(
@@ -65,7 +72,7 @@ async def main() -> int:
             fail(f"after approve/writing: status={row['status']}, "
                  f"decided_at={row['decided_at']}")
             return 1
-        print("ok: proposed → approved → writing, decided_at stamped")
+        print("ok: proposed -> approved -> writing, decided_at stamped")
 
         # ── draft with verification ────────────────────────────────
         await db.mark_article_written(
