@@ -5,6 +5,13 @@ uncommitted work out of a project with `git stash -u`, and this feature runs
 against eleven working trees that belong to the user, not to us. So:
 
   * stage only the paths the writer reported, never `git add -A`;
+  * commit only those same paths, never the whole index — `git commit` with
+    no pathspec commits everything currently staged, so if the user had
+    something else staged elsewhere in the repo, an unscoped commit would
+    silently sweep it into ours. Fixed 2026-08-20 after a review proved this
+    with a throwaway repo: an unrelated staged file rode along into a
+    "content: publish ..." commit. The commit call now passes `-- <paths>`,
+    same as `add`;
   * never `git stash`, for any reason;
   * if a target path already carries uncommitted edits that are not ours,
     refuse — the user's unsaved work outranks our commit.
@@ -179,7 +186,15 @@ async def publish(
     if not out.strip():
         raise PublishError("nothing staged: the draft paths match HEAD already")
 
-    rc, out, err = await _run([git, "commit", "-m", message], str(wd))
+    # Scoped to `-- *paths`, same as `add` above: a bare `git commit` commits
+    # the *entire* index, so if the user had anything else staged elsewhere
+    # in the repo, it would ride along into our commit under our message.
+    # The pathspec form only commits the index entries matching these paths
+    # and leaves every other staged entry exactly as the user left it.
+    rc, out, err = await _run(
+        [git, "--literal-pathspecs", "commit", "-m", message, "--", *paths],
+        str(wd),
+    )
     if rc != 0:
         # The paths are still staged in the user's index. Left alone, a retry
         # would see our own leftovers at the pre-check above -- indistinguishable

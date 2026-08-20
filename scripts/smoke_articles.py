@@ -616,10 +616,21 @@ async def main() -> int:
 
         # ── a rollback that itself fails must say so honestly ──────────
         # A separate throwaway repo so this doesn't disturb `repo`'s state.
-        # Forced deterministically: the pre-commit hook fails the commit AND
-        # leaves .git/index.lock behind as a side effect, so the reset that
-        # follows the failed commit collides with that stale lock and fails
-        # too -- no flakiness, nothing outside this repo is touched.
+        # The commit failure itself is real (a plain failing pre-commit
+        # hook, no lock-file trickery needed for that half). Forcing the
+        # *reset* to also fail deterministically is a different matter: the
+        # obvious trick -- have the hook leave a stale .git/index.lock behind
+        # -- turned out to depend on git's internal commit machinery, which
+        # (confirmed empirically while adding the pathspec fix below) cleans
+        # up that lock reliably for a *pathspec-scoped* commit but not for a
+        # full-index one. Since publish() now always commits with a
+        # pathspec, that trick stopped reproducing the scenario at all.
+        # Simulating just the reset call's return code via a thin wrapper
+        # around _run is the part that's actually under test here -- how the
+        # code reacts to "reset also failed" -- without depending on git
+        # internals or corrupting real repo state (which would also break
+        # the verification diff below).
+        from unittest.mock import patch
         lockfail_repo = tmp / "repo_lockfail"
         (lockfail_repo / "content").mkdir(parents=True)
         def git2(*args, cwd=lockfail_repo):
@@ -636,13 +647,19 @@ async def main() -> int:
         )
         hooks = lockfail_repo / ".git" / "hooks"
         (hooks / "pre-commit").write_text(
-            "#!/bin/sh\ntouch .git/index.lock\nexit 1\n", encoding="utf-8",
+            "#!/bin/sh\nexit 1\n", encoding="utf-8",
         )
+        real_run = article_publish._run
+        async def _run_reset_fails(cmd, cwd):
+            if "reset" in cmd:
+                return 1, "", "simulated: .git/index.lock exists (stale)"
+            return await real_run(cmd, cwd)
         try:
-            await article_publish.publish(
-                str(lockfail_repo), ["content/piece.md"],
-                message="should fail and fail to roll back", push=False,
-            )
+            with patch.object(article_publish, "_run", _run_reset_fails):
+                await article_publish.publish(
+                    str(lockfail_repo), ["content/piece.md"],
+                    message="should fail and fail to roll back", push=False,
+                )
         except article_publish.PublishError as e:
             msg = str(e)
             if "could not be rolled back" not in msg or "content/piece.md" not in msg:
@@ -651,6 +668,10 @@ async def main() -> int:
         else:
             fail("publish succeeded despite a failing pre-commit hook")
             return 1
+        # The simulated reset never actually ran, so real git state is
+        # exactly what a genuinely-failed reset would leave: the hook's
+        # commit failed, git add's staging is untouched. Verify that ground
+        # truth with a real (unmocked) git diff.
         still_staged = git2("diff", "--cached", "--name-only").stdout
         if "content/piece.md" not in still_staged:
             fail("reset failed but the path is no longer staged in reality -- "
@@ -658,6 +679,110 @@ async def main() -> int:
             return 1
         print("ok: a rollback that itself fails says so honestly and leaves "
               "the paths visibly still staged")
+
+        # ── commit must not sweep unrelated staged files into ours ──────
+        # `git commit` with no pathspec commits the *entire* index. Proven
+        # as a real bug against a throwaway repo: the user had something
+        # staged elsewhere, unrelated to the draft, and it rode along into
+        # our "content: publish ..." commit. Fixed by passing `-- <paths>`
+        # to the commit itself (same scoping `add` already had). Pin both
+        # halves: the commit must contain only the draft path, AND the
+        # unrelated file must still be staged and uncommitted afterwards --
+        # "we didn't touch it" matters as much as "we didn't commit it".
+        scope_repo = tmp / "repo_scope"
+        (scope_repo / "content").mkdir(parents=True)
+        (scope_repo / "other").mkdir(parents=True)
+        def git_scope(*args, cwd=scope_repo):
+            return subprocess.run(["git", *args], cwd=str(cwd),
+                                  capture_output=True, text=True)
+        git_scope("init", "-q")
+        git_scope("config", "user.email", "smoke@example.test")
+        git_scope("config", "user.name", "Smoke")
+        (scope_repo / "README.md").write_text("seed\n", encoding="utf-8")
+        git_scope("add", "README.md")
+        git_scope("commit", "-q", "-m", "seed")
+
+        # The user's own, unrelated work-in-progress, staged before publish
+        # ever runs.
+        (scope_repo / "other" / "unrelated.txt").write_text(
+            "the user's own work in progress\n", encoding="utf-8",
+        )
+        git_scope("add", "other/unrelated.txt")
+
+        (scope_repo / "content" / "scoped-piece.md").write_text(
+            "# Scoped piece\n", encoding="utf-8",
+        )
+        scope_sha = await article_publish.publish(
+            str(scope_repo), ["content/scoped-piece.md"],
+            message="publish: scoped piece (unverified)", push=False,
+        )
+        committed_files = git_scope(
+            "show", "--name-only", "--pretty=format:", scope_sha,
+        ).stdout.split()
+        if committed_files != ["content/scoped-piece.md"]:
+            fail("publish swept unrelated staged files into the commit: "
+                 f"{committed_files}")
+            return 1
+        still_staged_scope = git_scope(
+            "diff", "--cached", "--name-only",
+        ).stdout.split()
+        if still_staged_scope != ["other/unrelated.txt"]:
+            fail("the user's unrelated staged file was disturbed by publish: "
+                 f"still staged = {still_staged_scope}")
+            return 1
+        print("ok: publish commits only the draft path even when something "
+              "else is staged elsewhere, and leaves that unrelated file "
+              "staged and uncommitted")
+
+        # ── the same scoping must hold on the rollback path ─────────────
+        # A normal (non-lockfile) commit failure: the reset that follows
+        # must unstage only our own path and must not touch the user's
+        # other staged entry either. This is a different case from the
+        # lockfail test above (where the reset *itself* also fails) -- here
+        # the reset succeeds, and what's being checked is *what* it touched.
+        rollback_scope_repo = tmp / "repo_rollback_scope"
+        (rollback_scope_repo / "content").mkdir(parents=True)
+        (rollback_scope_repo / "other").mkdir(parents=True)
+        def git_rb(*args, cwd=rollback_scope_repo):
+            return subprocess.run(["git", *args], cwd=str(cwd),
+                                  capture_output=True, text=True)
+        git_rb("init", "-q")
+        git_rb("config", "user.email", "smoke@example.test")
+        git_rb("config", "user.name", "Smoke")
+        (rollback_scope_repo / "README.md").write_text("seed\n", encoding="utf-8")
+        git_rb("add", "README.md")
+        git_rb("commit", "-q", "-m", "seed")
+        (rollback_scope_repo / "other" / "unrelated.txt").write_text(
+            "the user's own work in progress\n", encoding="utf-8",
+        )
+        git_rb("add", "other/unrelated.txt")
+        (rollback_scope_repo / "content" / "piece.md").write_text(
+            "# piece\n", encoding="utf-8",
+        )
+        rb_hooks = rollback_scope_repo / ".git" / "hooks"
+        (rb_hooks / "pre-commit").write_text(
+            "#!/bin/sh\nexit 1\n", encoding="utf-8",
+        )
+        try:
+            await article_publish.publish(
+                str(rollback_scope_repo), ["content/piece.md"],
+                message="should fail, roll back cleanly", push=False,
+            )
+        except article_publish.PublishError as e:
+            msg = str(e)
+            if "staged changes rolled back" not in msg:
+                fail(f"expected the clean-rollback message, got: {msg!r}")
+                return 1
+        else:
+            fail("publish succeeded despite a failing pre-commit hook")
+            return 1
+        after_rollback = git_rb("diff", "--cached", "--name-only").stdout.split()
+        if after_rollback != ["other/unrelated.txt"]:
+            fail("rollback did not scope correctly -- expected only the "
+                 f"user's unrelated file still staged, got: {after_rollback}")
+            return 1
+        print("ok: a failed commit's rollback unstages only our own path, "
+              "leaving the user's unrelated staged file untouched")
 
         # ── C2 pin: a second publish must not drag 'published' back ─────
         # The double-click regression from the final-fixes review: two
