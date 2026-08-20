@@ -308,14 +308,24 @@ CREATE TABLE IF NOT EXISTS article_proposals (
     draft_ref       TEXT NOT NULL DEFAULT '',
     verify_output   TEXT NOT NULL DEFAULT '',
     verify_ok       INTEGER NOT NULL DEFAULT 0,
-    verify_label    TEXT NOT NULL DEFAULT '',
     commit_ref      TEXT NOT NULL DEFAULT '',
     session_id      TEXT NOT NULL DEFAULT '',
     error_message   TEXT NOT NULL DEFAULT '',
     created_at      TEXT NOT NULL,
     decided_at      TEXT,
     written_at      TEXT,
-    published_at    TEXT
+    published_at    TEXT,
+    -- Both of these were added after this table's first release, via
+    -- ALTER TABLE ADD COLUMN in _migrate_orchestration -- which can only
+    -- append, so a database migrated from before either column existed
+    -- gets them at the end, in the order they were appended (verify_label
+    -- first, then target_project_id). Declaring them anywhere else here
+    -- would make a fresh database's column order diverge from a migrated
+    -- one for no benefit; the two paths must not disagree about column
+    -- order, so any future ALTER TABLE ADD COLUMN addition belongs here
+    -- too, appended in the same order it is appended live.
+    verify_label    TEXT NOT NULL DEFAULT '',
+    target_project_id INTEGER
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_article_project_slug
     ON article_proposals (project_id, slug_hint);
@@ -443,6 +453,19 @@ class SqliteDB:
                 )
             except Exception as e:
                 log.warning("Failed to add verify_label column: %s", e)
+
+        # --- articles: target_project_id is the proposal's venue override
+        # (Wave B) -- NULL means "same as the subject", i.e. Wave A's
+        # behaviour unchanged. Same reason as verify_label above: CREATE
+        # TABLE IF NOT EXISTS is a no-op on a table that already exists. ---
+        if "target_project_id" not in article_cols:
+            try:
+                await self._conn.execute(
+                    "ALTER TABLE article_proposals ADD COLUMN "
+                    "target_project_id INTEGER"
+                )
+            except Exception as e:
+                log.warning("Failed to add target_project_id column: %s", e)
 
         try:
             await self._conn.execute(
@@ -676,16 +699,32 @@ class SqliteDB:
     ) -> str:
         """Insert a pending question. Returns the question id.
 
-        `tool_use_id` is UNIQUE — if claude calls AskUserQuestion with the same
-        tool_use_id twice (e.g. on resume), we return the existing row's id
-        instead of erroring.
+        `tool_use_id` is UNIQUE. If claude calls AskUserQuestion with the same
+        tool_use_id twice while the existing row is still `pending`, that is
+        the same ask (e.g. a session resumed mid-question) and we return the
+        existing row's id instead of erroring.
+
+        FIX 5: once that row has moved past `pending` (answered or
+        dismissed), a repeated tool_use_id is a *different* ask that happens
+        to collide with an old one — normally because the caller forgot the
+        run-tag rule write-article.md documents — and hand it the old row's
+        `answer_text` would silently let this new question consume a
+        previous attempt's answer to something else. That is exactly the
+        fabrication class this channel exists to prevent, so the stale row
+        is discarded (`tool_use_id` is UNIQUE, so it must go before a fresh
+        row can take its place) and a genuinely fresh, pending row — a new
+        id — is inserted instead.
         """
         existing = await self.fetch_one(
-            "SELECT id FROM orchestrator_questions WHERE tool_use_id=?",
+            "SELECT id, status FROM orchestrator_questions WHERE tool_use_id=?",
             (tool_use_id,),
         )
-        if existing:
+        if existing and existing["status"] == "pending":
             return existing["id"]
+        if existing:
+            await self._conn.execute(
+                "DELETE FROM orchestrator_questions WHERE id=?", (existing["id"],),
+            )
         from uuid import uuid4
         qid = str(uuid4())
         now = datetime.now(timezone.utc).isoformat()
@@ -1211,17 +1250,36 @@ class SqliteDB:
         self, project_id: int, *, source: str, source_ref: str, evidence: str,
         title: str, angle: str, slug_hint: str, funnel_level: str = "top",
         locales: str = "", tags_json: str = "[]", related_product: str = "",
+        target_project_id: int | None = None,
     ) -> int | None:
         """Вставить предложение. None — если (project_id, slug_hint) уже есть:
-        три фидера на один сюжет дают одну строку, а не три."""
+        три фидера на один сюжет дают одну строку, а не три.
+
+        A blank-after-strip `evidence` is refused here, not just at the
+        /articles/ingest HTTP boundary: this is the rule the whole feature
+        rests on (a queue of unfalsifiable suggestions is worse than an empty
+        one), and a future feeder that calls this method directly must not be
+        able to forget it. Every feeder today already composes a real,
+        non-empty evidence string, so this changes no observed behaviour —
+        it only turns a convention into an invariant.
+        """
+        if not evidence.strip():
+            raise ValueError(
+                "add_article_proposal: evidence must be non-blank — state "
+                "the fact this proposal traces to (a commit, a release, a "
+                "measurement, or a person's own request), never leave it "
+                "empty"
+            )
         now_iso = datetime.now(timezone.utc).isoformat()
         async with self._conn.execute(
             "INSERT OR IGNORE INTO article_proposals "
             "(project_id, source, source_ref, evidence, title, angle, slug_hint, "
-            " funnel_level, locales, tags_json, related_product, status, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?)",
+            " funnel_level, locales, tags_json, related_product, target_project_id, "
+            " status, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?)",
             (project_id, source, source_ref, evidence, title, angle, slug_hint,
-             funnel_level, locales, tags_json, related_product, now_iso),
+             funnel_level, locales, tags_json, related_product, target_project_id,
+             now_iso),
         ) as cur:
             if cur.rowcount == 0:
                 await self._conn.commit()
@@ -1261,6 +1319,60 @@ class SqliteDB:
         )
         return dict(row) if row else None
 
+    async def set_article_proposal_venue(
+        self, proposal_id: int, target_project_id: int | None,
+    ) -> bool:
+        """Point a proposal at a venue. Only while it is `proposed` or
+        `failed`: those are the only two statuses where no draft exists on
+        disk anywhere yet. From `drafted`, `writing`, or `published`, a
+        writer has already been dispatched against a resolved venue and
+        either is producing or has produced a draft — moving the venue
+        afterwards would describe a different article than the one on disk
+        (or in flight). `failed` never got that far — the write-back never
+        landed a draft_ref — so a first attempt that pinned the wrong venue
+        can be corrected before Retry instead of being welded to it."""
+        async with self._conn.execute(
+            "UPDATE article_proposals SET target_project_id=? "
+            "WHERE id=? AND status IN ('proposed', 'failed')",
+            (target_project_id, proposal_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
+    async def pin_article_proposal_venue(
+        self, proposal_id: int, target_project_id: int | None,
+    ) -> bool:
+        """Record the venue `articles_approve` actually resolved and is about
+        to dispatch into. This is NOT the user-facing venue setter — it
+        carries no status guard, on purpose: `set_article_proposal_venue`
+        above is deliberately `proposed`-only, but a retry dispatches from
+        `drafted` or `failed`, and the whole point of this method is that a
+        row must never sit in `writing` against a venue resolution nobody
+        recorded.
+
+        Without this, `articles_publish` re-resolving the venue from
+        scratch could drift from what approve actually used — e.g. the
+        subject's `article_venue_project` setting changes between approve
+        and publish — and publish would derive a different working
+        directory and article root than the one the writer actually wrote
+        into. Pinning the resolved id into the same `target_project_id`
+        column approve reads from means publish's own venue resolution
+        takes the override branch and reproduces approve's decision by
+        construction, rather than recomputing one that might no longer
+        match.
+
+        Call this after the venue is resolved and before the session is
+        spawned — including when the resolved venue is the subject itself,
+        so every dispatched row carries an explicit, recorded decision."""
+        async with self._conn.execute(
+            "UPDATE article_proposals SET target_project_id=? WHERE id=?",
+            (target_project_id, proposal_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
     async def set_article_proposal_status(
         self, proposal_id: int, status: str, *, error_message: str = "",
         session_id: str = "", expect_statuses: tuple[str, ...] | None = None,
@@ -1290,6 +1402,38 @@ class SqliteDB:
             n = cur.rowcount
         await self._conn.commit()
         return n > 0
+
+    async def dismiss_article_proposal_questions(self, proposal_id: int) -> int:
+        """Dismiss every still-pending question this proposal itself asked.
+
+        write-article.md passes the proposal id as `run_id` on every ask, so
+        `orchestrator_questions.run_id == str(proposal_id)` identifies this
+        proposal's own questions. Call this whenever the row leaves
+        'writing' without a human ever answering — from `articles_cancel`,
+        from the `/written` failure path, and from the re-dispatch path
+        (`start_article_attempt`'s caller) before a fresh attempt begins.
+
+        Without this, an abandoned question stays 'pending' forever: the
+        process watchdog treats a pending question for the project as "not
+        silence" and keeps every session on that project alive up to the
+        hard cap, and the card keeps showing "the writer is waiting for
+        your answer" for an attempt that is already dead.
+
+        Reuses `answer_question`'s own dismissal semantics (its `WHERE
+        status='pending'` guard) rather than a second UPDATE path. A row
+        with no matching pending questions is a no-op, not an error —
+        returns 0.
+        """
+        rows = await self.fetch_all(
+            "SELECT id FROM orchestrator_questions "
+            "WHERE run_id=? AND status='pending'",
+            (str(proposal_id),),
+        )
+        n = 0
+        for r in rows:
+            if await self.answer_question(r["id"], answer_text="", status="dismissed"):
+                n += 1
+        return n
 
     # Statuses from which (re)dispatching a writer is legal: the first
     # approve ('proposed', and the unreachable-today 'approved'), and a

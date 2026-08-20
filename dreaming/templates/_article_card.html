@@ -1,4 +1,6 @@
-{# Карточка предложения. Параметры: a — enriched-строка, project, locale. #}
+{# Карточка предложения. Параметры: a — enriched-строка (включая
+   a.has_pending_question — есть ли pending-вопрос ИМЕННО у этой заявки,
+   т.е. вопрос с run_id == str(a.id)), project, locale. #}
 <article class="card mb-3">
   <header class="flex items-baseline gap-3 flex-wrap mb-2">
     <span class="text-base font-semibold strong">{{ a.title }}</span>
@@ -9,6 +11,11 @@
     {% if a.status in ('drafted', 'published') %}
       <span class="badge badge-neutral">
         {{ ("article.verify." ~ a.verify_label) | t(locale=locale) }}
+      </span>
+    {% endif %}
+    {% if a.venue_slug and a.venue_slug != project.slug %}
+      <span class="badge badge-brand" title="{{ 'article.venue.hint' | t(locale=locale) }}">
+        {{ "article.venue" | t(locale=locale) }}: {{ a.venue_slug }}
       </span>
     {% endif %}
     <span class="text-xs faint ml-auto">{{ a.source }}{% if a.source_ref %} · {{ a.source_ref }}{% endif %}</span>
@@ -47,6 +54,15 @@
       <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/reject" class="inline">
         <button class="btn btn-sm">{{ "article.btn.reject" | t(locale=locale) }}</button>
       </form>
+      <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/venue"
+            class="inline flex items-center gap-1">
+        <select name="venue" class="text-xs rounded px-1 py-1 bg-elevated">
+          <option value="" {% if not a.venue_override_slug %}selected{% endif %}>{{ "article.venue.default" | t(locale=locale) }}</option>
+          {% for p in projects %}<option value="{{ p.slug }}"
+            {% if a.venue_override_slug == p.slug %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
+        </select>
+        <button class="btn btn-sm">{{ "article.venue.set" | t(locale=locale) }}</button>
+      </form>
     {% elif a.status == 'rejected' %}
       <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/restore" class="inline">
         <button class="btn btn-sm">{{ "article.btn.restore" | t(locale=locale) }}</button>
@@ -55,10 +71,24 @@
       <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/approve" class="inline">
         <button class="btn btn-sm">{{ "article.btn.retry" | t(locale=locale) }}</button>
       </form>
+      <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/venue"
+            class="inline flex items-center gap-1">
+        <select name="venue" class="text-xs rounded px-1 py-1 bg-elevated">
+          <option value="" {% if not a.venue_override_slug %}selected{% endif %}>{{ "article.venue.default" | t(locale=locale) }}</option>
+          {% for p in projects %}<option value="{{ p.slug }}"
+            {% if a.venue_override_slug == p.slug %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
+        </select>
+        <button class="btn btn-sm">{{ "article.venue.set" | t(locale=locale) }}</button>
+      </form>
     {% elif a.status == 'writing' %}
       <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/cancel" class="inline">
         <button class="btn btn-sm">{{ "article.btn.cancel" | t(locale=locale) }}</button>
       </form>
+      {% if a.has_pending_question %}
+        <a href="/p/{{ project.slug }}/questions" class="text-xs faint">
+          {{ "article.waiting_answer" | t(locale=locale) }}
+        </a>
+      {% endif %}
     {% elif a.status == 'drafted' %}
       {% if a.can_publish %}
         <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/publish" class="inline">

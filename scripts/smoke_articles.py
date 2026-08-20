@@ -63,6 +63,23 @@ async def main() -> int:
             return 1
         print("ok: insert + dedup on (project_id, slug_hint)")
 
+        # ── evidence is a structural guard, not a per-caller habit ──
+        # Promoted from the API boundary (articles_ingest's own 400) into
+        # add_article_proposal itself so every present and future caller —
+        # not just /articles/ingest — inherits the rule: a queue of
+        # unfalsifiable suggestions is worse than an empty one.
+        try:
+            await db.add_article_proposal(
+                pid, source="project_scan", source_ref="x",
+                evidence="   ", title="No evidence", angle="…",
+                slug_hint="smoke-blank-evidence",
+            )
+        except ValueError:
+            print("ok: add_article_proposal refuses blank-after-strip evidence")
+        else:
+            fail("add_article_proposal accepted blank evidence")
+            return 1
+
         # ── status transitions ─────────────────────────────────────
         row = await db.get_article_proposal(first)
         if row["status"] != "proposed":
@@ -703,9 +720,203 @@ async def main() -> int:
                     return 1
                 print("ok: cross-project /articles queue renders")
 
+                # ── manual add: blank topic refused, honest evidence recorded ──
+                blank = client.post("/p/ai-dreaming-center/articles/add",
+                                    data={"title": "   ", "angle": "x"},
+                                    follow_redirects=False)
+                if blank.status_code != 400:
+                    fail(f"manual add with a blank topic: {blank.status_code}, want 400")
+                    return 1
+                made = client.post("/p/ai-dreaming-center/articles/add",
+                                   data={"title": "Smoke manual topic",
+                                         "angle": "an intro prompt from the operator",
+                                         "venue": ""},
+                                   follow_redirects=False)
+                if made.status_code != 303:
+                    fail(f"manual add: {made.status_code}, want 303")
+                    return 1
+                # the row must carry honest, non-blank evidence naming the request
+                made_row = None
+                for r in await real_db.list_article_proposals(status="proposed"):
+                    if r["slug_hint"].startswith("smoke-manual") or r["title"] == "Smoke manual topic":
+                        made_row = r
+                        break
+                if made_row is None:
+                    fail("manual proposal was not created")
+                    return 1
+                if made_row["source"] != "manual" or not made_row["evidence"].strip():
+                    fail(f"manual row: source={made_row['source']}, evidence={made_row['evidence']!r}")
+                    return 1
+                if "an intro prompt from the operator" not in made_row["angle"]:
+                    fail("the intro prompt did not reach the angle")
+                    return 1
+                await real_db.execute("DELETE FROM article_proposals WHERE id=?", (made_row["id"],))
+                print("ok: manual add -- blank topic refused, row carries honest evidence")
+
+                # ── all-Cyrillic topics: the slug fallback must be
+                # deterministic on the topic's own text, not the clock ────
+                # slugify drops non-ASCII rather than transliterating, so an
+                # all-Cyrillic topic (this user's default case, not an edge
+                # case) always hits the fallback. A clock-based fallback gets
+                # dedup backwards both ways: two different topics posted in
+                # the same UTC second would falsely collide, and the same
+                # topic posted twice, seconds apart -- the normal human case
+                # -- would NOT collide. Pin both directions for real.
+                import json as _json
+                from urllib.parse import unquote
+                import time as _time
+                cyr_a = "Смок кириллица один"
+                cyr_b = "Смок кириллица два"
+
+                first_cyr = client.post("/p/ai-dreaming-center/articles/add",
+                                        data={"title": cyr_a, "angle": ""},
+                                        follow_redirects=False)
+                if first_cyr.status_code != 303:
+                    fail(f"manual add (cyrillic topic A): {first_cyr.status_code}, want 303")
+                    return 1
+                cyr_a_row = None
+                for r in await real_db.list_article_proposals(status="proposed"):
+                    if r["title"] == cyr_a:
+                        cyr_a_row = r
+                        break
+                if cyr_a_row is None:
+                    fail("cyrillic manual proposal (topic A) was not created")
+                    return 1
+                slug_a = cyr_a_row["slug_hint"]
+                suffix_a = slug_a[len("manual-"):]
+                if (not slug_a.startswith("manual-") or len(suffix_a) != 10
+                        or any(c not in "0123456789abcdef" for c in suffix_a)):
+                    fail(f"cyrillic fallback slug_hint malformed: {slug_a!r}")
+                    return 1
+
+                # A real gap (>1s) between two submissions of the SAME topic
+                # is exactly the case a clock-based fallback got wrong --
+                # forcing a real sleep here makes this a genuine regression
+                # pin, not an accident of two fast calls landing in the same
+                # UTC second.
+                _time.sleep(1.1)
+                second_cyr = client.post("/p/ai-dreaming-center/articles/add",
+                                         data={"title": cyr_a, "angle": ""},
+                                         follow_redirects=False)
+                if second_cyr.status_code != 303:
+                    fail(f"manual add (cyrillic topic A, repeat): {second_cyr.status_code}, want 303")
+                    return 1
+                dup_flash = _json.loads(unquote(second_cyr.cookies.get("flash", "")))
+                if dup_flash.get("level") != "info":
+                    fail("repeating the same cyrillic topic a second apart was "
+                         f"not reported as a duplicate: {dup_flash}")
+                    return 1
+                same_slug_rows = [
+                    r for r in await real_db.list_article_proposals(status="proposed")
+                    if r["slug_hint"] == slug_a
+                ]
+                if len(same_slug_rows) != 1:
+                    fail(f"same cyrillic topic, >1s apart, produced "
+                         f"{len(same_slug_rows)} rows instead of deduping to 1 "
+                         "-- the fallback slug is still clock-derived")
+                    return 1
+                print("ok: same all-Cyrillic topic, seconds apart, dedupes to "
+                      "one row (fallback slug derives from the topic, not the clock)")
+
+                different_cyr = client.post("/p/ai-dreaming-center/articles/add",
+                                            data={"title": cyr_b, "angle": ""},
+                                            follow_redirects=False)
+                if different_cyr.status_code != 303:
+                    fail(f"manual add (cyrillic topic B): {different_cyr.status_code}, want 303")
+                    return 1
+                cyr_b_row = None
+                for r in await real_db.list_article_proposals(status="proposed"):
+                    if r["title"] == cyr_b:
+                        cyr_b_row = r
+                        break
+                if cyr_b_row is None:
+                    fail("cyrillic manual proposal (topic B) was not created")
+                    return 1
+                if cyr_b_row["slug_hint"] == slug_a:
+                    fail("two DIFFERENT cyrillic topics collided on the same "
+                         f"fallback slug_hint: {slug_a!r}")
+                    return 1
+                print("ok: two different all-Cyrillic topics get different fallback slug_hints")
+
+                await real_db.execute("DELETE FROM article_proposals WHERE id=?", (cyr_a_row["id"],))
+                await real_db.execute("DELETE FROM article_proposals WHERE id=?", (cyr_b_row["id"],))
+
                 ai_dc_project = await ProjectsService(real_db).get_by_slug(
                     "ai-dreaming-center",
                 )
+
+                # ── venue route: settable while proposed, refused afterwards ──
+                # Task 1's set_article_proposal_venue already proves the DB
+                # setter's own status guard (see the round-trip check further
+                # below); this proves the route wraps it correctly: 404 for a
+                # missing row, 303 while 'proposed' (both setting and clearing
+                # the override), and 409 once the row has moved past
+                # 'proposed' -- the venue is no longer the user's to change.
+                vroute_id = await real_db.add_article_proposal(
+                    ai_dc_project.id, source="manual", source_ref="",
+                    evidence="smoke: venue route", title="Smoke venue route",
+                    angle="…", slug_hint="smoke-venue-route",
+                )
+                try:
+                    missing = client.post(
+                        "/p/ai-dreaming-center/articles/999999999/venue",
+                        data={"venue": ""}, follow_redirects=False,
+                    )
+                    if missing.status_code != 404:
+                        fail(f"venue route on a missing row: "
+                             f"{missing.status_code}, want 404")
+                        return 1
+
+                    set_resp = client.post(
+                        f"/p/ai-dreaming-center/articles/{vroute_id}/venue",
+                        data={"venue": ai_dc_project.slug},
+                        follow_redirects=False,
+                    )
+                    if set_resp.status_code != 303:
+                        fail(f"venue route on a proposed row: "
+                             f"{set_resp.status_code}, want 303")
+                        return 1
+                    vrow = await real_db.get_article_proposal(vroute_id)
+                    if vrow["target_project_id"] != ai_dc_project.id:
+                        fail("venue route did not persist the override: "
+                             f"{vrow['target_project_id']!r}")
+                        return 1
+
+                    clear_resp = client.post(
+                        f"/p/ai-dreaming-center/articles/{vroute_id}/venue",
+                        data={"venue": ""}, follow_redirects=False,
+                    )
+                    if clear_resp.status_code != 303:
+                        fail(f"venue route clearing the override: "
+                             f"{clear_resp.status_code}, want 303")
+                        return 1
+                    vrow = await real_db.get_article_proposal(vroute_id)
+                    if vrow["target_project_id"] is not None:
+                        fail("venue route did not clear a previously set "
+                             f"override: {vrow['target_project_id']!r}")
+                        return 1
+
+                    await real_db.set_article_proposal_status(vroute_id, "writing")
+                    dispatched_resp = client.post(
+                        f"/p/ai-dreaming-center/articles/{vroute_id}/venue",
+                        data={"venue": ai_dc_project.slug},
+                        follow_redirects=False,
+                    )
+                    if dispatched_resp.status_code != 409:
+                        fail(f"venue route on a 'writing' row: "
+                             f"{dispatched_resp.status_code}, want 409")
+                        return 1
+                    vrow = await real_db.get_article_proposal(vroute_id)
+                    if vrow["target_project_id"] is not None:
+                        fail("venue route's refused 409 still changed the "
+                             f"row: {vrow['target_project_id']!r}")
+                        return 1
+                finally:
+                    await real_db.execute(
+                        "DELETE FROM article_proposals WHERE id=?", (vroute_id,),
+                    )
+                print("ok: venue route -- 404 missing row, 303 set/clear "
+                      "while proposed, 409 once dispatched")
 
                 # C1, route level: a stale Approve/Retry POST against an
                 # already-'published' row must be refused (409) and must not
@@ -778,6 +989,26 @@ async def main() -> int:
                         "DELETE FROM article_proposals WHERE id=?", (weird_id,),
                     )
                 print("ok: a status outside _ORDER lands in the catch-all group")
+
+                # A proposal whose venue has no article_blog_dir must be
+                # refused with 400 naming the venue, not silently dispatched.
+                # `api_id` has no target_project_id and ai-dreaming-center has
+                # no article_venue_project setting, so its venue is itself --
+                # this is the NULL-venue regression case, not a new one.
+                r = client.post(
+                    f"/p/ai-dreaming-center/articles/{api_id}/approve",
+                    follow_redirects=False,
+                )
+                if r.status_code not in (400, 409):
+                    fail(f"approve without a venue blog dir: {r.status_code}, "
+                         "want 400/409")
+                    return 1
+                if r.status_code == 400 and "venue" not in r.json().get("detail", ""):
+                    fail("400 for a missing blog dir must name the venue: "
+                         f"{r.text[:200]}")
+                    return 1
+                print("ok: approve refuses before dispatch when the venue "
+                      "has no blog dir, naming it")
         finally:
             await real_db.close()
         print("ok: API ingest (201 fresh / 200 dedupe), detail, write-back, "
@@ -1030,6 +1261,161 @@ async def main() -> int:
                 os.environ["DC_DB_PATH"] = prior_db_path_env
         print("ok: /p/{slug}/articles still renders with no article_blog_dir set")
 
+        # ── the NULL-venue case must be byte-identical, through the route ──
+        # Pins the regression that matters: a proposal with target_project_id
+        # NULL and no article_venue_project setting -- every real proposal in
+        # the live database is in this state. resolve_venue_id's own unit
+        # test above proves the pure function; this proves the route wiring
+        # actually uses it the way wave A always behaved -- own project, own
+        # blog dir inside its own repo, own writer agent, no venue anywhere.
+        os.environ["DC_DB_PATH"] = str(page_db_dir / "test.db")
+        try:
+            with TestClient(app) as page_client:
+                null_venue_dir = tmp / "null_venue_project"
+                _git_init(null_venue_dir)
+                (null_venue_dir / "content" / "blog").mkdir(parents=True)
+                (null_venue_dir / ".claude" / "agents").mkdir(parents=True)
+                (null_venue_dir / ".claude" / "agents" / "blog-writer.md").write_text(
+                    "---\nname: blog-writer\n---\n", encoding="utf-8",
+                )
+                null_venue_project = await ProjectsService(app.state.db).create(
+                    slug="smoke-null-venue", label="Smoke Null Venue",
+                    working_dir=str(null_venue_dir),
+                )
+                await ProjectsService(app.state.db).set_setting(
+                    null_venue_project.id, "article_blog_dir", "content/blog",
+                )
+                # Deliberately no article_venue_project setting -- this is
+                # the NULL-venue case, not an override.
+                null_venue_row_id = await app.state.db.add_article_proposal(
+                    null_venue_project.id, source="manual", source_ref="",
+                    evidence="smoke: NULL target_project_id must equal wave A",
+                    title="Null venue smoke row", angle="…",
+                    slug_hint="smoke-null-venue-row",
+                )
+                resp = page_client.get("/p/smoke-null-venue/articles")
+                if resp.status_code != 200:
+                    fail(f"articles_page (NULL-venue equivalence): {resp.status_code}")
+                    return 1
+                # What the route's _venue_for/resolve_writer chain must
+                # produce for the *subject's own* article root -- computed
+                # from the same pure functions the route calls, not
+                # hardcoded, so this stays true if resolve_writer's autodetect
+                # logic changes.
+                expected_root = await articles.resolve_article_root(
+                    str(null_venue_dir), "content/blog",
+                )
+                expected_writer = articles.resolve_writer(expected_root, "")
+                if expected_writer not in resp.text:
+                    fail(f"NULL-venue writer label: expected {expected_writer!r} "
+                         f"to appear in the page, it did not")
+                    return 1
+                # The venue badge must stay invisible when venue == subject.
+                # The hint text is new, unique wording -- a much sharper
+                # signal than checking for the shared badge-brand CSS class,
+                # which other cards on this same page legitimately use.
+                if "Репозиторий, в который попадёт статья" in resp.text:
+                    fail("NULL-venue row rendered the venue badge, but venue "
+                         "equals the subject -- it must stay invisible")
+                    return 1
+
+                # ── the positive mirror: venue actually differs from subject ──
+                # Only the pure resolve_venue_id function covered this case so
+                # far. A page render with target_project_id pre-set exercises
+                # the route wiring itself (_venue_for + the template's badge
+                # condition) without dispatching any session -- no approve, no
+                # write-article, nothing paid.
+                other_venue_dir = tmp / "other_venue_project"
+                other_venue_dir.mkdir(parents=True, exist_ok=True)
+                other_venue_project = await ProjectsService(app.state.db).create(
+                    slug="smoke-other-venue", label="Smoke Other Venue",
+                    working_dir=str(other_venue_dir),
+                )
+                explicit_venue_row_id = await app.state.db.add_article_proposal(
+                    null_venue_project.id, source="manual", source_ref="",
+                    evidence="smoke: an explicit venue override must show its badge",
+                    title="Explicit venue smoke row", angle="…",
+                    slug_hint="smoke-explicit-venue-row",
+                    target_project_id=other_venue_project.id,
+                )
+                resp2 = page_client.get("/p/smoke-null-venue/articles")
+                if resp2.status_code != 200:
+                    fail(f"articles_page (explicit venue): {resp2.status_code}")
+                    return 1
+                if f"площадка: {other_venue_project.slug}" not in resp2.text:
+                    fail("explicit-venue row did not render the venue badge "
+                         f"naming {other_venue_project.slug!r}: {resp2.text[:2000]}")
+                    return 1
+
+                # ── review fix round 1: the <select> preselection must use ──
+                # the RAW override, not the resolved venue_slug. The
+                # resolved slug always equals some real project (override ->
+                # article_venue_project -> the subject itself), so comparing
+                # against it made the "no override" default option
+                # unreachable -- an operator confirming the form untouched
+                # would silently pin a previously-unpinned row. Isolate each
+                # card's own <form ...venue> block by proposal id (both rows
+                # are 'proposed' and share one page) and inspect its
+                # <option> tags directly rather than the raw HTML text,
+                # since exact inter-attribute whitespace is a template
+                # rendering detail, not the thing under test.
+                import re as _re
+
+                def _venue_form(html: str, row_id) -> str:
+                    m = _re.search(
+                        r'<form method="post" action="/p/smoke-null-venue'
+                        r'/articles/%s/venue".*?</form>' % row_id,
+                        html, _re.DOTALL,
+                    )
+                    if m is None:
+                        fail(f"no venue <form> found for proposal {row_id}")
+                        raise LookupError
+                    return m.group(0)
+
+                def _option(html: str, value: str) -> str:
+                    m = _re.search(
+                        r'<option value="%s"[^>]*>' % _re.escape(value), html,
+                    )
+                    if m is None:
+                        fail(f"no <option value={value!r}> found: {html[:500]}")
+                        raise LookupError
+                    return m.group(0)
+
+                try:
+                    no_override_form = _venue_form(resp2.text, null_venue_row_id)
+                    if "selected" not in _option(no_override_form, ""):
+                        fail("no-override row: the default option is not "
+                             f"selected: {no_override_form}")
+                        return 1
+                    if "selected" in _option(no_override_form, other_venue_project.slug):
+                        fail("no-override row: a project option is "
+                             f"selected when it should not be: {no_override_form}")
+                        return 1
+
+                    override_form = _venue_form(resp2.text, explicit_venue_row_id)
+                    if "selected" in _option(override_form, ""):
+                        fail("overridden row: the default option is "
+                             f"selected when an override exists: {override_form}")
+                        return 1
+                    if "selected" not in _option(override_form, other_venue_project.slug):
+                        fail("overridden row: its own venue's option is not "
+                             f"selected: {override_form}")
+                        return 1
+                except LookupError:
+                    return 1
+                print("ok: the venue <select> preselects the default option "
+                      "for an unpinned row and the actual override's option "
+                      "for a pinned one")
+        finally:
+            if prior_db_path_env is None:
+                os.environ.pop("DC_DB_PATH", None)
+            else:
+                os.environ["DC_DB_PATH"] = prior_db_path_env
+        print("ok: NULL target_project_id with no article_venue_project shows "
+              "the subject's own writer and no venue badge")
+        print("ok: an explicit target_project_id override renders the venue "
+              "badge, naming that project's slug")
+
         gate_cases = [
             ({"verify_ok": 1, "status": "drafted"}, "npm run build", "commit", True),
             ({"verify_ok": 0, "status": "drafted"}, "npm run build", "commit", False),
@@ -1099,11 +1485,461 @@ async def main() -> int:
             fail("write-article.md missing from the starter kit")
             return 1
         body2 = kit2.read_text(encoding="utf-8")
-        for needle in ("/api/articles/", "/written", "verify_ok", "draft_ref"):
+        for needle in ("/api/articles/", "/written", "verify_ok", "draft_ref",
+                       "DC_ARTICLE_SUBJECT_DIR", "DC_ARTICLE_SUBJECT_SLUG"):
             if needle not in body2:
                 fail(f"write-article.md does not mention {needle!r}")
                 return 1
         print("ok: write-article command shipped in the starter kit")
+
+        # ── delegation must hand the subject to the delegate ────────
+        # Fix round 1: the writer-resolution section told the session to
+        # delegate to a subagent without ever mentioning
+        # $DC_ARTICLE_SUBJECT_DIR, so a cross-project delegate would be
+        # asked to write about a repository it was never pointed at.
+        # Scope the check to the delegation section itself (not just
+        # "anywhere in the file", which the check above already covers) so
+        # a future edit that keeps the mention elsewhere but drops it from
+        # the delegation instruction still fails loudly here.
+        deleg_start = body2.find("## 3. Find out who writes")
+        deleg_end = body2.find("## 4. Verify")
+        if deleg_start == -1 or deleg_end == -1 or deleg_end < deleg_start:
+            fail("write-article.md: could not locate the delegation section "
+                 "to check")
+            return 1
+        delegation_section = body2[deleg_start:deleg_end]
+        if "DC_ARTICLE_SUBJECT_DIR" not in delegation_section:
+            fail("write-article.md: the delegation section never tells the "
+                 "session to hand $DC_ARTICLE_SUBJECT_DIR to the delegate")
+            return 1
+        print("ok: write-article.md's delegation section hands the subject "
+              "directory to the delegate")
+
+        # ── the question channel must be documented ─────────────────
+        # Task 6: the writer needs to know how to ask, poll, and what to do
+        # on dismissed/unanswered. These three needles are the minimum
+        # proof the section exists and names the right endpoints/fields --
+        # the fuller wording is checked by hand, not by grep.
+        for needle in ("/api/questions/create", "poll", "tool_use_id"):
+            if needle not in body2:
+                fail(f"write-article.md does not document {needle!r} "
+                     "(the question channel)")
+                return 1
+        print("ok: write-article.md documents the question channel")
+
+        # ── the articles page must surface a pending question, scoped to
+        # the proposal that asked it ────────────────────────────────
+        # Review fix round 1, finding 2: orchestrator_questions is shared
+        # by every kind of session on a project (self-study, rotation,
+        # ...), and two proposals can be 'writing' at once. A project-wide
+        # "anything pending?" boolean would light up every 'writing' card
+        # whenever ANY question is pending -- including one that has
+        # nothing to do with either row. The fix scopes by run_id
+        # (write-article.md now passes the proposal id as run_id), so this
+        # has to prove three things a single row/single question fixture
+        # cannot: an unrelated run_id lights up nothing, the row that
+        # actually asked shows the line and only that row, and answering
+        # clears it. Isolated DB (DC_DB_PATH override), same pattern as the
+        # nested-repo / NULL-venue page checks above -- this never touches
+        # the user's live data/dreaming.db, so there is nothing here to
+        # clean up on that database; every row created below lives only in
+        # this throwaway sqlite file.
+        os.environ["DC_DB_PATH"] = str(page_db_dir / "test.db")
+        try:
+            with TestClient(app) as q_client:
+                q_project = await ProjectsService(app.state.db).create(
+                    slug="smoke-waiting-question", label="Smoke Waiting Question",
+                    working_dir=str(tmp),
+                )
+                waiting_text = app.state.i18n.t("article.waiting_answer", locale="ru")
+
+                # Two 'writing' rows on the same project -- row A will ask,
+                # row B never does. Both must exist before any question is
+                # created, or a project-wide implementation would pass this
+                # check by accident (only one 'writing' row to light up).
+                row_a = await app.state.db.add_article_proposal(
+                    q_project.id, source="manual", source_ref="",
+                    evidence="smoke: the row that actually asks a question",
+                    title="Smoke waiting-on-question row A", angle="…",
+                    slug_hint="smoke-waiting-question-row-a",
+                )
+                row_b = await app.state.db.add_article_proposal(
+                    q_project.id, source="manual", source_ref="",
+                    evidence="smoke: a second writing row that never asks",
+                    title="Smoke waiting-on-question row B", angle="…",
+                    slug_hint="smoke-waiting-question-row-b",
+                )
+                for rid in (row_a, row_b):
+                    await app.state.db.set_article_proposal_status(rid, "approved")
+                    await app.state.db.set_article_proposal_status(rid, "writing")
+
+                # An unrelated pending question on the same project -- no
+                # run_id, exactly how a self-study or rotation session asks
+                # today. Neither row asked this; neither card may show it.
+                await app.state.db.create_question(
+                    project_id=q_project.id, run_id=None, node_id=None,
+                    tool_use_id="smoke-waiting-question-unrelated-q1",
+                    questions_json='{"question": "unrelated self-study question", "options": []}',
+                )
+                resp0 = q_client.get(f"/p/{q_project.slug}/articles")
+                if resp0.status_code != 200:
+                    fail(f"/p/{q_project.slug}/articles with only an "
+                         f"unrelated pending question: {resp0.status_code}")
+                    return 1
+                if waiting_text in resp0.text:
+                    fail("a pending question with no matching run_id lit "
+                         "up a card that never asked it")
+                    return 1
+
+                # Now row A asks, scoped by run_id=row_a (mirrors
+                # write-article.md's instruction to pass the proposal id).
+                question_id = await app.state.db.create_question(
+                    project_id=q_project.id, run_id=str(row_a), node_id=None,
+                    tool_use_id="smoke-waiting-question-q1",
+                    questions_json='{"question": "real number for this claim?", "options": []}',
+                )
+                resp1 = q_client.get(f"/p/{q_project.slug}/articles")
+                if resp1.status_code != 200:
+                    fail(f"/p/{q_project.slug}/articles with row A's "
+                         f"pending question: {resp1.status_code}")
+                    return 1
+                if f"/p/{q_project.slug}/questions" not in resp1.text:
+                    fail("row A's pending question does not link to the "
+                         "questions page")
+                    return 1
+                # Exactly one occurrence: if the flag were still
+                # project-wide, both 'writing' rows (A and B) would each
+                # render the line, giving two.
+                count1 = resp1.text.count(waiting_text)
+                if count1 != 1:
+                    fail(f"waiting line appeared {count1} times with one "
+                         "row asking and one not (want exactly 1 -- a "
+                         "project-wide flag would show it on both "
+                         "'writing' rows)")
+                    return 1
+
+                # Answering row A's question must clear its own line while
+                # the still-pending, still-unrelated question changes
+                # nothing (it was never able to trigger anything to begin
+                # with).
+                await app.state.db.answer_question(
+                    question_id, answer_text="42%", status="answered",
+                )
+                resp2 = q_client.get(f"/p/{q_project.slug}/articles")
+                if waiting_text in resp2.text:
+                    fail("the waiting line is still shown after row A's "
+                         "question was answered")
+                    return 1
+        finally:
+            if prior_db_path_env is None:
+                os.environ.pop("DC_DB_PATH", None)
+            else:
+                os.environ["DC_DB_PATH"] = prior_db_path_env
+        print("ok: the waiting line is scoped to the proposal that asked "
+              "(run_id) -- an unrelated pending question lights up nothing, "
+              "a second 'writing' row that never asked stays silent, and "
+              "the line clears once the asking row's question is answered")
+
+        # ── final-fixes round (FIX 1, 2, 3, 6): real HTTP calls ─────
+        # Isolated DB (DC_DB_PATH override), same pattern as the nested-repo
+        # / NULL-venue / waiting-line checks above -- these projects and
+        # rows never touch data/dreaming.db.
+        os.environ["DC_DB_PATH"] = str(page_db_dir / "test.db")
+        try:
+            with TestClient(app) as fix_client:
+                fix_db = app.state.db
+                fix_ps = ProjectsService(fix_db)
+
+                # ── FIX 1: /written must compute verify_label from the ──
+                # VENUE's article_verify_cmd, not the subject's. Reproduces
+                # the worst case from the review: the SUBJECT has a verify
+                # command configured, the VENUE (where the session actually
+                # ran and where verify_ok=true was actually observed) does
+                # not. Reading the subject's command would label this
+                # "verified" -- a false claim about a build that never ran.
+                f1_subject = await fix_ps.create(
+                    slug="smoke-fix1-subject", label="Smoke Fix1 Subject",
+                    working_dir=str(tmp),
+                )
+                f1_venue = await fix_ps.create(
+                    slug="smoke-fix1-venue", label="Smoke Fix1 Venue",
+                    working_dir=str(tmp),
+                )
+                await fix_ps.set_setting(
+                    f1_subject.id, "article_verify_cmd", "npm run build",
+                )
+                f1_row = await fix_db.add_article_proposal(
+                    f1_subject.id, source="manual", source_ref="",
+                    evidence="smoke: FIX1 -- verify_label must read the venue",
+                    title="Smoke FIX1 row", angle="…",
+                    slug_hint="smoke-fix1-row", target_project_id=f1_venue.id,
+                )
+                await fix_db.set_article_proposal_status(f1_row, "writing")
+                f1_resp = fix_client.post(
+                    f"/api/articles/{f1_row}/written",
+                    json={"draft_ref": "content/piece.md", "verify_output": "",
+                          "writer_agent": "self", "verify_ok": True},
+                )
+                if f1_resp.status_code != 200:
+                    fail(f"FIX1 write-back: {f1_resp.status_code} {f1_resp.text[:200]}")
+                    return 1
+                if f1_resp.json().get("verify_label") != "unverified":
+                    fail("FIX1: venue has no verify_cmd but verify_label = "
+                         f"{f1_resp.json().get('verify_label')!r}, want "
+                         "'unverified' -- looks computed from the SUBJECT's "
+                         "article_verify_cmd instead of the venue's")
+                    return 1
+                f1_row_after = await fix_db.get_article_proposal(f1_row)
+                if f1_row_after["verify_label"] != "unverified":
+                    fail("FIX1: persisted verify_label = "
+                         f"{f1_row_after['verify_label']!r}, want 'unverified'")
+                    return 1
+                print("ok: FIX1 -- /written computes verify_label from the "
+                      "venue's article_verify_cmd, not the subject's")
+
+                # ── FIX 2: publish refuses a pinned venue that is no ──────
+                # longer enabled, rather than falling back to the subject's
+                # repository.
+                f2_subject = await fix_ps.create(
+                    slug="smoke-fix2-subject", label="Smoke Fix2 Subject",
+                    working_dir=str(tmp),
+                )
+                f2_venue = await fix_ps.create(
+                    slug="smoke-fix2-venue", label="Smoke Fix2 Venue",
+                    working_dir=str(tmp), enabled=False,
+                )
+                f2_row = await fix_db.add_article_proposal(
+                    f2_subject.id, source="manual", source_ref="",
+                    evidence="smoke: FIX2 -- publish must refuse a disabled "
+                    "pinned venue",
+                    title="Smoke FIX2 row", angle="…",
+                    slug_hint="smoke-fix2-row", target_project_id=f2_venue.id,
+                )
+                await fix_db.set_article_proposal_status(f2_row, "drafted")
+                f2_resp = fix_client.post(
+                    f"/p/{f2_subject.slug}/articles/{f2_row}/publish",
+                    follow_redirects=False,
+                )
+                if f2_resp.status_code != 409:
+                    fail("FIX2: publish with a disabled pinned venue: "
+                         f"{f2_resp.status_code}, want 409")
+                    return 1
+                if f2_venue.slug not in f2_resp.text:
+                    fail(f"FIX2: 409 must name the venue: {f2_resp.text[:300]}")
+                    return 1
+                f2_row_after = await fix_db.get_article_proposal(f2_row)
+                if f2_row_after["status"] != "drafted":
+                    fail("FIX2: a refused publish must not disturb the row: "
+                         f"status={f2_row_after['status']!r}")
+                    return 1
+                print("ok: FIX2 -- publish refuses (409) when the row's "
+                      "pinned venue is no longer enabled, naming it, and "
+                      "leaves the row untouched")
+
+                # ── FIX 3: an abandoned question must not stay pending ────
+                # forever once its proposal leaves 'writing'. Two call
+                # sites are HTTP-reachable without dispatching a real CLI
+                # session: articles_cancel, and the /written failure path.
+                # (The third call site -- the re-dispatch path inside
+                # articles_approve -- only fires after a real write-article
+                # session is actually launched via process_manager, which
+                # this suite never does; its shared dismissal mechanism is
+                # pinned directly against the db method a few blocks below.)
+                f3_project = await fix_ps.create(
+                    slug="smoke-fix3-project", label="Smoke Fix3 Project",
+                    working_dir=str(tmp),
+                )
+
+                # -- cancel --
+                f3_cancel_row = await fix_db.add_article_proposal(
+                    f3_project.id, source="manual", source_ref="",
+                    evidence="smoke: FIX3 -- cancel must dismiss its own "
+                    "pending question",
+                    title="Smoke FIX3 cancel row", angle="…",
+                    slug_hint="smoke-fix3-cancel-row",
+                )
+                await fix_db.set_article_proposal_status(f3_cancel_row, "approved")
+                await fix_db.set_article_proposal_status(f3_cancel_row, "writing")
+                f3_cancel_qid = await fix_db.create_question(
+                    project_id=f3_project.id, run_id=str(f3_cancel_row),
+                    node_id=None, tool_use_id="smoke-fix3-cancel-q1",
+                    questions_json='{"question": "real number?", "options": []}',
+                )
+                f3_cancel_resp = fix_client.post(
+                    f"/p/{f3_project.slug}/articles/{f3_cancel_row}/cancel",
+                    follow_redirects=False,
+                )
+                if f3_cancel_resp.status_code != 303:
+                    fail(f"FIX3 cancel: {f3_cancel_resp.status_code}, want 303")
+                    return 1
+                f3_cancel_q = await fix_db.get_question(f3_cancel_qid)
+                if f3_cancel_q["status"] != "dismissed":
+                    fail("FIX3: cancel did not dismiss the proposal's own "
+                         f"pending question: status={f3_cancel_q['status']!r}")
+                    return 1
+                print("ok: FIX3 -- cancel dismisses the cancelled proposal's "
+                      "own pending question")
+
+                # -- /written failure path --
+                f3_fail_row = await fix_db.add_article_proposal(
+                    f3_project.id, source="manual", source_ref="",
+                    evidence="smoke: FIX3 -- a reported failure must "
+                    "dismiss its own pending question",
+                    title="Smoke FIX3 written-failure row", angle="…",
+                    slug_hint="smoke-fix3-written-failure-row",
+                )
+                await fix_db.set_article_proposal_status(f3_fail_row, "approved")
+                await fix_db.set_article_proposal_status(f3_fail_row, "writing")
+                f3_fail_qid = await fix_db.create_question(
+                    project_id=f3_project.id, run_id=str(f3_fail_row),
+                    node_id=None, tool_use_id="smoke-fix3-written-failure-q1",
+                    questions_json='{"question": "real number?", "options": []}',
+                )
+                f3_fail_resp = fix_client.post(
+                    f"/api/articles/{f3_fail_row}/written",
+                    json={"draft_ref": "",
+                          "error_message": "unanswered question: no real number"},
+                )
+                if f3_fail_resp.status_code != 200:
+                    fail(f"FIX3 written-failure: {f3_fail_resp.status_code} "
+                         f"{f3_fail_resp.text[:200]}")
+                    return 1
+                f3_fail_q = await fix_db.get_question(f3_fail_qid)
+                if f3_fail_q["status"] != "dismissed":
+                    fail("FIX3: the /written failure path did not dismiss "
+                         f"the proposal's own pending question: "
+                         f"status={f3_fail_q['status']!r}")
+                    return 1
+                print("ok: FIX3 -- the /written failure path dismisses the "
+                      "failed proposal's own pending question")
+
+                # ── Round-1 fix: the /written failure report, EXACTLY as ──
+                # documented. write-article.md's own text: "On failure,
+                # POST the same endpoint with `{"error_message": "<what
+                # failed>"}`." -- no draft_ref, no other keys. Before this
+                # round, ArticleWrittenIn.draft_ref had no default, so
+                # Pydantic rejected that literal payload with 422 before
+                # the handler ever ran -- a writer that failed honestly
+                # could not say so. Pin the shape verbatim from the
+                # command's own text, not a shape convenient for the test.
+                r1_project = await fix_ps.create(
+                    slug="smoke-r1-failure-shape", label="Smoke R1 Failure Shape",
+                    working_dir=str(tmp),
+                )
+                r1_row = await fix_db.add_article_proposal(
+                    r1_project.id, source="manual", source_ref="",
+                    evidence="smoke: round-1 -- the documented failure "
+                    "payload must not 422",
+                    title="Smoke R1 failure-shape row", angle="…",
+                    slug_hint="smoke-r1-failure-shape-row",
+                )
+                await fix_db.set_article_proposal_status(r1_row, "approved")
+                await fix_db.set_article_proposal_status(r1_row, "writing")
+                r1_resp = fix_client.post(
+                    f"/api/articles/{r1_row}/written",
+                    json={"error_message": "npm run build exited 1"},
+                )
+                if r1_resp.status_code != 200:
+                    fail("round-1: the command's own documented failure "
+                         'payload ({"error_message": "..."}, no other '
+                         f"keys) got {r1_resp.status_code}, want 200: "
+                         f"{r1_resp.text[:300]}")
+                    return 1
+                r1_row_after = await fix_db.get_article_proposal(r1_row)
+                if r1_row_after["status"] != "failed":
+                    fail(f"round-1: status={r1_row_after['status']!r}, "
+                         "want 'failed'")
+                    return 1
+                if "npm run build exited 1" not in (r1_row_after["error_message"] or ""):
+                    fail("round-1: error_message not stored: "
+                         f"{r1_row_after['error_message']!r}")
+                    return 1
+                print("ok: round-1 -- the documented failure payload "
+                      '({"error_message": "..."}, no draft_ref, no other '
+                      "keys) is accepted (200), the row becomes 'failed', "
+                      "and the message is stored")
+
+                # The success branch must still refuse a blank draft_ref
+                # (422) -- the fix must not be readable as loosening that
+                # contract. An empty JSON body means both error_message and
+                # draft_ref default to "", which is unambiguously the
+                # success path with nothing to record.
+                r1_success_row = await fix_db.add_article_proposal(
+                    r1_project.id, source="manual", source_ref="",
+                    evidence="smoke: round-1 -- a blank draft_ref must "
+                    "still 422 on the success branch",
+                    title="Smoke R1 blank-draft-ref row", angle="…",
+                    slug_hint="smoke-r1-blank-draft-ref-row",
+                )
+                await fix_db.set_article_proposal_status(r1_success_row, "approved")
+                await fix_db.set_article_proposal_status(r1_success_row, "writing")
+                r1_blank_resp = fix_client.post(
+                    f"/api/articles/{r1_success_row}/written", json={},
+                )
+                if r1_blank_resp.status_code != 422:
+                    fail("round-1: a payload with no error_message and no "
+                         f"draft_ref got {r1_blank_resp.status_code}, want "
+                         "422 -- the success branch must still refuse a "
+                         "blank draft_ref")
+                    return 1
+                r1_success_row_after = await fix_db.get_article_proposal(r1_success_row)
+                if r1_success_row_after["status"] != "writing":
+                    fail("round-1: a refused write-back must not disturb "
+                         f"the row: status={r1_success_row_after['status']!r}")
+                    return 1
+                print("ok: round-1 -- the success branch still refuses a "
+                      "blank draft_ref with 422, unaffected by the "
+                      "failure-path fix")
+
+                # ── FIX 6: the venue can be re-pinned on a 'failed' row, ──
+                # and the failed card offers the venue <select>.
+                f6_subject = await fix_ps.create(
+                    slug="smoke-fix6-subject", label="Smoke Fix6 Subject",
+                    working_dir=str(tmp),
+                )
+                f6_venue = await fix_ps.create(
+                    slug="smoke-fix6-venue", label="Smoke Fix6 Venue",
+                    working_dir=str(tmp),
+                )
+                f6_row = await fix_db.add_article_proposal(
+                    f6_subject.id, source="manual", source_ref="",
+                    evidence="smoke: FIX6 -- a failed row's venue is not welded",
+                    title="Smoke FIX6 row", angle="…",
+                    slug_hint="smoke-fix6-row",
+                )
+                await fix_db.set_article_proposal_status(
+                    f6_row, "failed",
+                    error_message="wrong venue picked the first time",
+                )
+                if not await fix_db.set_article_proposal_venue(f6_row, f6_venue.id):
+                    fail("FIX6: set_article_proposal_venue refused a "
+                         "'failed' row")
+                    return 1
+                f6_row_after = await fix_db.get_article_proposal(f6_row)
+                if f6_row_after["target_project_id"] != f6_venue.id:
+                    fail("FIX6: the venue override did not persist on a "
+                         f"'failed' row: {f6_row_after['target_project_id']!r}")
+                    return 1
+                f6_page = fix_client.get(f"/p/{f6_subject.slug}/articles")
+                if f6_page.status_code != 200:
+                    fail(f"FIX6 page: {f6_page.status_code}")
+                    return 1
+                f6_form_action = f"/p/{f6_subject.slug}/articles/{f6_row}/venue"
+                if f6_form_action not in f6_page.text:
+                    fail("FIX6: the failed card does not offer the venue "
+                         f"<select> (no form posting to {f6_form_action!r})")
+                    return 1
+                print("ok: FIX6 -- set_article_proposal_venue allows a "
+                      "'failed' row, and its card offers the venue <select>")
+        finally:
+            if prior_db_path_env is None:
+                os.environ.pop("DC_DB_PATH", None)
+            else:
+                os.environ["DC_DB_PATH"] = prior_db_path_env
+        print("ok: final-fixes round -- FIX1 (venue verify_label), FIX2 "
+              "(disabled pinned venue refused), FIX3 (cancel + written-"
+              "failure dismiss their own pending question), FIX6 (venue "
+              "re-pinnable on failed, select shown) all pass over real HTTP")
 
         # ── publish: real git repo in a temp dir ───────────────────
         import re
@@ -1473,6 +2309,258 @@ async def main() -> int:
             fail("the weekly article scan must default to disabled")
             return 1
         print("ok: weekly_article_ideas_scan registered, off by default")
+
+        # ── venue resolution (pure) ────────────────────────────────
+        class _P:
+            def __init__(self, pid, slug): self.id, self.slug = pid, slug
+        enabled = [_P(1, "subject"), _P(2, "venue"), _P(3, "other")]
+        cases = [
+            # (override, configured slug, expected)
+            (2,    "other",   2),  # override wins over the setting
+            (None, "venue",   2),  # setting used when no override
+            (None, "",        1),  # neither -> the subject itself
+            (None, "missing", 1),  # unknown slug -> subject, not an error
+            (99,   "venue",   2),  # override naming no enabled project -> setting
+            (99,   "",        1),  # ... and then the subject
+        ]
+        for override, configured, want in cases:
+            got = articles.resolve_venue_id(1, override, configured, enabled)
+            if got != want:
+                fail(f"resolve_venue_id(1, {override}, {configured!r}) = {got}, want {want}")
+                return 1
+        print("ok: resolve_venue_id -- override > setting > subject, unknown falls back")
+
+        # ── the venue's settings are the ones that count ───────────
+        # A subject with no blog dir but a venue that has one must be
+        # approvable; the reverse must not be.
+        venue_enabled = [_P(pid, "subject"), _P(pid + 1000, "venue")]
+        venue_id = articles.resolve_venue_id(pid, pid + 1000, "", venue_enabled)
+        if venue_id != pid + 1000:
+            fail(f"venue_id = {venue_id}, want {pid + 1000}")
+            return 1
+        print("ok: venue id resolves for a subject that is not the venue")
+
+        # ── target_project_id round-trip ───────────────────────────
+        vid = await db.add_article_proposal(
+            pid, source="manual", source_ref="",
+            evidence="controller smoke: venue column round-trip",
+            title="Venue column", angle="", slug_hint="smoke-venue-column",
+            target_project_id=pid,
+        )
+        row = await db.get_article_proposal(vid)
+        if row["target_project_id"] != pid:
+            fail(f"target_project_id not persisted: {row['target_project_id']}")
+            return 1
+        plain = await db.add_article_proposal(
+            pid, source="manual", source_ref="",
+            evidence="controller smoke: default venue is NULL",
+            title="No venue", angle="", slug_hint="smoke-venue-null",
+        )
+        row = await db.get_article_proposal(plain)
+        if row["target_project_id"] is not None:
+            fail(f"default target_project_id = {row['target_project_id']!r}, want None")
+            return 1
+        if not await db.set_article_proposal_venue(plain, pid):
+            fail("set_article_proposal_venue returned False on a proposed row")
+            return 1
+        if (await db.get_article_proposal(plain))["target_project_id"] != pid:
+            fail("set_article_proposal_venue did not persist")
+            return 1
+        await db.set_article_proposal_status(plain, "published")
+        if await db.set_article_proposal_venue(plain, None):
+            fail("set_article_proposal_venue must refuse a non-proposed row")
+            return 1
+        print("ok: target_project_id defaults to NULL, round-trips, and is "
+              "settable only while proposed")
+
+        # ── FIX 6: a 'failed' row's venue is not welded ─────────────
+        # No draft exists on disk for a 'failed' row (the write-back never
+        # landed a draft_ref), so the reason set_article_proposal_venue is
+        # otherwise restricted does not apply to it -- it must be settable
+        # on 'failed' exactly like 'proposed', and refused on everything
+        # else ('drafted', 'writing', 'published' all had -- or are
+        # producing -- a real draft the venue is now bound to).
+        failed_venue_row = await db.add_article_proposal(
+            pid, source="manual", source_ref="",
+            evidence="smoke: FIX6 -- a failed row's venue is not welded",
+            title="Smoke FIX6 DB row", angle="…",
+            slug_hint="smoke-fix6-db-row",
+        )
+        await db.set_article_proposal_status(
+            failed_venue_row, "failed", error_message="wrong venue the first time",
+        )
+        if not await db.set_article_proposal_venue(failed_venue_row, pid):
+            fail("FIX6: set_article_proposal_venue refused a 'failed' row")
+            return 1
+        if (await db.get_article_proposal(failed_venue_row))["target_project_id"] != pid:
+            fail("FIX6: the venue override did not persist on a 'failed' row")
+            return 1
+        # And the boundary still holds: 'drafted' must still be refused,
+        # exactly as before this fix -- only 'proposed' and 'failed' widen.
+        await db.set_article_proposal_status(failed_venue_row, "drafted")
+        if await db.set_article_proposal_venue(failed_venue_row, None):
+            fail("FIX6: set_article_proposal_venue must still refuse a "
+                 "'drafted' row")
+            return 1
+        print("ok: FIX6 -- set_article_proposal_venue allows 'proposed' and "
+              "'failed', still refuses 'drafted'/'writing'/'published'")
+
+        # ── FIX 5: create_question's dedupe only reuses a PENDING row ────
+        # A repeated tool_use_id while the row is still pending is the same
+        # ask (a resumed session) and must return that same id. Once the
+        # row has moved past pending (answered/dismissed), a repeated
+        # tool_use_id is a fresh ask that happens to collide with an old
+        # one -- reusing that row would silently hand back a previous
+        # attempt's answer to a question it never actually asked.
+        dedupe_tool_use_id = "smoke-fix5-dedupe-tool-use-id"
+        qid_first = await db.create_question(
+            project_id=pid, run_id="smoke-fix5-run", node_id=None,
+            tool_use_id=dedupe_tool_use_id,
+            questions_json='{"question": "first ask", "options": []}',
+        )
+        qid_resumed = await db.create_question(
+            project_id=pid, run_id="smoke-fix5-run", node_id=None,
+            tool_use_id=dedupe_tool_use_id,
+            questions_json='{"question": "first ask, resumed", "options": []}',
+        )
+        if qid_resumed != qid_first:
+            fail("FIX5: a repeated tool_use_id on a still-pending row must "
+                 f"return the same id: got {qid_resumed!r}, want {qid_first!r}")
+            return 1
+        print("ok: FIX5 -- create_question dedupes a repeated tool_use_id "
+              "while the existing row is still pending")
+
+        await db.answer_question(qid_first, answer_text="the old answer",
+                                  status="answered")
+        qid_collision = await db.create_question(
+            project_id=pid, run_id="smoke-fix5-run", node_id=None,
+            tool_use_id=dedupe_tool_use_id,
+            questions_json='{"question": "second ask, forgot the run tag", '
+            '"options": []}',
+        )
+        if qid_collision == qid_first:
+            fail("FIX5: a repeated tool_use_id on an already-answered row "
+                 "must not hand back that same stale row")
+            return 1
+        fresh_question = await db.get_question(qid_collision)
+        if fresh_question["status"] != "pending" or (fresh_question.get("answer_text") or ""):
+            fail("FIX5: the fresh row must be pending with no answer, got "
+                 f"status={fresh_question['status']!r} "
+                 f"answer_text={fresh_question.get('answer_text')!r}")
+            return 1
+        if await db.get_question(qid_first) is not None:
+            fail("FIX5: the stale answered row should have been replaced, "
+                 f"but the old id {qid_first} still resolves")
+            return 1
+        print("ok: FIX5 -- a repeated tool_use_id on an already-answered/"
+              "dismissed row gets a fresh pending row instead of the stale "
+              "answer, and the stale row is gone")
+
+        # ── FIX 3 (db level): dismiss_article_proposal_questions ────
+        # Covers the shared mechanism all three call sites (cancel, the
+        # /written failure path, and the re-dispatch path inside
+        # articles_approve) use -- the HTTP-level pins above already prove
+        # the first two call sites wire it in; this proves the method
+        # itself: scoped to run_id==str(proposal_id) (an unrelated pending
+        # question on the same project must survive), idempotent (a second
+        # call finds nothing left to dismiss), and a safe no-op for a
+        # proposal that never asked anything at all.
+        dismiss_target_id = await db.add_article_proposal(
+            pid, source="manual", source_ref="",
+            evidence="smoke: FIX3 db-level -- dismiss_article_proposal_questions",
+            title="Smoke FIX3 db row", angle="…",
+            slug_hint="smoke-fix3-db-row",
+        )
+        dismiss_own_qid = await db.create_question(
+            project_id=pid, run_id=str(dismiss_target_id), node_id=None,
+            tool_use_id="smoke-fix3-db-own-q1",
+            questions_json='{"question": "own question", "options": []}',
+        )
+        dismiss_unrelated_qid = await db.create_question(
+            project_id=pid, run_id="some-other-run", node_id=None,
+            tool_use_id="smoke-fix3-db-unrelated-q1",
+            questions_json='{"question": "unrelated question", "options": []}',
+        )
+        n_dismissed = await db.dismiss_article_proposal_questions(dismiss_target_id)
+        if n_dismissed != 1:
+            fail(f"dismiss_article_proposal_questions: dismissed {n_dismissed}, want 1")
+            return 1
+        if (await db.get_question(dismiss_own_qid))["status"] != "dismissed":
+            fail("dismiss_article_proposal_questions did not dismiss the "
+                 "proposal's own pending question")
+            return 1
+        if (await db.get_question(dismiss_unrelated_qid))["status"] != "pending":
+            fail("dismiss_article_proposal_questions touched an unrelated "
+                 "run_id's pending question")
+            return 1
+        # Idempotent: nothing pending left to dismiss.
+        if await db.dismiss_article_proposal_questions(dismiss_target_id) != 0:
+            fail("dismiss_article_proposal_questions must be a no-op once "
+                 "nothing of this proposal's is still pending")
+            return 1
+        # A proposal with no questions at all is also a no-op, not an error.
+        if await db.dismiss_article_proposal_questions(dismiss_target_id + 999999) != 0:
+            fail("dismiss_article_proposal_questions must no-op for a "
+                 "proposal with no questions at all")
+            return 1
+        print("ok: FIX3 -- dismiss_article_proposal_questions dismisses "
+              "only this proposal's own pending questions and no-ops "
+              "otherwise")
+
+        # ── pin_article_proposal_venue: the internal, status-guard-free pin ──
+        # Distinct from set_article_proposal_venue above: a retry dispatches
+        # from 'drafted' or 'failed', not just 'proposed', so this method
+        # must not refuse a row already moved past 'proposed'. `plain` is
+        # 'published' at this point -- the sharpest case available.
+        if not await db.pin_article_proposal_venue(plain, pid + 1000):
+            fail("pin_article_proposal_venue refused a non-'proposed' row -- "
+                 "it must carry no status guard")
+            return 1
+        pinned_row = await db.get_article_proposal(plain)
+        if pinned_row["target_project_id"] != pid + 1000:
+            fail(f"pin_article_proposal_venue did not persist: "
+                 f"{pinned_row['target_project_id']}")
+            return 1
+        print("ok: pin_article_proposal_venue records the resolved venue "
+              "regardless of status, unlike the user-facing setter")
+
+        # ── schema-order regression pin ──────────────────────────────
+        # article_proposals has two columns (verify_label, target_project_id)
+        # that were added after the table's first release via ALTER TABLE
+        # ADD COLUMN in _migrate_orchestration, which can only append -- so a
+        # database migrated from before either column existed ends up with
+        # them at the end, in append order. The CREATE TABLE string has to
+        # declare them in that same trailing order, or a fresh database and
+        # a migrated one silently disagree about column order (harmless
+        # today since every reader uses name-based access, but a footgun for
+        # anything that ever reads positionally). Pin the full column list
+        # against a throwaway fresh database so a future column added in the
+        # wrong spot fails loudly here instead of staying invisible.
+        order_tmp = Path(tempfile.mkdtemp(prefix="dc_smoke_articles_order_"))
+        order_db = SqliteDB(str(order_tmp / "order.db"))
+        await order_db.connect()
+        try:
+            async with order_db._conn.execute(
+                "PRAGMA table_info(article_proposals)"
+            ) as cur:
+                fresh_cols = [row[1] for row in await cur.fetchall()]
+        finally:
+            await order_db.close()
+        want_cols = [
+            "id", "project_id", "source", "source_ref", "evidence", "title",
+            "angle", "slug_hint", "funnel_level", "locales", "tags_json",
+            "related_product", "status", "writer_agent", "draft_ref",
+            "verify_output", "verify_ok", "commit_ref", "session_id",
+            "error_message", "created_at", "decided_at", "written_at",
+            "published_at", "verify_label", "target_project_id",
+        ]
+        if fresh_cols != want_cols:
+            fail(f"article_proposals column order: got {fresh_cols}, "
+                 f"want {want_cols}")
+            return 1
+        print("ok: article_proposals column order matches a migrated "
+              "database's (verify_label, target_project_id trail in "
+              "append order)")
 
         print("PASS")
         return 0

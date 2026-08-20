@@ -214,6 +214,27 @@ def can_publish(
     return True, "ok"
 
 
+def resolve_venue_id(
+    subject_id: int, override_id: int | None, configured_slug: str, enabled: list,
+) -> int:
+    """Which project's repository receives this article.
+
+    Order: the proposal's own override, then the subject's
+    `article_venue_project` setting, then the subject itself. A value naming
+    no enabled project falls back rather than failing — a disabled venue
+    should not make a proposal unapprovable, and the page displays whatever
+    this returns so the fallback is visible instead of silent.
+    """
+    by_id = {p.id: p for p in enabled}
+    by_slug = {p.slug: p for p in enabled}
+    if override_id is not None and override_id in by_id:
+        return override_id
+    slug = (configured_slug or "").strip()
+    if slug and slug in by_slug:
+        return by_slug[slug].id
+    return subject_id
+
+
 _SLUG_DROP = re.compile(r"[^a-z0-9]+")
 _SLUG_WORDS = 6
 

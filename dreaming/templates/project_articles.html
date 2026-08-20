@@ -19,6 +19,26 @@
 <p class="text-xs faint mb-4">{{ "article.capped" | t(locale=locale, shown=shown, total=total) }}</p>
 {% endif %}
 
+<details class="card mb-4">
+  <summary class="text-sm cursor-pointer strong">{{ "article.add.title" | t(locale=locale) }}</summary>
+  <form method="post" action="/p/{{ project.slug }}/articles/add" class="mt-3 flex flex-col gap-2">
+    <input type="text" name="title" required
+           placeholder="{{ 'article.add.topic' | t(locale=locale) }}"
+           class="rounded px-2 py-1 bg-elevated text-sm">
+    <textarea name="angle" rows="3"
+              placeholder="{{ 'article.add.prompt' | t(locale=locale) }}"
+              class="rounded px-2 py-1 bg-elevated text-sm"></textarea>
+    <div class="flex items-center gap-2 text-xs">
+      <label>{{ "article.venue" | t(locale=locale) }}</label>
+      <select name="venue" class="rounded px-2 py-1 bg-elevated">
+        <option value="">{{ "article.venue.default" | t(locale=locale) }}</option>
+        {% for p in projects %}<option value="{{ p.slug }}">{{ p.label }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-sm btn-primary">{{ "article.add.submit" | t(locale=locale) }}</button>
+    </div>
+  </form>
+</details>
+
 {% if not blog_dir %}
 <div class="banner banner-warn mb-4">
   <p class="text-sm">{{ "article.blog_dir_missing" | t(locale=locale) }}</p>
