@@ -69,6 +69,17 @@ class AppSettings(BaseSettings):
     orchestration_max_turns: int = 500
     orchestration_timeout_minutes: int = 240
 
+    # === Article pipeline — the center proposes, you approve, the project writes.
+    # Own turn/timeout pair: the global 50/20 is exhausted by the first language
+    # of a trilingual 15-20k-character piece plus a build.
+    article_writer_agent: str = ""
+    article_blog_dir: str = ""
+    article_locales: str = ""
+    article_verify_cmd: str = ""
+    article_publish_mode: str = "off"
+    article_max_turns: int = 300
+    article_timeout_minutes: int = 120
+
     # === Scheduling — nightly ===
     cron_expression: str = "0 2 * * *"
     cron_enabled: bool = True
@@ -87,6 +98,8 @@ class AppSettings(BaseSettings):
     weekly_wiki_lint_enabled: bool = False
     weekly_evolve_apply_cron: str = "0 4 * * 0"
     weekly_evolve_apply_enabled: bool = False
+    weekly_article_ideas_scan_cron: str = "0 8 * * 1"
+    weekly_article_ideas_scan_enabled: bool = False
     daily_bootstrap_cron: str = "0 4 * * *"
     daily_bootstrap_enabled: bool = False
     # AI Radar — global weekly RSS/Atom scan of the watchlist (Monday 07:00).
@@ -176,6 +189,11 @@ SETTINGS_GROUPS: list[tuple[str, list[str]]] = [
     ("Orchestration", [
         "orchestration_max_turns", "orchestration_timeout_minutes",
     ]),
+    ("Articles", [
+        "article_writer_agent", "article_blog_dir", "article_locales",
+        "article_verify_cmd", "article_publish_mode",
+        "article_max_turns", "article_timeout_minutes",
+    ]),
     ("Scheduling — nightly", [
         "cron_expression", "cron_enabled", "agents_per_night",
         "max_concurrent", "wait_between_sec",
@@ -189,6 +207,7 @@ SETTINGS_GROUPS: list[tuple[str, list[str]]] = [
         "daily_bootstrap_cron", "daily_bootstrap_enabled",
         "daily_plans_cleanup_cron", "daily_plans_cleanup_enabled",
         "monthly_deep_audit_cron", "monthly_deep_audit_enabled",
+        "weekly_article_ideas_scan_cron", "weekly_article_ideas_scan_enabled",
     ]),
     ("Watchdogs", [
         "loop_watchdog_enabled", "loop_watchdog_interval_minutes",

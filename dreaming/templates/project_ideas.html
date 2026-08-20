@@ -138,6 +138,9 @@
         <button class="btn btn-sm">{{ "ideas.btn.jira" | t(locale=locale) }}</button>
       </form>
       {% endif %}
+      <form method="post" action="/p/{{ project.slug }}/ideas/{{ iid }}/propose-article" class="inline ml-1">
+        <button class="btn btn-sm">{{ "article.btn.propose" | t(locale=locale) }}</button>
+      </form>
     </td>
   </tr>
   {% endfor %}

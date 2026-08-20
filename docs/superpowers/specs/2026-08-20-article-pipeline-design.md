@@ -140,7 +140,7 @@ out of scope (below).
 | Key | Default | Meaning |
 |---|---|---|
 | `article_writer_agent` | `""` | empty → autodetect in `.claude/agents/`, then self-write |
-| `article_blog_dir` | `""` | where articles live; autoconfig offers a guess |
+| `article_blog_dir` | `""` | where articles live, relative to the project's working directory; also determines the article root (below) |
 | `article_locales` | `""` | e.g. `pl,en,ru`; empty → whatever the existing posts use |
 | `article_verify_cmd` | `""` | e.g. `npm run build`; empty → publish is allowed but labelled unverified |
 | `article_publish_mode` | `off` | `off` \| `commit` \| `commit+push` |
@@ -155,6 +155,25 @@ precedent with `orchestration_max_turns: 500` / `orchestration_timeout_minutes:
 240`. Note the watchdog measures *silence*, not lifetime, with a hard ceiling of
 `max(timeout × 6, 1 h)` — so the timeout value is about how long the session may
 go quiet, not how long the article may take.
+
+### The article root
+
+Article work happens in **the git repository that contains the blog directory**, not
+necessarily the project's own repository. That root — derived from the project's
+working directory plus `article_blog_dir` — is what the writer autodetect searches,
+what the article session runs in, and what the publish commits into.
+
+For most projects the two are the same and nothing changes. They differ where a
+project's site lives in a nested repository: `mi-code-ai`'s blog is
+`micode-landing-page/blog`, and `micode-landing-page` is its own repository with its
+own remote and its own `blog-writer` agent. Without this rule the pipeline would look
+for a writer in the wrong `.claude/agents`, run the session where `package.json` is
+not, and commit one repository's paths from another.
+
+The derivation refuses to leave the project: an absolute `article_blog_dir`, one
+containing `..`, a missing directory, or a directory that is not in a git repository
+all fall back to the project's working directory. The blog directory handed to the
+session is expressed relative to the derived root.
 
 ## Feeders
 

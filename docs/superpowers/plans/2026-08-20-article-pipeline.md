@@ -18,13 +18,14 @@
 - The weekly cron may create `proposed` rows only. It may never write and never publish.
 - A proposal arriving with blank `evidence` is rejected with HTTP 400.
 - With `article_verify_cmd` empty, publish stays available but card and commit message both say **unverified**. Never present an unrun verification as passed.
-- The write session spawns with `--permission-mode bypassPermissions`. Do not use `--allowedTools` — it silently breaks writes into `.claude/`.
+- The write session must spawn with permissions bypassed. `ProcessManager.start_command` already does this for every command it launches, via the session-wide hard override `--dangerously-skip-permissions` (see `_BYPASS_PERMISSION_FLAGS` and the comment block above it, which explains why that flag is used rather than `--permission-mode bypassPermissions`). Do not add a second mechanism, and never use `--allowedTools` — it silently breaks writes into `.claude/`.
 - User-facing strings go through `{{ "key" | t(locale=locale) }}`. Every new RU key needs its EN mirror; `scripts/check_i18n.py` enforces this.
 - Files with Cyrillic content must be written with the Write/Edit tool. PowerShell `Set-Content` defaults to UTF-16 LE and breaks the JSON parser.
 - Templates carry no colour utilities and no static `style=` attributes; `scripts/check_css_tokens.py` enforces this.
 - Modern Starlette signature: `templates.TemplateResponse(request, "name.html", {ctx_without_request})`.
 - Routes read `request.state.project`, never query by slug themselves.
 - There is no pytest in this repo. The test vehicle is `scripts/smoke_articles.py`, run manually; it must exit 0.
+- Keep smoke-script output inside cp1250: this machine's console encoding cannot represent arrows (`→`), check marks, or box drawing, and `print()` of such a character raises `UnicodeEncodeError` and aborts the run mid-way. Em dashes and Cyrillic are fine — the existing `scripts/smoke_ai_radar.py` prints both. Write `->` instead of `→`.
 
 ---
 
@@ -117,7 +118,7 @@ async def main() -> int:
             fail(f"after approve/writing: status={row['status']}, "
                  f"decided_at={row['decided_at']}")
             return 1
-        print("ok: proposed → approved → writing, decided_at stamped")
+        print("ok: proposed -> approved -> writing, decided_at stamped")
 
         # ── draft with verification ────────────────────────────────
         await db.mark_article_written(
@@ -569,6 +570,21 @@ Blank evidence is a 400 — the rule imported from advice.mjs.
 Refs #34"
 ```
 
+**Amended during execution (two defects in the code above, both found in review):**
+
+1. `article_written` as written has no state precondition, and neither db method
+   guards either — so a duplicate or out-of-order call can fast-forward a
+   `proposed` row to `drafted`, or drag a `published` article back. The spec makes
+   `published` terminal, so the endpoint must require the row to be in `writing`
+   and return **409** otherwise, on both the success and the error branch. The
+   smoke script asserts the 409 by posting the same write-back twice.
+2. The smoke additions stop exercising the fresh-insert path after their first
+   ever run: the `smoke-` slug persists in the real database, later runs get
+   200/duplicate, and an assertion accepting `(200, 201)` keeps printing `ok:`
+   while proving nothing. The script must delete its own `smoke-%` rows from the
+   configured database before the `TestClient` block, then assert exactly 201 on
+   the fresh insert and exactly 200 on the duplicate.
+
 ---
 
 ### Task 3: Settings keys and writer resolution
@@ -752,7 +768,7 @@ Expected: `ok: resolve_writer …` and `ok: publish gate …`, then `PASS`
 
 Then confirm the keys reached the settings UI grouping:
 
-Run: `python -c "from dreaming.config import Settings; s=Settings(); print(s.article_publish_mode, s.article_max_turns, s.weekly_article_ideas_scan_enabled)"`
+Run: `python -c "from dreaming.config import AppSettings; s=AppSettings(); print(s.article_publish_mode, s.article_max_turns, s.weekly_article_ideas_scan_enabled)"`
 Expected: `off 300 False`
 
 - [ ] **Step 6: Commit**
@@ -1888,8 +1904,10 @@ Append to `scripts/smoke_articles.py` before `print("PASS")`:
             return 1
         print("ok: publish commits only draft paths, leaves the rest alone")
 
-        # Dirty target path must refuse rather than sweep.
+        # A target path that someone else has already STAGED must refuse
+        # rather than sweep their index entry into our commit.
         article.write_text("# Piece edited by hand\n", encoding="utf-8")
+        git("add", "content/piece.md")
         try:
             await article_publish.publish(
                 str(repo), ["content/piece.md"], message="second", push=False,
@@ -2021,13 +2039,17 @@ async def publish(
     return commit
 ```
 
-Note on the dirty-path check: the smoke test edits the article file *after* the
-first commit, leaving it unstaged (` M`), and expects a refusal. An unstaged
-edit to a path we are about to stage is exactly the "someone is mid-edit"
-case, so treat any porcelain line whose path is a target as blocking — adjust
-the filter to `staged = [ln for ln in out.splitlines() if ln.strip()]` if the
-narrower index-only check lets that case through, and re-run the smoke script
-to confirm both publish cases behave.
+Note on the dirty-path check — the index-only filter is deliberate, do not
+widen it. Git cannot tell the writer's own unstaged edits from a human's: on the
+landing page a new article legitimately shows ` M src/data/blog-posts.json` and
+` M vite.config.ts`, because adding a post means editing tracked files. A check
+that refused any dirty target path would refuse every real publish there, and
+would also refuse the first publish of a brand-new untracked file (`??`). What
+it can detect is a *staged* change we did not make, which means a human is
+mid-commit in those paths — that is the case worth refusing. This narrows the
+spec's "unrelated uncommitted edits stop the publish" to "staged edits stop the
+publish"; the guarantee that survives, and the one the stash incident was
+actually about, is that nothing outside `draft_ref` is ever touched.
 
 - [ ] **Step 4: Implement the publish route**
 

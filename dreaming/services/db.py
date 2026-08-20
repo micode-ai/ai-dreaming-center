@@ -285,6 +285,44 @@ CREATE INDEX IF NOT EXISTS idx_radar_discovered
     ON ai_radar_findings (discovered_at DESC);
 CREATE INDEX IF NOT EXISTS idx_radar_status_discovered
     ON ai_radar_findings (status, discovered_at DESC);
+
+-- + dreaming: Article pipeline — предложения статей (project-scoped).
+-- Текст статьи живёт в репозитории проекта; здесь только предложение,
+-- статус и отчёт верификации. См.
+-- docs/superpowers/specs/2026-08-20-article-pipeline-design.md
+CREATE TABLE IF NOT EXISTS article_proposals (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id      INTEGER NOT NULL,
+    source          TEXT NOT NULL,
+    source_ref      TEXT NOT NULL DEFAULT '',
+    evidence        TEXT NOT NULL,
+    title           TEXT NOT NULL,
+    angle           TEXT NOT NULL DEFAULT '',
+    slug_hint       TEXT NOT NULL,
+    funnel_level    TEXT NOT NULL DEFAULT 'top',
+    locales         TEXT NOT NULL DEFAULT '',
+    tags_json       TEXT NOT NULL DEFAULT '[]',
+    related_product TEXT NOT NULL DEFAULT '',
+    status          TEXT NOT NULL DEFAULT 'proposed',
+    writer_agent    TEXT NOT NULL DEFAULT '',
+    draft_ref       TEXT NOT NULL DEFAULT '',
+    verify_output   TEXT NOT NULL DEFAULT '',
+    verify_ok       INTEGER NOT NULL DEFAULT 0,
+    verify_label    TEXT NOT NULL DEFAULT '',
+    commit_ref      TEXT NOT NULL DEFAULT '',
+    session_id      TEXT NOT NULL DEFAULT '',
+    error_message   TEXT NOT NULL DEFAULT '',
+    created_at      TEXT NOT NULL,
+    decided_at      TEXT,
+    written_at      TEXT,
+    published_at    TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_article_project_slug
+    ON article_proposals (project_id, slug_hint);
+CREATE INDEX IF NOT EXISTS idx_article_project_status
+    ON article_proposals (project_id, status);
+CREATE INDEX IF NOT EXISTS idx_article_status_created
+    ON article_proposals (status, created_at DESC);
 """
 
 
@@ -388,6 +426,23 @@ class SqliteDB:
                 )
             except Exception as e:
                 log.warning("Failed to add agent_name column: %s", e)
+
+        # --- articles: verify_label persists what was actually observed at
+        # write-back time (I5) -- a DB created before this column existed
+        # needs it added, since CREATE TABLE IF NOT EXISTS above is a no-op
+        # on a table that already exists. ---
+        async with self._conn.execute(
+            "PRAGMA table_info(article_proposals)"
+        ) as cur:
+            article_cols = {row[1] for row in await cur.fetchall()}
+        if "verify_label" not in article_cols:
+            try:
+                await self._conn.execute(
+                    "ALTER TABLE article_proposals ADD COLUMN "
+                    "verify_label TEXT NOT NULL DEFAULT ''"
+                )
+            except Exception as e:
+                log.warning("Failed to add verify_label column: %s", e)
 
         try:
             await self._conn.execute(
@@ -1135,3 +1190,206 @@ class SqliteDB:
             "WHERE discovered_at >= ? GROUP BY source_key ORDER BY n DESC",
             (cutoff,),
         )
+
+    # ── Article pipeline ───────────────────────────────────────────────
+
+    async def add_article_proposal(
+        self, project_id: int, *, source: str, source_ref: str, evidence: str,
+        title: str, angle: str, slug_hint: str, funnel_level: str = "top",
+        locales: str = "", tags_json: str = "[]", related_product: str = "",
+    ) -> int | None:
+        """Вставить предложение. None — если (project_id, slug_hint) уже есть:
+        три фидера на один сюжет дают одну строку, а не три."""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        async with self._conn.execute(
+            "INSERT OR IGNORE INTO article_proposals "
+            "(project_id, source, source_ref, evidence, title, angle, slug_hint, "
+            " funnel_level, locales, tags_json, related_product, status, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?)",
+            (project_id, source, source_ref, evidence, title, angle, slug_hint,
+             funnel_level, locales, tags_json, related_product, now_iso),
+        ) as cur:
+            if cur.rowcount == 0:
+                await self._conn.commit()
+                return None
+            new_id = cur.lastrowid
+        await self._conn.commit()
+        return new_id
+
+    async def get_article_proposal(self, proposal_id: int) -> dict | None:
+        row = await self.fetch_one(
+            "SELECT * FROM article_proposals WHERE id=?", (proposal_id,),
+        )
+        return dict(row) if row else None
+
+    async def list_article_proposals(
+        self, *, project_id: int | None = None, status: str | None = None,
+        limit: int = 200,
+    ) -> list:
+        sql = "SELECT * FROM article_proposals WHERE 1=1"
+        params: list = []
+        if project_id is not None:
+            sql += " AND project_id=?"
+            params.append(project_id)
+        if status:
+            sql += " AND status=?"
+            params.append(status)
+        sql += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        return await self.fetch_all(sql, tuple(params))
+
+    async def find_article_proposal_by_slug(
+        self, project_id: int, slug_hint: str,
+    ) -> dict | None:
+        row = await self.fetch_one(
+            "SELECT * FROM article_proposals WHERE project_id=? AND slug_hint=?",
+            (project_id, slug_hint),
+        )
+        return dict(row) if row else None
+
+    async def set_article_proposal_status(
+        self, proposal_id: int, status: str, *, error_message: str = "",
+        session_id: str = "", expect_statuses: tuple[str, ...] | None = None,
+    ) -> bool:
+        """Двигает статус. `decided_at` ставится на первом уходе из 'proposed'.
+
+        This one setter backs several different transitions (reject, restore,
+        cancel, the write-back failure path, the publish failure paths), so
+        the caller — not this method — knows which prior statuses are legal
+        for a given call. `expect_statuses`, when given, adds `AND status IN
+        (...)` to the WHERE clause and makes the write a no-op (returns
+        False) when the row has already moved on. Omitting it keeps the old,
+        unconditional behaviour for call sites that don't need the guard.
+        """
+        now_iso = datetime.now(timezone.utc).isoformat()
+        sql = (
+            "UPDATE article_proposals SET status=?, error_message=?, "
+            "session_id=CASE WHEN ?<>'' THEN ? ELSE session_id END, "
+            "decided_at=COALESCE(decided_at, ?) WHERE id=?"
+        )
+        params: list = [status, error_message, session_id, session_id, now_iso, proposal_id]
+        if expect_statuses:
+            placeholders = ",".join("?" * len(expect_statuses))
+            sql += f" AND status IN ({placeholders})"
+            params.extend(expect_statuses)
+        async with self._conn.execute(sql, tuple(params)) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
+    # Statuses from which (re)dispatching a writer is legal: the first
+    # approve ('proposed', and the unreachable-today 'approved'), and a
+    # retry after a prior attempt ('failed', 'drafted'). Never 'writing' —
+    # that row is already claimed by an in-flight (or crash-orphaned)
+    # attempt, and re-dispatching over it would silently detach that
+    # attempt's eventual write-back from the row it thinks it owns; recovery
+    # goes through the explicit Cancel button ('writing' -> 'failed') before
+    # Retry is offered again. Never 'published' — that is terminal (C1).
+    _DISPATCHABLE_STATUSES = ("proposed", "approved", "failed", "drafted")
+
+    async def start_article_attempt(
+        self, proposal_id: int, *, session_id: str,
+    ) -> bool:
+        """Moves a row into 'writing' for a fresh attempt, clearing whatever a
+        previous attempt left behind.
+
+        A plain `set_article_proposal_status(id, "writing", ...)` only touches
+        status/error_message/session_id/decided_at, so retrying a 'drafted' or
+        'failed' row would keep its old draft_ref/verify_output/verify_ok/
+        writer_agent — a stale "build passed" sitting next to a brand new
+        error. `written_at` is left alone; the write-back stamps it.
+
+        Returns False (no write) when the row is not currently in one of
+        `_DISPATCHABLE_STATUSES` — in particular, this is what makes a stray
+        Approve/Retry POST against an already-'published' row a no-op instead
+        of C1's regression (dragging a published row back to 'writing' and
+        wiping its draft_ref/verify_output/verify_ok/writer_agent while
+        keeping commit_ref).
+        """
+        now_iso = datetime.now(timezone.utc).isoformat()
+        placeholders = ",".join("?" * len(self._DISPATCHABLE_STATUSES))
+        async with self._conn.execute(
+            "UPDATE article_proposals SET status='writing', "
+            "session_id=CASE WHEN ?<>'' THEN ? ELSE session_id END, "
+            "decided_at=COALESCE(decided_at, ?), "
+            "draft_ref='', verify_output='', writer_agent='', "
+            "error_message='', verify_ok=0 "
+            f"WHERE id=? AND status IN ({placeholders})",
+            (session_id, session_id, now_iso, proposal_id,
+             *self._DISPATCHABLE_STATUSES),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
+    async def mark_article_written(
+        self, proposal_id: int, *, draft_ref: str, verify_output: str,
+        writer_agent: str, verify_ok: bool, verify_label: str = "",
+    ) -> bool:
+        """'writing' -> 'drafted'. Refuses (returns False) any row that is not
+        currently 'writing' — the API route checks this too, but the write
+        itself is where the rule actually has to hold.
+
+        `verify_label` is what the card and the eventual commit message are
+        allowed to claim (I5): the caller computes it once, from the
+        verify_cmd that was actually in force for this session, and it is
+        persisted here rather than recomputed later from whatever
+        article_verify_cmd happens to read at render or publish time.
+        """
+        now_iso = datetime.now(timezone.utc).isoformat()
+        async with self._conn.execute(
+            "UPDATE article_proposals SET status='drafted', draft_ref=?, "
+            "verify_output=?, writer_agent=?, verify_ok=?, verify_label=?, "
+            "written_at=? WHERE id=? AND status='writing'",
+            (draft_ref, verify_output[:8000], writer_agent,
+             1 if verify_ok else 0, verify_label, now_iso, proposal_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
+    async def mark_article_published(
+        self, proposal_id: int, *, commit_ref: str,
+    ) -> bool:
+        """'drafted' -> 'published'. Refuses (returns False) any row that is
+        not currently 'drafted' — this is the write-side half of C2: two
+        concurrent publish attempts can both pass the route's `can_publish`
+        read, but only the one that finds the row still 'drafted' right here
+        gets to flip it to 'published'."""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        async with self._conn.execute(
+            "UPDATE article_proposals SET status='published', commit_ref=?, "
+            "published_at=? WHERE id=? AND status='drafted'",
+            (commit_ref, now_iso, proposal_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
+    async def article_status_counts(self, project_id: int | None = None) -> list:
+        sql = "SELECT status, COUNT(*) AS n FROM article_proposals"
+        params: tuple = ()
+        if project_id is not None:
+            sql += " WHERE project_id=?"
+            params = (project_id,)
+        sql += " GROUP BY status ORDER BY n DESC"
+        return await self.fetch_all(sql, params)
+
+    async def count_article_proposals(
+        self, *, status: str | None = None, project_ids: list[int] | None = None,
+    ) -> int:
+        """Count article proposals, optionally filtered by status and/or project list."""
+        # Empty list means zero, not "no filter".
+        if project_ids is not None and len(project_ids) == 0:
+            return 0
+        sql = "SELECT COUNT(*) AS n FROM article_proposals WHERE 1=1"
+        params: list = []
+        if status is not None:
+            sql += " AND status=?"
+            params.append(status)
+        if project_ids is not None:
+            placeholders = ",".join("?" * len(project_ids))
+            sql += f" AND project_id IN ({placeholders})"
+            params.extend(project_ids)
+        row = await self.fetch_one(sql, tuple(params))
+        return int(row["n"]) if row else 0

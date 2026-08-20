@@ -172,6 +172,38 @@ async def _weekly_product_ideas_scan(app_state, project_id: int):
         log.warning("weekly_product_ideas_scan [%s]: %s", proj.slug, e)
 
 
+async def _weekly_article_ideas_scan(app_state, project_id: int):
+    """Run the per-project article-ideas scan command via Claude CLI.
+
+    Proposes only -- this session never writes an article and never
+    publishes. It must not call the approve route, `start_command` with
+    `write-article`, or anything in `article_publish`.
+    """
+    proj = await app_state.projects.get_by_id(project_id)
+    if proj is None or not proj.enabled:
+        return
+    pm = app_state.process_manager
+    settings = app_state.settings
+    resolver = ConfigResolver(app_state.projects, settings)
+    try:
+        await pm.start_command(
+            proj,
+            command_name="article-ideas-scan",
+            prompt="/article-ideas-scan",
+            claude_path=await resolver.get(proj, "claude_path", "claude"),
+            working_dir=proj.working_dir,
+            model=await resolver.get(proj, "model", "sonnet"),
+            max_turns=int(await resolver.get(proj, "max_turns", 50)),
+            timeout_minutes=int(await resolver.get(proj, "timeout_minutes", 30)),
+            env_overrides={
+                "DREAMING_PROJECT_SLUG": proj.slug,
+                "DREAMING_API_URL": f"http://localhost:{settings.port}",
+            },
+        )
+    except RuntimeError as e:
+        log.warning("weekly_article_ideas_scan [%s]: %s", proj.slug, e)
+
+
 async def _weekly_wiki_lint(app_state, project_id: int):
     """Run the per-project wiki-lint command via Claude CLI."""
     proj = await app_state.projects.get_by_id(project_id)
@@ -263,6 +295,9 @@ _PER_PROJECT_JOBS = [
      "0 3 * * 1", False, _weekly_topics_scan),
     ("weekly_wiki_health_scan", "weekly_wiki_health_scan_cron", "weekly_wiki_health_scan_enabled",
      "0 7 * * 6", False, _weekly_wiki_health_scan),
+    ("weekly_article_ideas_scan", "weekly_article_ideas_scan_cron",
+     "weekly_article_ideas_scan_enabled", "0 8 * * 1", False,
+     _weekly_article_ideas_scan),
 ]
 
 

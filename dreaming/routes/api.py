@@ -1,5 +1,6 @@
 """REST API for slash-command callbacks. Multi-tenant via project_slug body."""
 from __future__ import annotations
+import json
 import logging
 import uuid
 from fastapi import APIRouter, Request, HTTPException
@@ -409,3 +410,142 @@ async def topics_list(request: Request, slug: str):
          "target_agents": r["target_agents"]}
         for r in rows
     ])
+
+
+# -- Article pipeline (slash-command callbacks) -------------------
+
+class ArticleIngestIn(BaseModel):
+    title: str
+    slug_hint: str
+    evidence: str
+    angle: str = ""
+    source: str = "project_scan"
+    source_ref: str = ""
+    funnel_level: str = "top"
+    locales: str = ""
+    tags: list[str] = []
+    related_product: str = ""
+
+
+class ArticleWrittenIn(BaseModel):
+    draft_ref: str
+    verify_output: str = ""
+    writer_agent: str = ""
+    verify_ok: bool = False
+    error_message: str = ""
+
+
+_ARTICLE_SOURCES = {"project_scan", "radar", "center", "manual"}
+
+
+@router.post("/p/{slug}/articles/ingest")
+async def articles_ingest(request: Request, slug: str, payload: ArticleIngestIn):
+    """Called by /article-ideas-scan running inside the project. One POST per
+    proposal.
+
+    `evidence` is required and enforced here rather than in the prompt: a queue
+    of unfalsifiable suggestions is worse than an empty queue — the rule comes
+    from micode-landing-page's scripts/ai-visibility/advice.mjs."""
+    project = await _resolve_project(request, slug)
+    title = payload.title.strip()
+    slug_hint = payload.slug_hint.strip()
+    evidence = payload.evidence.strip()
+    if not title or not slug_hint:
+        raise HTTPException(status_code=422, detail="title and slug_hint required")
+    if not evidence:
+        raise HTTPException(
+            status_code=400,
+            detail="evidence required: state the fact this proposal traces to",
+        )
+    if payload.source not in _ARTICLE_SOURCES:
+        raise HTTPException(status_code=422, detail=f"bad source: {payload.source}")
+    db = request.app.state.db
+    new_id = await db.add_article_proposal(
+        project.id, source=payload.source, source_ref=payload.source_ref.strip(),
+        evidence=evidence, title=title, angle=payload.angle.strip(),
+        slug_hint=slug_hint, funnel_level=payload.funnel_level.strip() or "top",
+        locales=payload.locales.strip(),
+        tags_json=json.dumps(payload.tags, ensure_ascii=False),
+        related_product=payload.related_product.strip(),
+    )
+    if new_id is None:
+        existing = await db.find_article_proposal_by_slug(project.id, slug_hint)
+        return JSONResponse(
+            {"id": existing["id"] if existing else None, "duplicate": True},
+            status_code=200,
+        )
+    return JSONResponse({"id": new_id, "duplicate": False}, status_code=201)
+
+
+@router.get("/p/{slug}/articles/list")
+async def articles_list(request: Request, slug: str):
+    """Called by /article-ideas-scan to skip subjects already proposed."""
+    project = await _resolve_project(request, slug)
+    rows = await request.app.state.db.list_article_proposals(project_id=project.id)
+    return JSONResponse([
+        {"id": r["id"], "slug_hint": r["slug_hint"], "title": r["title"],
+         "status": r["status"]}
+        for r in rows
+    ])
+
+
+@router.get("/articles/{proposal_id}")
+async def article_detail(request: Request, proposal_id: int):
+    """Called by /write-article to read the brief it must write from."""
+    row = await request.app.state.db.get_article_proposal(proposal_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="proposal not found")
+    return JSONResponse(row)
+
+
+@router.post("/articles/{proposal_id}/written")
+async def article_written(
+    request: Request, proposal_id: int, payload: ArticleWrittenIn,
+):
+    """Called by /write-article when the draft exists (or failed)."""
+    from dreaming.services import articles as articles_svc
+    db = request.app.state.db
+    row = await db.get_article_proposal(proposal_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="proposal not found")
+    if row["status"] != "writing":
+        raise HTTPException(
+            status_code=409,
+            detail=f"proposal {proposal_id} is '{row['status']}', not 'writing'",
+        )
+    if payload.error_message.strip():
+        ok = await db.set_article_proposal_status(
+            proposal_id, "failed", error_message=payload.error_message.strip()[:2000],
+            expect_statuses=("writing",),
+        )
+        if not ok:
+            raise HTTPException(
+                status_code=409,
+                detail=f"proposal {proposal_id} changed status before the "
+                "failure could be recorded",
+            )
+        return JSONResponse({"status": "failed"})
+    if not payload.draft_ref.strip():
+        raise HTTPException(status_code=422, detail="draft_ref required on success")
+    # I5: persist what was actually observed rather than a value the card
+    # and the eventual publish commit message would otherwise have to
+    # re-derive later from whatever article_verify_cmd happens to read at
+    # that later moment. project_id comes off the row itself since this
+    # endpoint has no /p/{slug} in its path to resolve one from.
+    project = await request.app.state.projects.get_by_id(row["project_id"])
+    resolver = request.app.state.resolver_factory(request)
+    verify_cmd = await resolver.get(project, "article_verify_cmd", "") if project else ""
+    verify_label = articles_svc.publish_label(payload.verify_ok, verify_cmd)
+    ok = await db.mark_article_written(
+        proposal_id, draft_ref=payload.draft_ref.strip(),
+        verify_output=payload.verify_output,
+        writer_agent=payload.writer_agent.strip() or "self",
+        verify_ok=payload.verify_ok, verify_label=verify_label,
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=409,
+            detail=f"proposal {proposal_id} changed status before the "
+            "draft could be recorded",
+        )
+    return JSONResponse({"status": "drafted", "verify_label": verify_label})

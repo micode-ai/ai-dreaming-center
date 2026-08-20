@@ -17,6 +17,7 @@ History of AI Dreaming Center development: what was done in each wave, the git t
 - [Wave 4 full — evolutions / loops / plans / cascade-costs](#wave-4-full--evolutions--loops--plans--cascade-costs)
 - [Wave 5 — aggregated dashboard](#wave-5--aggregated-dashboard)
 - [Wave D1/D2 — Design system foundation](#wave-d1d2--design-system-foundation)
+- [Wave A — Article pipeline](#wave-a--article-pipeline)
 - [Not implemented yet](#not-implemented-yet)
 
 ## Wave 0 — Foundation
@@ -320,6 +321,56 @@ History of AI Dreaming Center development: what was done in each wave, the git t
 - **D3** (applying the visual direction) and **D4** (key screens, ergonomics) get their own specs.
 
 **Unrelated defect found in passing**: `scripts/smoke_dashboard_tiles.py` prints its full OK sequence but **never terminates** — the process hangs holding a SQLite connection open. Looks like an unclosed async connection or an uncancelled task keeping the event loop alive. The result is correct, but a CI run would hang on it.
+
+## Wave A — Article pipeline
+
+**Branch**: `feature/article-pipeline`, range `e4f4bcc`..`211b538` — 28 commits, 27 files, +2683/−13. (`b9430e9` was the wrong base — that's the spec commit already on master; the real merge base is `e4f4bcc`.)
+
+**Spec**: [`docs/superpowers/specs/2026-08-20-article-pipeline-design.md`](../superpowers/specs/2026-08-20-article-pipeline-design.md)
+**Plan**: [`docs/superpowers/plans/2026-08-20-article-pipeline.md`](../superpowers/plans/2026-08-20-article-pipeline.md)
+**Issue**: [#34](https://github.com/micode-ai/ai-dreaming-center/issues/34)
+
+**Goal**: the center proposes article topics per project, dispatches that project's own writer agent once a topic is approved, and publishes the result by committing it into the project's repository after a second approval.
+
+**Two corrections to the premise that shaped the design.** A writer agent exists in only 3 of the 11 managed projects (`blog-writer` in `mi-code-ai` and `ai-budget-assistant`, `kb-page-author` in `legalka-kb`), so the pipeline has to work without one rather than pretend otherwise. And the publishing format differs per project: the landing page keeps prose as data in `blog-posts.json` plus an entry in `vite.config.ts`, `accounting-ai-agent` uses per-locale markdown with a strict frontmatter contract, `legalka-kb` has its own structure. So the center owns the proposal; the project owns the article's shape.
+
+**What shipped**:
+
+- An `article_proposals` table with the status machine `proposed → approved → writing → drafted → published` (plus `rejected` / `failed`) and `UNIQUE(project_id, slug_hint)`, so three feeders converging on one subject produce one row.
+- Feeder API: `POST /api/p/{slug}/articles/ingest` (blank `evidence` → **400**), `GET .../articles/list` for dedupe, `GET /api/articles/{id}`, and `POST /api/articles/{id}/written` guarded to 409 outside `writing`.
+- Three feeders: the `article-ideas-scan` starter-kit command, a "propose an article" button on the AI Radar card, and the same on the product ideas page.
+- The `write-article` starter-kit command: reads the brief from the API, resolves the writer (setting → autodetect in `.claude/agents/` → itself), learns the format from neighbouring posts, runs `article_verify_cmd`, and reports `draft_ref` plus the verification output back.
+- Publishing commits only the paths in `draft_ref` — never `git add -A`, never `git stash`.
+- A `/p/{slug}/articles` page grouped by status, and a cross-project `/articles` queue.
+- A weekly `weekly_article_ideas_scan` job, disabled by default. The cron may only propose: it structurally cannot write or publish.
+
+**The rule imported from `micode-landing-page`**: a proposal must carry `evidence` — a traceable fact (a commit, a closed wave, a dated release, a measured gap). This is the principle `scripts/ai-visibility/advice.mjs` states outright: "a suggestion nobody can check is worse than no suggestion". It is enforced at the API, not in the prompt.
+
+**Defects review caught during the wave** (all fixed inside their own tasks):
+
+- `slugify` truncated titles to six words while `slug_hint` is unique, so two different subjects sharing an opening ("Improve error handling in the parser" and "... in the scheduler") mapped to one slug; the second proposal came back as a duplicate and was **silently lost**. Fixed with a deterministic suffix applied only when truncation actually drops words.
+- `git add -- <path>` does refuse paths outside the repository — but it also faithfully honours pathspec magic, so a `draft_ref` of `:(glob)**/*` turned the path-scoped add into an effective `git add -A`. Closed with validation (absolute paths, `..`, glob characters, existing regular file only) plus `--literal-pathspecs`. `-f` is never passed: git's refusal to add ignored files is what keeps gitignored secrets out of our commits.
+- A `git commit` failure after a successful `git add` left the index staged, and a retry then hit the module's own "these paths already have staged changes" check forever. A rollback of exactly our paths was added.
+- A `git push` failure after a successful commit lost the sha from the app's bookkeeping and deadlocked every retry on "nothing staged". Now the commit is recorded and the row is marked published with a message saying a manual push is needed.
+- The page computed `article_status_counts` and never used it: every number came from a list capped at 200 rows, so past 200 proposals the screen would show a subset as if it were everything.
+- A row whose status fell outside the group list vanished from the page while still counting toward the total. There is no `CHECK` constraint on `status`, so this was reachable — a catch-all group was added.
+- Retry did not clear the previous attempt's results, so a failed retry rendered its new error next to "build passed" from the earlier run.
+- A row stuck in `writing` (session killed by the watchdog, or lost to a restart) rendered with no buttons at all. A cancel action, available only in that status, was added; it does not kill the process, and its docstring says so.
+
+**The publish gate — three cases, distinguished by what the card is allowed to claim**: `article_verify_cmd` set and exited zero → publish enabled, shown as verified; set and failed → publish blocked; empty → publish enabled, but card and commit message both say **unverified**. Blocking the third case would make the feature useless in `accounting-ai-agent`, whose markdown blog has no build step at all; claiming a verification that never ran would break the one rule the whole feature is modelled on.
+
+**Acceptance**: [`scripts/smoke_articles.py`](../../scripts/smoke_articles.py) — 25 checks, exit 0, including a real temporary git repository where publishing commits only the draft path, leaves an unrelated working-tree file untouched, and refuses a staged target path. `check_i18n.py`, `check_css_tokens.py`, `smoke_ai_radar.py` all green. Eleven touched pages return 200.
+
+**Deferred**:
+
+- **The end-to-end run against a live project has not happened.** It is the one step in the plan that needs a paid session and a commit into someone else's repository, so it runs under human supervision rather than automatically.
+- **The ideas-page button does not dim** once an idea is already proposed — that needs a per-idea status lookup.
+- **A disabled project's proposals disappear from the queue** with no on-page notice. The exclusion is intended; the silence is not.
+- **`commit_ref` is not displayed** on a published card.
+- **No sweep for rows stuck in `writing`** — only the manual cancel button.
+- **`can_publish` does not guard `verify_cmd` against `None`** the way it guards `publish_mode`.
+
+**Known defect found along the way (unrelated to this wave)**: `scripts/smoke_node_skills.py` prints its result but **does not exit** — the same class already noted for `smoke_dashboard_tiles.py`: an unclosed async connection holding the event loop. A CI run would hang on it.
 
 ## Not implemented yet
 

@@ -36,6 +36,15 @@ def _template_files() -> list[Path]:
     return [p for p in TEMPLATE_DIR.rglob("*") if p.is_file()]
 
 
+def command_installed(working_dir: str | Path, command_name: str) -> bool:
+    """Is a single starter-kit slash-command present in this project's
+    .claude/commands/? Cheaper than status(), which walks and diffs the whole
+    kit, when a route only needs to know about one file before dispatching it
+    (I4) — e.g. `command_installed(wd, "write-article")` checks for
+    `.claude/commands/write-article.md`."""
+    return (Path(working_dir) / ".claude" / "commands" / f"{command_name}.md").exists()
+
+
 def status(working_dir: str | Path) -> StarterKitStatus:
     wd = Path(working_dir)
     target_base = wd / ".claude"

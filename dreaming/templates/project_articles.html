@@ -1,0 +1,39 @@
+{% extends "_project_layout.html" %}
+{% set active = 'articles' %}
+{% block project_content %}
+<header class="mb-4 flex items-baseline gap-3 flex-wrap">
+  <h2 class="text-lg font-semibold strong">{{ "article.title" | t(locale=locale) }}</h2>
+  <span class="text-xs faint">{{ total }} {{ "article.total" | t(locale=locale) }}</span>
+  <span class="text-xs faint">
+    {{ "article.writer" | t(locale=locale) }}:
+    {% if writer == 'self' %}{{ "article.writer.self" | t(locale=locale) }}{% else %}<span class="font-mono">{{ writer }}</span>{% endif %}
+  </span>
+  <form method="post" action="/p/{{ project.slug }}/articles/scan" class="ml-auto inline">
+    <button class="btn btn-sm btn-primary" {% if scan_running %}disabled{% endif %}>
+      {{ "article.btn.scan" | t(locale=locale) }}
+    </button>
+  </form>
+</header>
+
+{% if capped %}
+<p class="text-xs faint mb-4">{{ "article.capped" | t(locale=locale, shown=shown, total=total) }}</p>
+{% endif %}
+
+{% if not blog_dir %}
+<div class="banner banner-warn mb-4">
+  <p class="text-sm">{{ "article.blog_dir_missing" | t(locale=locale) }}</p>
+</div>
+{% endif %}
+
+{% if groups %}
+  {% for status, items in groups %}
+    <h3 class="section-title mt-4">
+      {{ ("article.status." ~ status) | t(locale=locale) }}
+      <span class="text-xs faint">{{ items|length }}</span>
+    </h3>
+    {% for a in items %}{% include "_article_card.html" %}{% endfor %}
+  {% endfor %}
+{% else %}
+  <div class="card"><p class="text-sm">{{ "article.empty" | t(locale=locale) }}</p></div>
+{% endif %}
+{% endblock %}
