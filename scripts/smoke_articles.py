@@ -1073,6 +1073,81 @@ async def main() -> int:
         print("ok: write-article.md's delegation section hands the subject "
               "directory to the delegate")
 
+        # ── the question channel must be documented ─────────────────
+        # Task 6: the writer needs to know how to ask, poll, and what to do
+        # on dismissed/unanswered. These three needles are the minimum
+        # proof the section exists and names the right endpoints/fields --
+        # the fuller wording is checked by hand, not by grep.
+        for needle in ("/api/questions/create", "poll", "tool_use_id"):
+            if needle not in body2:
+                fail(f"write-article.md does not document {needle!r} "
+                     "(the question channel)")
+                return 1
+        print("ok: write-article.md documents the question channel")
+
+        # ── the articles page must surface a pending question ───────
+        # A 'writing' row blocked on an answer looks identical to one that
+        # is still working, unless the card says otherwise. Isolated DB
+        # (DC_DB_PATH override), same pattern as the nested-repo /
+        # NULL-venue page checks above -- this never touches the user's
+        # live data/dreaming.db, so there is nothing here to clean up on
+        # that database; the two rows this creates (the proposal and the
+        # question) live only in this throwaway sqlite file.
+        os.environ["DC_DB_PATH"] = str(page_db_dir / "test.db")
+        try:
+            with TestClient(app) as q_client:
+                q_project = await ProjectsService(app.state.db).create(
+                    slug="smoke-waiting-question", label="Smoke Waiting Question",
+                    working_dir=str(tmp),
+                )
+                writing_id = await app.state.db.add_article_proposal(
+                    q_project.id, source="manual", source_ref="",
+                    evidence="smoke: a writing row with a pending question "
+                             "must show the waiting state",
+                    title="Smoke waiting-on-question row", angle="…",
+                    slug_hint="smoke-waiting-question-row",
+                )
+                await app.state.db.set_article_proposal_status(writing_id, "approved")
+                await app.state.db.set_article_proposal_status(writing_id, "writing")
+                question_id = await app.state.db.create_question(
+                    project_id=q_project.id, run_id=None, node_id=None,
+                    tool_use_id="smoke-waiting-question-q1",
+                    questions_json='{"question": "real number for this claim?", "options": []}',
+                )
+                resp = q_client.get(f"/p/{q_project.slug}/articles")
+                if resp.status_code != 200:
+                    fail(f"/p/{q_project.slug}/articles with a pending "
+                         f"question: {resp.status_code}")
+                    return 1
+                if f"/p/{q_project.slug}/questions" not in resp.text:
+                    fail("a 'writing' row with a pending question does not "
+                         "link to the questions page")
+                    return 1
+                waiting_text = app.state.i18n.t("article.waiting_answer", locale="ru")
+                if waiting_text not in resp.text:
+                    fail("a 'writing' row with a pending question does not "
+                         f"render the waiting text ({waiting_text!r})")
+                    return 1
+
+                # Answering the question must make the waiting line disappear
+                # (the flag is a live read, not stuck true once shown).
+                await app.state.db.answer_question(
+                    question_id, answer_text="42%", status="answered",
+                )
+                resp2 = q_client.get(f"/p/{q_project.slug}/articles")
+                if waiting_text in resp2.text:
+                    fail("the waiting line is still shown after the "
+                         "question was answered")
+                    return 1
+        finally:
+            if prior_db_path_env is None:
+                os.environ.pop("DC_DB_PATH", None)
+            else:
+                os.environ["DC_DB_PATH"] = prior_db_path_env
+        print("ok: a 'writing' row with a pending question shows the "
+              "waiting state and links to /p/{slug}/questions; it clears "
+              "once answered")
+
         # ── publish: real git repo in a temp dir ───────────────────
         import re
         import subprocess

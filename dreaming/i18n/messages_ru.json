@@ -609,5 +609,6 @@
   "article.add.prompt": "Вводный промпт — что важно сказать, на что опереться",
   "article.add.submit": "Предложить",
   "article.venue.default": "по умолчанию для проекта",
-  "article.venue.set": "Площадка"
+  "article.venue.set": "Площадка",
+  "article.waiting_answer": "Писатель ждёт вашего ответа"
 }

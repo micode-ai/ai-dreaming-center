@@ -1,4 +1,5 @@
-{# Карточка предложения. Параметры: a — enriched-строка, project, locale. #}
+{# Карточка предложения. Параметры: a — enriched-строка, project, locale,
+   has_pending_question — есть ли pending-вопрос у проекта-субъекта. #}
 <article class="card mb-3">
   <header class="flex items-baseline gap-3 flex-wrap mb-2">
     <span class="text-base font-semibold strong">{{ a.title }}</span>
@@ -73,6 +74,11 @@
       <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/cancel" class="inline">
         <button class="btn btn-sm">{{ "article.btn.cancel" | t(locale=locale) }}</button>
       </form>
+      {% if has_pending_question %}
+        <a href="/p/{{ project.slug }}/questions" class="text-xs faint">
+          {{ "article.waiting_answer" | t(locale=locale) }}
+        </a>
+      {% endif %}
     {% elif a.status == 'drafted' %}
       {% if a.can_publish %}
         <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/publish" class="inline">

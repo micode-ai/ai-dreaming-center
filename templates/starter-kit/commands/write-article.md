@@ -57,7 +57,7 @@ the piece yourself.
 Either way, **the venue owns the article's shape**. Before writing anything,
 read two or three existing articles in `$DC_ARTICLE_BLOG_DIR` and copy their
 structure exactly: file layout, frontmatter fields, language set, heading style,
-where the CTA goes. If this project keeps prose as data (a JSON entry rather
+where the CTA goes. If the venue keeps prose as data (a JSON entry rather
 than a markdown file), add a data entry — do not invent a markdown file beside
 it. If adding an article requires registering it somewhere (a build entry, an
 index, a route), do that too; a piece that does not build is not written.
@@ -67,7 +67,61 @@ are `„…”`, Russian are `«…»`, English are `"…"`, dashes are `—`, a
 are `…`. Straight quotes in Polish or Russian text are a defect.
 
 No invented numbers, clients, or benchmarks. If a claim is unverified, ask
-rather than guess.
+rather than guess — see below for how.
+
+## Ask when you can't verify something
+
+Use this when the piece needs a fact that neither `$DC_ARTICLE_SUBJECT_DIR`
+nor the venue can establish — a number, a client name, a claim about
+behaviour. `blog-writer.md`'s own rule already forbids inventing these; this
+channel is how you obey it instead of quietly working around it.
+
+Post the question against the **subject**'s slug — `$DREAMING_PROJECT_SLUG` —
+even though your cwd is the venue's article root. That project's page is
+what the user is actually looking at.
+
+```bash
+curl -s -X POST "$DREAMING_API_URL/api/questions/create" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_slug": "'"$DREAMING_PROJECT_SLUG"'",
+    "tool_use_id": "write-article-<proposal-id>-q1",
+    "question": "Do we have a real number for this, or should the claim be cut?",
+    "options": []
+  }'
+```
+
+**JSON escaping (critical):** the body is single-quoted for the shell — the
+same rule `/article-ideas-scan`'s ingest call carries. A literal apostrophe
+inside `question` ends the quoted string early and breaks the command;
+rewrite the value to avoid it, or close and re-open the quote around it
+(`'It'\''s broken'`). `$DREAMING_PROJECT_SLUG` is spliced in with its own
+`'"..."'` segment exactly as shown above — pasting the variable straight
+inside the single-quoted JSON will not expand it; it will POST the literal
+text `$DREAMING_PROJECT_SLUG`. `tool_use_id` only needs to be unique within
+this run — a counter (`-q1`, `-q2`) against the proposal id is enough.
+
+The response is `{"id": "...", "status": "pending"}`. Poll it, sleeping
+between attempts:
+
+```bash
+curl -s "$DREAMING_API_URL/api/questions/<id>/poll"
+```
+
+Keep polling every 20–30 seconds (`sleep 20` between calls) until `status`
+is no longer `"pending"`. While a question is pending, the center's watchdog
+does not count this session's silence against it, so waiting for an answer
+is safe — it will not get the session killed.
+
+- On `"answered"`, use `answer_text` as the fact and keep writing.
+- On `"dismissed"`, or if the session ends before an answer ever arrives,
+  **do not invent the fact and do not ship the piece without it.** Report
+  the failure at step 5 through `error_message`, naming the question that
+  went unanswered (e.g. `"unanswered question: do we have a real number for
+  the latency improvement?"`). An article that ships around the fact it
+  asked about is exactly the fabrication this pipeline exists to prevent.
+
+Ask sparingly — two or three questions in one run, not an interrogation.
 
 ## 4. Verify
 

@@ -127,6 +127,11 @@ async def articles_page(request: Request, slug: str):
     )
     projects = await request.app.state.projects.list_all(only_enabled=True)
     pm = request.app.state.process_manager
+    # Questions and the card both belong to the subject (spec: "the card,
+    # the queue row, the questions | subject") -- reuse project_questions.py's
+    # own accessor rather than a second query. limit=1 is enough: this page
+    # only needs to know *whether* one is pending, not which or how many.
+    pending_questions = await db.list_questions(project.id, status="pending", limit=1)
     return request.app.state.templates.TemplateResponse(
         request, "project_articles.html",
         {"project": project,
@@ -136,6 +141,7 @@ async def articles_page(request: Request, slug: str):
          "blog_dir": blog_dir,
          "writer": articles.resolve_writer(article_root, configured_writer),
          "scan_running": f"cmd:{project.slug}:article-ideas-scan" in pm.list_running(),
+         "has_pending_question": bool(pending_questions),
          "projects": projects, "locale": locale},
     )
 
