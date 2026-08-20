@@ -285,6 +285,43 @@ CREATE INDEX IF NOT EXISTS idx_radar_discovered
     ON ai_radar_findings (discovered_at DESC);
 CREATE INDEX IF NOT EXISTS idx_radar_status_discovered
     ON ai_radar_findings (status, discovered_at DESC);
+
+-- + dreaming: Article pipeline — предложения статей (project-scoped).
+-- Текст статьи живёт в репозитории проекта; здесь только предложение,
+-- статус и отчёт верификации. См.
+-- docs/superpowers/specs/2026-08-20-article-pipeline-design.md
+CREATE TABLE IF NOT EXISTS article_proposals (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id      INTEGER NOT NULL,
+    source          TEXT NOT NULL,
+    source_ref      TEXT NOT NULL DEFAULT '',
+    evidence        TEXT NOT NULL,
+    title           TEXT NOT NULL,
+    angle           TEXT NOT NULL DEFAULT '',
+    slug_hint       TEXT NOT NULL,
+    funnel_level    TEXT NOT NULL DEFAULT 'top',
+    locales         TEXT NOT NULL DEFAULT '',
+    tags_json       TEXT NOT NULL DEFAULT '[]',
+    related_product TEXT NOT NULL DEFAULT '',
+    status          TEXT NOT NULL DEFAULT 'proposed',
+    writer_agent    TEXT NOT NULL DEFAULT '',
+    draft_ref       TEXT NOT NULL DEFAULT '',
+    verify_output   TEXT NOT NULL DEFAULT '',
+    verify_ok       INTEGER NOT NULL DEFAULT 0,
+    commit_ref      TEXT NOT NULL DEFAULT '',
+    session_id      TEXT NOT NULL DEFAULT '',
+    error_message   TEXT NOT NULL DEFAULT '',
+    created_at      TEXT NOT NULL,
+    decided_at      TEXT,
+    written_at      TEXT,
+    published_at    TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_article_project_slug
+    ON article_proposals (project_id, slug_hint);
+CREATE INDEX IF NOT EXISTS idx_article_project_status
+    ON article_proposals (project_id, status);
+CREATE INDEX IF NOT EXISTS idx_article_status_created
+    ON article_proposals (status, created_at DESC);
 """
 
 
@@ -465,6 +502,25 @@ class SqliteDB:
     async def fetch_all(self, sql: str, params: tuple = ()) -> list:
         async with self._conn.execute(sql, params) as cur:
             return list(await cur.fetchall())
+
+    # ── Projects ───────────────────────────────────────────────────
+
+    async def create_project(
+        self, slug: str, label: str, working_dir: str,
+        enabled: bool = True, is_default: bool = False,
+        sort_order: int = 0, color: str | None = None,
+    ) -> int:
+        """Вставить проект и вернуть его ID."""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await self.execute(
+            """INSERT INTO projects
+               (slug, label, working_dir, enabled, is_default, sort_order, color, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (slug, label, working_dir, int(enabled), int(is_default),
+             sort_order, color, now_iso, now_iso),
+        )
+        row = await self.fetch_one("SELECT id FROM projects WHERE slug=?", (slug,))
+        return row["id"] if row else 0
 
     # ── Orchestration node skills ─────────────────────────────────
 
@@ -1135,3 +1191,113 @@ class SqliteDB:
             "WHERE discovered_at >= ? GROUP BY source_key ORDER BY n DESC",
             (cutoff,),
         )
+
+    # ── Article pipeline ───────────────────────────────────────────────
+
+    async def add_article_proposal(
+        self, project_id: int, *, source: str, source_ref: str, evidence: str,
+        title: str, angle: str, slug_hint: str, funnel_level: str = "top",
+        locales: str = "", tags_json: str = "[]", related_product: str = "",
+    ) -> int | None:
+        """Вставить предложение. None — если (project_id, slug_hint) уже есть:
+        три фидера на один сюжет дают одну строку, а не три."""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        async with self._conn.execute(
+            "INSERT OR IGNORE INTO article_proposals "
+            "(project_id, source, source_ref, evidence, title, angle, slug_hint, "
+            " funnel_level, locales, tags_json, related_product, status, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?)",
+            (project_id, source, source_ref, evidence, title, angle, slug_hint,
+             funnel_level, locales, tags_json, related_product, now_iso),
+        ) as cur:
+            if cur.rowcount == 0:
+                await self._conn.commit()
+                return None
+            new_id = cur.lastrowid
+        await self._conn.commit()
+        return new_id
+
+    async def get_article_proposal(self, proposal_id: int) -> dict | None:
+        row = await self.fetch_one(
+            "SELECT * FROM article_proposals WHERE id=?", (proposal_id,),
+        )
+        return dict(row) if row else None
+
+    async def list_article_proposals(
+        self, *, project_id: int | None = None, status: str | None = None,
+        limit: int = 200,
+    ) -> list:
+        sql = "SELECT * FROM article_proposals WHERE 1=1"
+        params: list = []
+        if project_id is not None:
+            sql += " AND project_id=?"
+            params.append(project_id)
+        if status:
+            sql += " AND status=?"
+            params.append(status)
+        sql += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        return await self.fetch_all(sql, tuple(params))
+
+    async def find_article_proposal_by_slug(
+        self, project_id: int, slug_hint: str,
+    ) -> dict | None:
+        row = await self.fetch_one(
+            "SELECT * FROM article_proposals WHERE project_id=? AND slug_hint=?",
+            (project_id, slug_hint),
+        )
+        return dict(row) if row else None
+
+    async def set_article_proposal_status(
+        self, proposal_id: int, status: str, *, error_message: str = "",
+        session_id: str = "",
+    ) -> bool:
+        """Двигает статус. `decided_at` ставится на первом уходе из 'proposed'."""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        async with self._conn.execute(
+            "UPDATE article_proposals SET status=?, error_message=?, "
+            "session_id=CASE WHEN ?<>'' THEN ? ELSE session_id END, "
+            "decided_at=COALESCE(decided_at, ?) WHERE id=?",
+            (status, error_message, session_id, session_id, now_iso, proposal_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
+    async def mark_article_written(
+        self, proposal_id: int, *, draft_ref: str, verify_output: str,
+        writer_agent: str, verify_ok: bool,
+    ) -> bool:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        async with self._conn.execute(
+            "UPDATE article_proposals SET status='drafted', draft_ref=?, "
+            "verify_output=?, writer_agent=?, verify_ok=?, written_at=? "
+            "WHERE id=?",
+            (draft_ref, verify_output[:8000], writer_agent,
+             1 if verify_ok else 0, now_iso, proposal_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
+    async def mark_article_published(
+        self, proposal_id: int, *, commit_ref: str,
+    ) -> bool:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        async with self._conn.execute(
+            "UPDATE article_proposals SET status='published', commit_ref=?, "
+            "published_at=? WHERE id=?",
+            (commit_ref, now_iso, proposal_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
+    async def article_status_counts(self, project_id: int | None = None) -> list:
+        sql = "SELECT status, COUNT(*) AS n FROM article_proposals"
+        params: tuple = ()
+        if project_id is not None:
+            sql += " WHERE project_id=?"
+            params = (project_id,)
+        sql += " GROUP BY status ORDER BY n DESC"
+        return await self.fetch_all(sql, params)
