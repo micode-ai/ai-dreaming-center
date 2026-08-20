@@ -49,6 +49,18 @@ def publish_label(verify_ok: bool, verify_cmd: str) -> str:
     return "verified" if verify_ok else "failed"
 
 
+_LEGAL_PUBLISH_MODES = ("off", "commit", "commit+push")
+
+
+def normalize_publish_mode(publish_mode: str) -> str:
+    """Case/whitespace-insensitive; anything outside the three legal values
+    reads as 'off' (M4) rather than silently behaving like the nearest legal
+    one — `"Off"` must not enable publishing, and `"commit+push "` (a
+    trailing-space typo) must not quietly degrade into commit-only."""
+    mode = (publish_mode or "").strip().lower()
+    return mode if mode in _LEGAL_PUBLISH_MODES else "off"
+
+
 def can_publish(
     row: dict, verify_cmd: str, publish_mode: str,
 ) -> tuple[bool, str]:
@@ -59,7 +71,7 @@ def can_publish(
     accounting-ai-agent, whose markdown blog has no build step — but the label
     then says 'unverified' everywhere it is shown.
     """
-    if (publish_mode or "off").strip() == "off":
+    if normalize_publish_mode(publish_mode) == "off":
         return False, "mode_off"
     if row.get("status") != "drafted":
         return False, "not_drafted"

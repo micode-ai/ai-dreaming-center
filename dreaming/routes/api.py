@@ -503,6 +503,7 @@ async def article_written(
     request: Request, proposal_id: int, payload: ArticleWrittenIn,
 ):
     """Called by /write-article when the draft exists (or failed)."""
+    from dreaming.services import articles as articles_svc
     db = request.app.state.db
     row = await db.get_article_proposal(proposal_id)
     if row is None:
@@ -513,16 +514,38 @@ async def article_written(
             detail=f"proposal {proposal_id} is '{row['status']}', not 'writing'",
         )
     if payload.error_message.strip():
-        await db.set_article_proposal_status(
+        ok = await db.set_article_proposal_status(
             proposal_id, "failed", error_message=payload.error_message.strip()[:2000],
+            expect_statuses=("writing",),
         )
+        if not ok:
+            raise HTTPException(
+                status_code=409,
+                detail=f"proposal {proposal_id} changed status before the "
+                "failure could be recorded",
+            )
         return JSONResponse({"status": "failed"})
     if not payload.draft_ref.strip():
         raise HTTPException(status_code=422, detail="draft_ref required on success")
-    await db.mark_article_written(
+    # I5: persist what was actually observed rather than a value the card
+    # and the eventual publish commit message would otherwise have to
+    # re-derive later from whatever article_verify_cmd happens to read at
+    # that later moment. project_id comes off the row itself since this
+    # endpoint has no /p/{slug} in its path to resolve one from.
+    project = await request.app.state.projects.get_by_id(row["project_id"])
+    resolver = request.app.state.resolver_factory(request)
+    verify_cmd = await resolver.get(project, "article_verify_cmd", "") if project else ""
+    verify_label = articles_svc.publish_label(payload.verify_ok, verify_cmd)
+    ok = await db.mark_article_written(
         proposal_id, draft_ref=payload.draft_ref.strip(),
         verify_output=payload.verify_output,
         writer_agent=payload.writer_agent.strip() or "self",
-        verify_ok=payload.verify_ok,
+        verify_ok=payload.verify_ok, verify_label=verify_label,
     )
-    return JSONResponse({"status": "drafted"})
+    if not ok:
+        raise HTTPException(
+            status_code=409,
+            detail=f"proposal {proposal_id} changed status before the "
+            "draft could be recorded",
+        )
+    return JSONResponse({"status": "drafted", "verify_label": verify_label})

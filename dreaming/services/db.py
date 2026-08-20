@@ -308,6 +308,7 @@ CREATE TABLE IF NOT EXISTS article_proposals (
     draft_ref       TEXT NOT NULL DEFAULT '',
     verify_output   TEXT NOT NULL DEFAULT '',
     verify_ok       INTEGER NOT NULL DEFAULT 0,
+    verify_label    TEXT NOT NULL DEFAULT '',
     commit_ref      TEXT NOT NULL DEFAULT '',
     session_id      TEXT NOT NULL DEFAULT '',
     error_message   TEXT NOT NULL DEFAULT '',
@@ -425,6 +426,23 @@ class SqliteDB:
                 )
             except Exception as e:
                 log.warning("Failed to add agent_name column: %s", e)
+
+        # --- articles: verify_label persists what was actually observed at
+        # write-back time (I5) -- a DB created before this column existed
+        # needs it added, since CREATE TABLE IF NOT EXISTS above is a no-op
+        # on a table that already exists. ---
+        async with self._conn.execute(
+            "PRAGMA table_info(article_proposals)"
+        ) as cur:
+            article_cols = {row[1] for row in await cur.fetchall()}
+        if "verify_label" not in article_cols:
+            try:
+                await self._conn.execute(
+                    "ALTER TABLE article_proposals ADD COLUMN "
+                    "verify_label TEXT NOT NULL DEFAULT ''"
+                )
+            except Exception as e:
+                log.warning("Failed to add verify_label column: %s", e)
 
         try:
             await self._conn.execute(
@@ -1231,19 +1249,43 @@ class SqliteDB:
 
     async def set_article_proposal_status(
         self, proposal_id: int, status: str, *, error_message: str = "",
-        session_id: str = "",
+        session_id: str = "", expect_statuses: tuple[str, ...] | None = None,
     ) -> bool:
-        """Двигает статус. `decided_at` ставится на первом уходе из 'proposed'."""
+        """Двигает статус. `decided_at` ставится на первом уходе из 'proposed'.
+
+        This one setter backs several different transitions (reject, restore,
+        cancel, the write-back failure path, the publish failure paths), so
+        the caller — not this method — knows which prior statuses are legal
+        for a given call. `expect_statuses`, when given, adds `AND status IN
+        (...)` to the WHERE clause and makes the write a no-op (returns
+        False) when the row has already moved on. Omitting it keeps the old,
+        unconditional behaviour for call sites that don't need the guard.
+        """
         now_iso = datetime.now(timezone.utc).isoformat()
-        async with self._conn.execute(
+        sql = (
             "UPDATE article_proposals SET status=?, error_message=?, "
             "session_id=CASE WHEN ?<>'' THEN ? ELSE session_id END, "
-            "decided_at=COALESCE(decided_at, ?) WHERE id=?",
-            (status, error_message, session_id, session_id, now_iso, proposal_id),
-        ) as cur:
+            "decided_at=COALESCE(decided_at, ?) WHERE id=?"
+        )
+        params: list = [status, error_message, session_id, session_id, now_iso, proposal_id]
+        if expect_statuses:
+            placeholders = ",".join("?" * len(expect_statuses))
+            sql += f" AND status IN ({placeholders})"
+            params.extend(expect_statuses)
+        async with self._conn.execute(sql, tuple(params)) as cur:
             n = cur.rowcount
         await self._conn.commit()
         return n > 0
+
+    # Statuses from which (re)dispatching a writer is legal: the first
+    # approve ('proposed', and the unreachable-today 'approved'), and a
+    # retry after a prior attempt ('failed', 'drafted'). Never 'writing' —
+    # that row is already claimed by an in-flight (or crash-orphaned)
+    # attempt, and re-dispatching over it would silently detach that
+    # attempt's eventual write-back from the row it thinks it owns; recovery
+    # goes through the explicit Cancel button ('writing' -> 'failed') before
+    # Retry is offered again. Never 'published' — that is terminal (C1).
+    _DISPATCHABLE_STATUSES = ("proposed", "approved", "failed", "drafted")
 
     async def start_article_attempt(
         self, proposal_id: int, *, session_id: str,
@@ -1256,15 +1298,25 @@ class SqliteDB:
         'failed' row would keep its old draft_ref/verify_output/verify_ok/
         writer_agent — a stale "build passed" sitting next to a brand new
         error. `written_at` is left alone; the write-back stamps it.
+
+        Returns False (no write) when the row is not currently in one of
+        `_DISPATCHABLE_STATUSES` — in particular, this is what makes a stray
+        Approve/Retry POST against an already-'published' row a no-op instead
+        of C1's regression (dragging a published row back to 'writing' and
+        wiping its draft_ref/verify_output/verify_ok/writer_agent while
+        keeping commit_ref).
         """
         now_iso = datetime.now(timezone.utc).isoformat()
+        placeholders = ",".join("?" * len(self._DISPATCHABLE_STATUSES))
         async with self._conn.execute(
             "UPDATE article_proposals SET status='writing', "
             "session_id=CASE WHEN ?<>'' THEN ? ELSE session_id END, "
             "decided_at=COALESCE(decided_at, ?), "
             "draft_ref='', verify_output='', writer_agent='', "
-            "error_message='', verify_ok=0 WHERE id=?",
-            (session_id, session_id, now_iso, proposal_id),
+            "error_message='', verify_ok=0 "
+            f"WHERE id=? AND status IN ({placeholders})",
+            (session_id, session_id, now_iso, proposal_id,
+             *self._DISPATCHABLE_STATUSES),
         ) as cur:
             n = cur.rowcount
         await self._conn.commit()
@@ -1272,15 +1324,25 @@ class SqliteDB:
 
     async def mark_article_written(
         self, proposal_id: int, *, draft_ref: str, verify_output: str,
-        writer_agent: str, verify_ok: bool,
+        writer_agent: str, verify_ok: bool, verify_label: str = "",
     ) -> bool:
+        """'writing' -> 'drafted'. Refuses (returns False) any row that is not
+        currently 'writing' — the API route checks this too, but the write
+        itself is where the rule actually has to hold.
+
+        `verify_label` is what the card and the eventual commit message are
+        allowed to claim (I5): the caller computes it once, from the
+        verify_cmd that was actually in force for this session, and it is
+        persisted here rather than recomputed later from whatever
+        article_verify_cmd happens to read at render or publish time.
+        """
         now_iso = datetime.now(timezone.utc).isoformat()
         async with self._conn.execute(
             "UPDATE article_proposals SET status='drafted', draft_ref=?, "
-            "verify_output=?, writer_agent=?, verify_ok=?, written_at=? "
-            "WHERE id=?",
+            "verify_output=?, writer_agent=?, verify_ok=?, verify_label=?, "
+            "written_at=? WHERE id=? AND status='writing'",
             (draft_ref, verify_output[:8000], writer_agent,
-             1 if verify_ok else 0, now_iso, proposal_id),
+             1 if verify_ok else 0, verify_label, now_iso, proposal_id),
         ) as cur:
             n = cur.rowcount
         await self._conn.commit()
@@ -1289,10 +1351,15 @@ class SqliteDB:
     async def mark_article_published(
         self, proposal_id: int, *, commit_ref: str,
     ) -> bool:
+        """'drafted' -> 'published'. Refuses (returns False) any row that is
+        not currently 'drafted' — this is the write-side half of C2: two
+        concurrent publish attempts can both pass the route's `can_publish`
+        read, but only the one that finds the row still 'drafted' right here
+        gets to flip it to 'published'."""
         now_iso = datetime.now(timezone.utc).isoformat()
         async with self._conn.execute(
             "UPDATE article_proposals SET status='published', commit_ref=?, "
-            "published_at=? WHERE id=?",
+            "published_at=? WHERE id=? AND status='drafted'",
             (commit_ref, now_iso, proposal_id),
         ) as cur:
             n = cur.rowcount

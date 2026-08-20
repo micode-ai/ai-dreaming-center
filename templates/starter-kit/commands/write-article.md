@@ -61,6 +61,21 @@ curl -s -X POST "$DREAMING_API_URL/api/articles/<proposal-id>/written" \
        "verify_ok": true}'
 ```
 
+`draft_ref` contract (the center validates this before it will ever commit
+anything, and there is no UI to fix a bad value afterwards — a rejected
+`draft_ref` means another paid session to correct it):
+
+- Every path is **relative to the repository root** — not to
+  `$DC_ARTICLE_BLOG_DIR`. If the blog directory is itself a subdirectory
+  (e.g. `src/data/`), still report the full path from the repo root (e.g.
+  `src/data/blog-posts.json`), never just the filename or a path relative to
+  that subdirectory.
+- **Comma-separated** for more than one file — `"a.md, b.ts"` — never a JSON
+  array; the API accepts a string and a JSON array is rejected outright.
+- Each entry must be an **existing regular file**, not a directory and not a
+  glob (`*`, `?`, `[...]` are all refused).
+- No `..` segments and no absolute paths.
+
 On failure, POST the same endpoint with `{"error_message": "<what failed>"}`.
 
 Set `verify_ok` to `true` only if you ran the command and it exited zero. If

@@ -78,7 +78,7 @@ async def main() -> int:
         await db.mark_article_written(
             first, draft_ref="src/data/blog-posts.json",
             verify_output="dist/blog/glm-53-agent-routing/index.html written",
-            writer_agent="blog-writer", verify_ok=True,
+            writer_agent="blog-writer", verify_ok=True, verify_label="verified",
         )
         row = await db.get_article_proposal(first)
         if row["status"] != "drafted" or row["verify_ok"] != 1:
@@ -87,7 +87,22 @@ async def main() -> int:
         if not row["written_at"] or "dist/blog" not in row["verify_output"]:
             fail("written_at or verify_output not persisted")
             return 1
-        print("ok: drafted with verify_output + verify_ok")
+        if row["verify_label"] != "verified":
+            fail(f"verify_label not persisted: got {row['verify_label']!r}")
+            return 1
+        print("ok: drafted with verify_output + verify_ok + verify_label")
+
+        # mark_article_written must refuse a row that is not 'writing' (I5's
+        # column addition rides on the same precondition C1/C2 rely on) --
+        # `first` is already 'drafted' from the call just above.
+        refused = await db.mark_article_written(
+            first, draft_ref="should-not-land.md", verify_output="",
+            writer_agent="blog-writer", verify_ok=True, verify_label="verified",
+        )
+        if refused:
+            fail("mark_article_written applied to a row that was not 'writing'")
+            return 1
+        print("ok: mark_article_written refuses a non-'writing' row")
 
         # ── retry clears the previous attempt's stale results ───────
         # A plain status flip to 'writing' would leave the old draft_ref /
@@ -132,12 +147,46 @@ async def main() -> int:
         print("ok: failed carries error_message")
 
         # ── publish ────────────────────────────────────────────────
+        # `first` is still 'writing' from the retry test above.
+        # mark_article_published must refuse anything that isn't 'drafted' --
+        # this is the write-side half of C2 (see the two-publishes pin
+        # further below for the full regression it closes).
+        refused = await db.mark_article_published(first, commit_ref="deadbeef")
+        if refused:
+            fail("mark_article_published applied to a 'writing' row")
+            return 1
+        # Bring `first` back to 'drafted' the normal way (a second write-back
+        # completing) before testing the drafted -> published transition.
+        await db.mark_article_written(
+            first, draft_ref="src/data/blog-posts.json",
+            verify_output="dist/blog/glm-53-agent-routing/index.html written",
+            writer_agent="blog-writer", verify_ok=True, verify_label="verified",
+        )
         await db.mark_article_published(first, commit_ref="deadbeef")
         row = await db.get_article_proposal(first)
         if row["status"] != "published" or row["commit_ref"] != "deadbeef":
             fail(f"publish: status={row['status']}, ref={row['commit_ref']}")
             return 1
         print("ok: published with commit_ref")
+
+        # ── C1 pin: 'published' is terminal ─────────────────────────
+        # This is the exact regression from the article-pipeline final-fixes
+        # review: two tabs open, one publishes, the other's stale 'drafted'
+        # card still offers Retry, and that POST used to sail straight into
+        # start_article_attempt, wiping draft_ref/verify_output/verify_ok/
+        # writer_agent while keeping commit_ref. A stray (re)dispatch must
+        # be refused, and the row must come out exactly as it went in.
+        restarted = await db.start_article_attempt(first, session_id="should-not-start")
+        if restarted:
+            fail("start_article_attempt resurrected a 'published' row into 'writing'")
+            return 1
+        row = await db.get_article_proposal(first)
+        if row["status"] != "published" or row["commit_ref"] != "deadbeef":
+            fail("C1: a refused re-dispatch attempt disturbed the published row: "
+                 f"status={row['status']!r}, commit_ref={row['commit_ref']!r}")
+            return 1
+        print("ok: C1 -- start_article_attempt refuses a 'published' row, "
+              "leaving status and commit_ref untouched")
 
         # ── listing + counts ───────────────────────────────────────
         proposed = await db.list_article_proposals(project_id=pid, status="failed")
@@ -149,6 +198,48 @@ async def main() -> int:
             fail(f"counts wrong: {counts}")
             return 1
         print("ok: list filter + status counts")
+
+        # ── count_article_proposals: per-project filtering (M6) ─────
+        # This only exercises SQL filtering, so it runs entirely against
+        # this script's own throwaway database -- no reason to create (and
+        # then have to remember to reliably delete) real rows in the user's
+        # live project list just to test a WHERE clause.
+        count_p1_project = await ProjectsService(db).create(
+            slug="smoke-count-p1", label="Smoke Count P1", working_dir=str(tmp),
+        )
+        count_p2_project = await ProjectsService(db).create(
+            slug="smoke-count-p2", label="Smoke Count P2", working_dir=str(tmp),
+        )
+        await db.add_article_proposal(
+            count_p1_project.id, source="smoke", source_ref="1",
+            evidence="test", title="Smoke count 1", angle="…",
+            slug_hint="smoke-count-1",
+        )
+        await db.add_article_proposal(
+            count_p2_project.id, source="smoke", source_ref="2",
+            evidence="test", title="Smoke count 2", angle="…",
+            slug_hint="smoke-count-2",
+        )
+        count_p1 = await db.count_article_proposals(
+            status="proposed", project_ids=[count_p1_project.id],
+        )
+        if count_p1 != 1:
+            fail(f"count_article_proposals for p1: got {count_p1}, want 1")
+            return 1
+        count_both = await db.count_article_proposals(
+            status="proposed",
+            project_ids=[count_p1_project.id, count_p2_project.id],
+        )
+        if count_both != 2:
+            fail(f"count_article_proposals for both: got {count_both}, want 2")
+            return 1
+        count_empty = await db.count_article_proposals(
+            status="proposed", project_ids=[],
+        )
+        if count_empty != 0:
+            fail(f"count_article_proposals for empty list: got {count_empty}, want 0")
+            return 1
+        print("ok: count_article_proposals counts correctly per project")
 
         # ── API: ingest / dedupe / write-back ──────────────────────
         from starlette.testclient import TestClient
@@ -230,60 +321,57 @@ async def main() -> int:
                     return 1
                 print("ok: cross-project /articles queue renders")
 
-                # Test count_article_proposals with project filter
-                smoke_p1 = await ProjectsService(real_db).create(
-                    slug="smoke-count-p1", label="Smoke Count P1", working_dir=str(tmp),
+                ai_dc_project = await ProjectsService(real_db).get_by_slug(
+                    "ai-dreaming-center",
                 )
-                smoke_p2 = await ProjectsService(real_db).create(
-                    slug="smoke-count-p2", label="Smoke Count P2", working_dir=str(tmp),
+
+                # C1, route level: a stale Approve/Retry POST against an
+                # already-'published' row must be refused (409) and must not
+                # disturb the row -- the same regression pinned at the DB
+                # layer above (start_article_attempt), now through the
+                # actual HTTP endpoint a browser would hit. The status
+                # precondition in articles_approve fires before any other
+                # check (blog_dir, starter-kit install, process_manager), so
+                # this needs none of that set up.
+                c1_id = await real_db.add_article_proposal(
+                    ai_dc_project.id, source="project_scan",
+                    source_ref="c1-route-check",
+                    evidence="smoke: approving a published row must be refused",
+                    title="Smoke C1 route check", angle="…",
+                    slug_hint="smoke-c1-route-check",
                 )
-                await real_db.add_article_proposal(
-                    smoke_p1.id, source="smoke", source_ref="1",
-                    evidence="test", title="Smoke count 1", angle="…",
-                    slug_hint="smoke-count-1",
-                )
-                await real_db.add_article_proposal(
-                    smoke_p2.id, source="smoke", source_ref="2",
-                    evidence="test", title="Smoke count 2", angle="…",
-                    slug_hint="smoke-count-2",
-                )
-                count_p1 = await real_db.count_article_proposals(
-                    status="proposed", project_ids=[smoke_p1.id],
-                )
-                if count_p1 != 1:
-                    fail(f"count_article_proposals for p1: got {count_p1}, want 1")
-                    return 1
-                count_both = await real_db.count_article_proposals(
-                    status="proposed", project_ids=[smoke_p1.id, smoke_p2.id],
-                )
-                if count_both != 2:
-                    fail(f"count_article_proposals for both: got {count_both}, want 2")
-                    return 1
-                count_empty = await real_db.count_article_proposals(
-                    status="proposed", project_ids=[],
-                )
-                if count_empty != 0:
-                    fail(f"count_article_proposals for empty list: got {count_empty}, want 0")
-                    return 1
                 try:
-                    await real_db.execute(
-                        "DELETE FROM projects WHERE id IN (?, ?)",
-                        (smoke_p1.id, smoke_p2.id),
+                    await real_db.set_article_proposal_status(c1_id, "drafted")
+                    if not await real_db.mark_article_published(
+                        c1_id, commit_ref="smoke-c1-deadbeef",
+                    ):
+                        fail("C1 setup: mark_article_published on a drafted "
+                             "smoke row failed")
+                        return 1
+                    resp = client.post(
+                        f"/p/ai-dreaming-center/articles/{c1_id}/approve"
                     )
-                    await real_db.execute(
-                        "DELETE FROM article_proposals WHERE project_id IN (?, ?)",
-                        (smoke_p1.id, smoke_p2.id),
-                    )
+                    if resp.status_code != 409:
+                        fail(f"C1: approving a published row got "
+                             f"{resp.status_code}, want 409")
+                        return 1
+                    c1_row = await real_db.get_article_proposal(c1_id)
+                    if (c1_row["status"] != "published"
+                            or c1_row["commit_ref"] != "smoke-c1-deadbeef"):
+                        fail("C1: approve route disturbed a published row: "
+                             f"status={c1_row['status']!r}, "
+                             f"commit_ref={c1_row['commit_ref']!r}")
+                        return 1
                 finally:
-                    pass
-                print("ok: count_article_proposals counts correctly per project")
+                    await real_db.execute(
+                        "DELETE FROM article_proposals WHERE id=?", (c1_id,),
+                    )
+                print("ok: C1 -- POST .../approve on a published row is "
+                      "refused (409), status and commit_ref untouched")
 
                 # A status outside the seven the page groups by must still
                 # show up (in the catch-all "other" group) instead of
                 # silently vanishing -- status has no CHECK constraint.
-                ai_dc_project = await ProjectsService(real_db).get_by_slug(
-                    "ai-dreaming-center",
-                )
                 weird_id = await real_db.add_article_proposal(
                     ai_dc_project.id, source="project_scan",
                     source_ref="weird-status",
@@ -570,6 +658,74 @@ async def main() -> int:
             return 1
         print("ok: a rollback that itself fails says so honestly and leaves "
               "the paths visibly still staged")
+
+        # ── C2 pin: a second publish must not drag 'published' back ─────
+        # The double-click regression from the final-fixes review: two
+        # publish requests both read 'drafted' and pass can_publish; one
+        # commits for real and advances the row to 'published', the other's
+        # git call finds nothing left to stage (the file already matches
+        # HEAD) and raises PublishError. The route's except-branch used to
+        # write status='drafted' unconditionally -- dragging the just-
+        # published row backwards forever. Reproduce both publish calls
+        # against a fresh temp repo (not `repo` above, which by now carries
+        # deliberately-dirtied state from the earlier "already staged" test
+        # and would muddy what this specific pin is checking), then apply
+        # the route's *fixed* handling of the second call's failure and
+        # confirm it is a no-op.
+        c2_repo = tmp / "repo_c2"
+        (c2_repo / "content").mkdir(parents=True)
+        def git_c2(*args, cwd=c2_repo):
+            return subprocess.run(["git", *args], cwd=str(cwd),
+                                  capture_output=True, text=True)
+        git_c2("init", "-q")
+        git_c2("config", "user.email", "smoke@example.test")
+        git_c2("config", "user.name", "Smoke")
+        (c2_repo / "README.md").write_text("seed\n", encoding="utf-8")
+        git_c2("add", "README.md")
+        git_c2("commit", "-q", "-m", "seed")
+        c2_file = c2_repo / "content" / "c2-terminal.md"
+        c2_file.write_text("# C2 terminal check\n", encoding="utf-8")
+        c2_id = await db.add_article_proposal(
+            pid, source="center", source_ref="c2-check",
+            evidence="smoke: a second publish must not drag 'published' back",
+            title="Smoke C2 terminal row", angle="…",
+            slug_hint="smoke-c2-terminal",
+        )
+        await db.set_article_proposal_status(c2_id, "drafted")
+        first_sha = await article_publish.publish(
+            str(c2_repo), ["content/c2-terminal.md"],
+            message="publish: c2 terminal check (unverified)", push=False,
+        )
+        if not await db.mark_article_published(c2_id, commit_ref=first_sha):
+            fail("C2 setup: mark_article_published on a drafted smoke row failed")
+            return 1
+        try:
+            await article_publish.publish(
+                str(c2_repo), ["content/c2-terminal.md"],
+                message="publish: c2 terminal check, second attempt", push=False,
+            )
+        except article_publish.PublishError as e:
+            # Exactly the route's `except PublishError` handler: only write
+            # 'drafted' back if the row is *still* 'drafted'.
+            reverted = await db.set_article_proposal_status(
+                c2_id, "drafted", error_message=str(e)[:2000],
+                expect_statuses=("drafted",),
+            )
+            if reverted:
+                fail("C2: a second, failed publish dragged the row back to "
+                     "'drafted' -- the regression is not fixed")
+                return 1
+        else:
+            fail("C2 setup: the second publish should have found nothing "
+                 "staged and raised PublishError")
+            return 1
+        c2_row = await db.get_article_proposal(c2_id)
+        if c2_row["status"] != "published" or c2_row["commit_ref"] != first_sha:
+            fail("C2: row disturbed by the second publish attempt: "
+                 f"status={c2_row['status']!r}, commit_ref={c2_row['commit_ref']!r}")
+            return 1
+        print("ok: C2 -- publishing twice in a row leaves the row 'published', "
+              "not dragged back to 'drafted'")
 
         # ── scheduler wiring ──────────────────────────────────────
         from dreaming.services import scheduler as sched_mod
