@@ -1393,3 +1393,49 @@ class SqliteDB:
             params.extend(project_ids)
         row = await self.fetch_one(sql, tuple(params))
         return int(row["n"]) if row else 0
+
+    async def reconcile_stranded_article_proposals(self) -> int:
+        """Fail 'writing' proposals whose dispatched session has finished
+        without a write-back.
+
+        `start_article_attempt` stamps a proposal's `session_id` and moves it
+        to 'writing'; the write-back (`mark_article_written`) is what's
+        supposed to move it on from there. If the claude session that owns
+        that attempt ends — success, failed, or cancelled — without ever
+        calling back, nothing else touches the row: it sits in 'writing'
+        forever, reading as in-progress work long after the process that was
+        doing it is gone. Called from the same 5-minute reconcile cron as
+        `reconcile_stale_sessions`.
+
+        A row whose `session_id` is empty is left alone — it was never
+        dispatched through a path that records one (e.g. hand-set via the
+        API for a smoke/test), and guessing what happened to it would be
+        worse than leaving it as-is.
+
+        A session still 'running' (or the legacy status IS NULL AND
+        finished_at IS NULL shape used elsewhere in this file) is not
+        stranded — its attempt may yet write back.
+
+        Returns the count of proposals marked failed.
+        """
+        rows = await self.fetch_all(
+            "SELECT ap.id AS id, ap.session_id AS session_id, "
+            "       s.status AS session_status "
+            "FROM article_proposals ap "
+            "JOIN agent_learning_sessions s ON s.id = ap.session_id "
+            "WHERE ap.status='writing' AND ap.session_id != '' "
+            "AND NOT (s.status='running' OR (s.status IS NULL AND s.finished_at IS NULL))"
+        )
+        failed = 0
+        for row in rows:
+            session_status = row["session_status"] or "unknown"
+            message = (
+                f"session {row['session_id']} ended as {session_status} "
+                f"without reporting a draft"
+            )
+            if await self.set_article_proposal_status(
+                row["id"], "failed", error_message=message,
+                expect_statuses=("writing",),
+            ):
+                failed += 1
+        return failed

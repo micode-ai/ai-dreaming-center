@@ -2,7 +2,8 @@
 
 Global jobs:
 - `reconcile_stale_sessions` (interval, every 5 minutes) — closes orphan
-  sessions whose process has vanished.
+  sessions whose process has vanished, and fails 'writing' article
+  proposals whose dispatched session has finished without a write-back.
 
 Per-project jobs:
 - `nightly_learning_{slug}` (cron) — picks top-N agents and runs self-study.
@@ -46,6 +47,8 @@ async def _reconcile_job(app_state):
     """Close orphans across all process-backed tables:
       - agent_learning_sessions (self-study + cmd:* sessions)
       - orchestrator_runs (Roman runs whose claude process is gone)
+      - article_proposals stuck in 'writing' whose session has finished
+        without a write-back
     """
     pm = app_state.process_manager
     pairs: list[tuple[int, str]] = []
@@ -71,6 +74,10 @@ async def _reconcile_job(app_state):
         ) or 0
     except Exception as e:
         log.warning("reconcile_job orchestration error: %s", e)
+    try:
+        closed += await app_state.db.reconcile_stranded_article_proposals() or 0
+    except Exception as e:
+        log.warning("reconcile_job article error: %s", e)
     return closed
 
 

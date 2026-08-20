@@ -7,8 +7,10 @@
 """
 from __future__ import annotations
 import asyncio
+import json
 import sys
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -240,6 +242,149 @@ async def main() -> int:
             fail(f"count_article_proposals for empty list: got {count_empty}, want 0")
             return 1
         print("ok: count_article_proposals counts correctly per project")
+
+        # ── session-crash-visibility fix 1: process_manager._cleanup must
+        # prefer the stream-json result's terminal status over the exit
+        # code -- a claude CLI process that hits error_during_execution
+        # mid-write still exits 0, and used to be recorded as 'success'. ──
+        from dreaming.services.process_manager import ProcessManager, RunningSession
+        import types as _types
+
+        pm = ProcessManager(
+            settings=_types.SimpleNamespace(), db=db, projects=ProjectsService(db),
+        )
+
+        # (a) a result event reporting an error, with exit code 0 (the
+        # exact shape from the real incident: "[done] status=
+        # error_during_execution ..." followed by "[exit] code=0") must be
+        # recorded 'failed', with the subtype surfacing in error_message.
+        sid_crash = await db.create_session(pid, "smoke-crash-agent", "sonnet")
+        session_crash = RunningSession(
+            session_id=sid_crash, agent_name="smoke-crash-agent",
+            project_id=pid, project_slug="demo", process=None,
+        )
+        pm._parse_stream_json(session_crash, json.dumps({
+            "type": "result", "subtype": "error_during_execution",
+            "duration_ms": 370909, "total_cost_usd": 2.8876,
+        }))
+        if session_crash.terminal_status != "error_during_execution":
+            fail("_parse_stream_json did not store the result subtype on "
+                 f"the session: {session_crash.terminal_status!r}")
+            return 1
+        await pm._cleanup(session_crash, exit_code=0, error_message=None)
+        row = await db.fetch_one(
+            "SELECT status, error_message FROM agent_learning_sessions WHERE id=?",
+            (sid_crash,),
+        )
+        if row["status"] != "failed":
+            fail(f"crashed-but-exit-0 session recorded status={row['status']!r}, "
+                 "want 'failed'")
+            return 1
+        if "error_during_execution" not in (row["error_message"] or ""):
+            fail("crashed session's error_message doesn't name the subtype: "
+                 f"{row['error_message']!r}")
+            return 1
+        print("ok: fix 1 -- exit code 0 with an error result subtype is "
+              "recorded 'failed', with the subtype in error_message")
+
+        # (b) no result event at all (stream never produced one -- killed,
+        # crashed before finishing, watchdog) must still fall back to the
+        # exit code exactly as before this fix.
+        sid_noresult = await db.create_session(pid, "smoke-noresult-agent", "sonnet")
+        session_noresult = RunningSession(
+            session_id=sid_noresult, agent_name="smoke-noresult-agent",
+            project_id=pid, project_slug="demo", process=None,
+        )
+        await pm._cleanup(session_noresult, exit_code=0, error_message=None)
+        row = await db.fetch_one(
+            "SELECT status FROM agent_learning_sessions WHERE id=?",
+            (sid_noresult,),
+        )
+        if row["status"] != "success":
+            fail("no-result-event session with exit code 0 recorded "
+                 f"status={row['status']!r}, want 'success' (exit-code fallback)")
+            return 1
+
+        sid_noresult_fail = await db.create_session(pid, "smoke-noresult-fail-agent", "sonnet")
+        session_noresult_fail = RunningSession(
+            session_id=sid_noresult_fail, agent_name="smoke-noresult-fail-agent",
+            project_id=pid, project_slug="demo", process=None,
+        )
+        await pm._cleanup(
+            session_noresult_fail, exit_code=1,
+            error_message="claude exited code=1: some line",
+        )
+        row = await db.fetch_one(
+            "SELECT status, error_message FROM agent_learning_sessions WHERE id=?",
+            (sid_noresult_fail,),
+        )
+        if row["status"] != "failed" or row["error_message"] != "claude exited code=1: some line":
+            fail("no-result-event session with exit code 1: "
+                 f"status={row['status']!r}, error_message={row['error_message']!r}")
+            return 1
+        print("ok: fix 1 -- no result event still follows the exit code "
+              "(0 -> success, non-zero -> failed) unchanged")
+
+        # ── session-crash-visibility fix 2: reconcile_stranded_article_
+        # proposals fails a 'writing' row whose dispatched session has
+        # finished without a write-back. ────────────────────────────────
+        sid_running = await db.create_session(pid, "smoke-writer-running", "sonnet")
+        stranded_running = await db.add_article_proposal(
+            pid, source="smoke", source_ref="stranded-running",
+            evidence="test", title="Stranded but session still running",
+            angle="…", slug_hint="stranded-running",
+        )
+        await db.start_article_attempt(stranded_running, session_id=sid_running)
+
+        sid_done = await db.create_session(pid, "smoke-writer-done", "sonnet")
+        await db.execute(
+            "UPDATE agent_learning_sessions SET status='failed', finished_at=? "
+            "WHERE id=?",
+            (datetime.now(timezone.utc).isoformat(), sid_done),
+        )
+        stranded_done = await db.add_article_proposal(
+            pid, source="smoke", source_ref="stranded-done",
+            evidence="test", title="Stranded, session finished",
+            angle="…", slug_hint="stranded-done",
+        )
+        await db.start_article_attempt(stranded_done, session_id=sid_done)
+
+        stranded_empty = await db.add_article_proposal(
+            pid, source="smoke", source_ref="stranded-empty",
+            evidence="test", title="Stranded, no session_id at all",
+            angle="…", slug_hint="stranded-empty",
+        )
+        await db.set_article_proposal_status(stranded_empty, "writing")
+
+        n_failed = await db.reconcile_stranded_article_proposals()
+        if n_failed != 1:
+            fail(f"reconcile_stranded_article_proposals: failed {n_failed} rows, want 1")
+            return 1
+
+        row = await db.get_article_proposal(stranded_running)
+        if row["status"] != "writing":
+            fail("reconcile touched a proposal whose session is still "
+                 f"'running': status={row['status']!r}")
+            return 1
+
+        row = await db.get_article_proposal(stranded_done)
+        if row["status"] != "failed":
+            fail("reconcile left a stranded proposal (finished session) "
+                 f"as {row['status']!r}, want 'failed'")
+            return 1
+        if sid_done not in row["error_message"] or "failed" not in row["error_message"]:
+            fail("reconcile's error_message doesn't name the session/status: "
+                 f"{row['error_message']!r}")
+            return 1
+
+        row = await db.get_article_proposal(stranded_empty)
+        if row["status"] != "writing":
+            fail("reconcile touched a proposal with an empty session_id: "
+                 f"status={row['status']!r}")
+            return 1
+        print("ok: fix 2 -- reconcile_stranded_article_proposals fails a "
+              "'writing' row whose session has finished, leaves a still-"
+              "running session and an empty session_id untouched")
 
         # ── API: ingest / dedupe / write-back ──────────────────────
         from starlette.testclient import TestClient

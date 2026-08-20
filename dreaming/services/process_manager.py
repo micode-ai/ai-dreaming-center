@@ -175,6 +175,12 @@ class RunningSession:
     _watchdog_task: asyncio.Task | None = None
     key: str = ""  # composite key in pm.running dict
     log_path: str | None = None  # absolute path to per-session stdout log file
+    # Status from the stream-json terminal `result` event's `subtype` (or its
+    # `stop_reason` fallback), e.g. "success" / "error_during_execution" /
+    # "error_max_turns". None until (unless) that event arrives — the CLI can
+    # exit 0 after emitting a non-success result, which _cleanup must not
+    # mistake for a clean exit. See _parse_stream_json / _cleanup.
+    terminal_status: str | None = None
 
     async def send_user_message(self, text: str) -> bool:
         """Записать stream-json user-message в stdin живого процесса.
@@ -580,7 +586,7 @@ class ProcessManager:
         )
         return session_id
 
-    def _parse_stream_json(self, raw_line: str) -> list[str]:
+    def _parse_stream_json(self, session: RunningSession, raw_line: str) -> list[str]:
         """Parse a stream-json line and return human-readable lines for display."""
         try:
             event = json.loads(raw_line)
@@ -659,6 +665,10 @@ class ProcessManager:
             lines.append(
                 f"[done] status={status} duration={duration}ms cost=${cost:.4f}"
             )
+            # Remember it for _cleanup: the process can still exit 0 after
+            # emitting a non-"success" terminal result (see module notes).
+            if status:
+                session.terminal_status = status
 
         return lines
 
@@ -725,7 +735,7 @@ class ProcessManager:
                 if not raw:
                     continue
 
-                for line in self._parse_stream_json(raw):
+                for line in self._parse_stream_json(session, raw):
                     _emit(line)
                     produced += 1
                     tail.append(line)
@@ -911,10 +921,23 @@ class ProcessManager:
                  session.session_id, key, exit_code)
         if self.db is None:
             return
-        # Map exit code → DB status. 0 = success; anything else = failed.
-        # Watchdog kills go through here too (exit code = negative signal
-        # on POSIX, large positive on Windows); those count as failed.
-        target_status = "success" if exit_code == 0 else "failed"
+        # Prefer the stream-json result's own status over the exit code: the
+        # claude CLI can exit 0 after emitting a non-"success" terminal
+        # result (e.g. error_during_execution mid-write), which used to be
+        # recorded as a plain success. Only fall back to the exit code when
+        # the stream never produced a result event at all (killed, crashed,
+        # watchdog) — same mapping as before: 0 = success, anything else =
+        # failed.
+        if session.terminal_status is not None:
+            if session.terminal_status == "success":
+                target_status = "success"
+            else:
+                target_status = "failed"
+                error_message = error_message or (
+                    f"claude CLI ended with status={session.terminal_status}"
+                )
+        else:
+            target_status = "success" if exit_code == 0 else "failed"
         # Command-style entries ('cmd:...') don't have agent_learning_sessions
         # rows of their own — the row's `agent_name` IS the composite key.
         # Update by id (which is the claude session_id passed to start_session).
