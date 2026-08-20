@@ -192,6 +192,44 @@ async def main() -> int:
         print("ok: API ingest (201 fresh / 200 dedupe), detail, write-back, "
               "write-back guard (409 once drafted)")
 
+        # ── writer resolution + publish gate ───────────────────────
+        from dreaming.services import articles
+        agents_dir = tmp / ".claude" / "agents"
+        agents_dir.mkdir(parents=True, exist_ok=True)
+        if articles.resolve_writer(str(tmp)) != "self":
+            fail("resolve_writer: empty agents dir must give 'self'")
+            return 1
+        (agents_dir / "blog-writer.md").write_text("---\nname: blog-writer\n---\n",
+                                                   encoding="utf-8")
+        (agents_dir / "backend-developer.md").write_text("---\nname: x\n---\n",
+                                                         encoding="utf-8")
+        got = articles.resolve_writer(str(tmp))
+        if got != "blog-writer":
+            fail(f"autodetect picked {got!r}, want 'blog-writer'")
+            return 1
+        if articles.resolve_writer(str(tmp), configured="kb-page-author") != "kb-page-author":
+            fail("configured agent must win over autodetect")
+            return 1
+        print("ok: resolve_writer — configured > autodetect > self")
+
+        gate_cases = [
+            ({"verify_ok": 1, "status": "drafted"}, "npm run build", "commit", True),
+            ({"verify_ok": 0, "status": "drafted"}, "npm run build", "commit", False),
+            ({"verify_ok": 0, "status": "drafted"}, "", "commit", True),
+            ({"verify_ok": 1, "status": "drafted"}, "npm run build", "off", False),
+            ({"verify_ok": 1, "status": "proposed"}, "npm run build", "commit", False),
+        ]
+        for row_in, cmd, mode, want in gate_cases:
+            allowed, reason = articles.can_publish(row_in, cmd, mode)
+            if allowed is not want:
+                fail(f"can_publish({row_in}, {cmd!r}, {mode!r}) = {allowed} "
+                     f"({reason}), want {want}")
+                return 1
+        if articles.publish_label(False, "") != "unverified":
+            fail("publish_label: empty verify cmd must read 'unverified'")
+            return 1
+        print("ok: publish gate — verified / failed / unverified / off")
+
         print("PASS")
         return 0
     finally:
