@@ -1888,8 +1888,10 @@ Append to `scripts/smoke_articles.py` before `print("PASS")`:
             return 1
         print("ok: publish commits only draft paths, leaves the rest alone")
 
-        # Dirty target path must refuse rather than sweep.
+        # A target path that someone else has already STAGED must refuse
+        # rather than sweep their index entry into our commit.
         article.write_text("# Piece edited by hand\n", encoding="utf-8")
+        git("add", "content/piece.md")
         try:
             await article_publish.publish(
                 str(repo), ["content/piece.md"], message="second", push=False,
@@ -2021,13 +2023,17 @@ async def publish(
     return commit
 ```
 
-Note on the dirty-path check: the smoke test edits the article file *after* the
-first commit, leaving it unstaged (` M`), and expects a refusal. An unstaged
-edit to a path we are about to stage is exactly the "someone is mid-edit"
-case, so treat any porcelain line whose path is a target as blocking — adjust
-the filter to `staged = [ln for ln in out.splitlines() if ln.strip()]` if the
-narrower index-only check lets that case through, and re-run the smoke script
-to confirm both publish cases behave.
+Note on the dirty-path check — the index-only filter is deliberate, do not
+widen it. Git cannot tell the writer's own unstaged edits from a human's: on the
+landing page a new article legitimately shows ` M src/data/blog-posts.json` and
+` M vite.config.ts`, because adding a post means editing tracked files. A check
+that refused any dirty target path would refuse every real publish there, and
+would also refuse the first publish of a brand-new untracked file (`??`). What
+it can detect is a *staged* change we did not make, which means a human is
+mid-commit in those paths — that is the case worth refusing. This narrows the
+spec's "unrelated uncommitted edits stop the publish" to "staged edits stop the
+publish"; the guarantee that survives, and the one the stash incident was
+actually about, is that nothing outside `draft_ref` is ever touched.
 
 - [ ] **Step 4: Implement the publish route**
 
