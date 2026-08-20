@@ -6,6 +6,18 @@
     <h1 class="page-header__title">{{ "article.queue.title" | t(locale=locale) }}</h1>
     <span class="text-xs faint">{{ total }} {{ "article.total" | t(locale=locale) }}</span>
   </div>
+  {% if projects %}
+  <div class="page-header__actions">
+    <form method="post" action="/articles/scan" class="inline flex items-center gap-1">
+      <select name="target_project" class="text-xs rounded px-1 py-1 bg-elevated">
+        {% for p in projects %}<option value="{{ p.slug }}">{{ p.label }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-sm btn-primary">
+        {{ "article.btn.scan" | t(locale=locale) }}
+      </button>
+    </form>
+  </div>
+  {% endif %}
 </header>
 
 {% if capped %}
@@ -22,9 +34,14 @@
       <span class="text-xs faint ml-auto">{{ a.source }}</span>
     </header>
     {% if a.angle %}<p class="text-sm mb-2">{{ a.angle }}</p>{% endif %}
-    <p class="text-xs faint">
+    <p class="text-xs faint mb-2">
       <span class="strong">{{ "article.evidence" | t(locale=locale) }}:</span> {{ a.evidence }}
     </p>
+    <footer class="flex gap-2 items-center text-xs">
+      <form method="post" action="/p/{{ a.project_slug }}/articles/{{ a.id }}/reject" class="inline">
+        <button class="btn btn-sm">{{ "article.btn.reject" | t(locale=locale) }}</button>
+      </form>
+    </footer>
   </article>
   {% endfor %}
 {% else %}
