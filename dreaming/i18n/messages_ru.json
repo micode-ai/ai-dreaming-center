@@ -591,6 +591,7 @@
   "article.btn.restore": "Вернуть в очередь",
   "article.btn.publish": "Публиковать",
   "article.btn.retry": "Повторить",
+  "article.btn.cancel": "Отменить",
   "article.verify.verified": "сборка прошла",
   "article.verify.unverified": "без проверки",
   "article.verify.failed": "сборка упала",

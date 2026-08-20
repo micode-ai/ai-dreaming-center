@@ -591,6 +591,7 @@
   "article.btn.restore": "Back to queue",
   "article.btn.publish": "Publish",
   "article.btn.retry": "Retry",
+  "article.btn.cancel": "Cancel",
   "article.verify.verified": "build passed",
   "article.verify.unverified": "unverified",
   "article.verify.failed": "build failed",

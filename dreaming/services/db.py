@@ -1245,6 +1245,31 @@ class SqliteDB:
         await self._conn.commit()
         return n > 0
 
+    async def start_article_attempt(
+        self, proposal_id: int, *, session_id: str,
+    ) -> bool:
+        """Moves a row into 'writing' for a fresh attempt, clearing whatever a
+        previous attempt left behind.
+
+        A plain `set_article_proposal_status(id, "writing", ...)` only touches
+        status/error_message/session_id/decided_at, so retrying a 'drafted' or
+        'failed' row would keep its old draft_ref/verify_output/verify_ok/
+        writer_agent — a stale "build passed" sitting next to a brand new
+        error. `written_at` is left alone; the write-back stamps it.
+        """
+        now_iso = datetime.now(timezone.utc).isoformat()
+        async with self._conn.execute(
+            "UPDATE article_proposals SET status='writing', "
+            "session_id=CASE WHEN ?<>'' THEN ? ELSE session_id END, "
+            "decided_at=COALESCE(decided_at, ?), "
+            "draft_ref='', verify_output='', writer_agent='', "
+            "error_message='', verify_ok=0 WHERE id=?",
+            (session_id, session_id, now_iso, proposal_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
     async def mark_article_written(
         self, proposal_id: int, *, draft_ref: str, verify_output: str,
         writer_agent: str, verify_ok: bool,

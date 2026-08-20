@@ -16,6 +16,12 @@ You get `title`, `angle`, `slug_hint`, `funnel_level`, `locales`, `tags_json`,
 `evidence`, `related_product`. The evidence is the fact the piece must be true
 to — do not write around it.
 
+For which languages to write, prefer `$DC_ARTICLE_LOCALES` when it is
+non-empty; fall back to the payload's own `locales` only if that env var is
+empty. The project setting wins because it is the operator's explicit
+decision for this project; the payload's `locales` is only the scan's guess
+at the time it proposed the topic.
+
 ## 2. Find out who writes
 
 `$DC_ARTICLE_WRITER` names the agent the center resolved. If it is a real agent

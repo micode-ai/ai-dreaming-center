@@ -177,7 +177,30 @@ async def articles_approve(request: Request, slug: str, proposal_id: int):
         )
     except RuntimeError as e:
         raise HTTPException(status_code=409, detail=str(e))
-    await db.set_article_proposal_status(
-        proposal_id, "writing", session_id=session_id or "",
-    )
+    await db.start_article_attempt(proposal_id, session_id=session_id or "")
     return RedirectResponse(f"/p/{project.slug}/live", status_code=303)
+
+
+@router.post("/p/{slug}/articles/{proposal_id}/cancel")
+async def articles_cancel(request: Request, slug: str, proposal_id: int):
+    """Reconcile a row stuck in 'writing' back to 'failed' from the UI.
+
+    This only rewrites the database row — it does NOT stop the running CLI
+    session or kill any OS process. Use it when a write session crashed, was
+    killed by the watchdog, or the host restarted before /written arrived, so
+    the card is not left with no buttons at all."""
+    project = request.state.project
+    db = request.app.state.db
+    row = await db.get_article_proposal(proposal_id)
+    if row is None or row["project_id"] != project.id:
+        raise HTTPException(status_code=404, detail="proposal not found")
+    if row["status"] != "writing":
+        raise HTTPException(
+            status_code=409,
+            detail=f"proposal is '{row['status']}', not 'writing' — nothing to cancel",
+        )
+    await db.set_article_proposal_status(
+        proposal_id, "failed",
+        error_message="cancelled from the UI while writing",
+    )
+    return RedirectResponse(f"/p/{project.slug}/articles", status_code=303)

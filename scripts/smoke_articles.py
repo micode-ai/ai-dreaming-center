@@ -89,6 +89,33 @@ async def main() -> int:
             return 1
         print("ok: drafted with verify_output + verify_ok")
 
+        # ── retry clears the previous attempt's stale results ───────
+        # A plain status flip to 'writing' would leave the old draft_ref /
+        # verify_output / verify_ok / writer_agent sitting next to a fresh
+        # attempt's error -- two contradictory truths about the same draft.
+        await db.start_article_attempt(first, session_id="retry-session")
+        row = await db.get_article_proposal(first)
+        if row["status"] != "writing":
+            fail(f"start_article_attempt: status={row['status']}, want 'writing'")
+            return 1
+        if (row["draft_ref"] or row["verify_output"] or row["writer_agent"]
+                or row["error_message"]):
+            fail("start_article_attempt left stale fields: "
+                 f"draft_ref={row['draft_ref']!r}, "
+                 f"verify_output={row['verify_output']!r}, "
+                 f"writer_agent={row['writer_agent']!r}, "
+                 f"error_message={row['error_message']!r}")
+            return 1
+        if row["verify_ok"] != 0:
+            fail(f"start_article_attempt: verify_ok={row['verify_ok']}, want 0")
+            return 1
+        if row["session_id"] != "retry-session":
+            fail(f"start_article_attempt: session_id={row['session_id']!r}, "
+                 "want 'retry-session'")
+            return 1
+        print("ok: start_article_attempt clears draft_ref/verify_output/"
+              "writer_agent/error_message and resets verify_ok")
+
         # ── failure path ───────────────────────────────────────────
         second = await db.add_article_proposal(
             pid, source="center", source_ref="idea-42",
