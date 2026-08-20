@@ -293,7 +293,6 @@ CREATE INDEX IF NOT EXISTS idx_radar_status_discovered
 CREATE TABLE IF NOT EXISTS article_proposals (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     project_id      INTEGER NOT NULL,
-    target_project_id INTEGER,
     source          TEXT NOT NULL,
     source_ref      TEXT NOT NULL DEFAULT '',
     evidence        TEXT NOT NULL,
@@ -316,7 +315,13 @@ CREATE TABLE IF NOT EXISTS article_proposals (
     created_at      TEXT NOT NULL,
     decided_at      TEXT,
     written_at      TEXT,
-    published_at    TEXT
+    published_at    TEXT,
+    -- Kept last, not next to project_id: ALTER TABLE ADD COLUMN can only
+    -- append, so a database migrated from before this column existed would
+    -- get it at the end regardless. Putting it anywhere else here would
+    -- make a fresh database's column order diverge from a migrated one for
+    -- no benefit -- the two paths must not disagree about column order.
+    target_project_id INTEGER
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_article_project_slug
     ON article_proposals (project_id, slug_hint);
