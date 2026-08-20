@@ -46,10 +46,15 @@ below, are the only pattern to copy.
 ## 3. Find out who writes
 
 `$DC_ARTICLE_WRITER` names the agent the center resolved. If it is a real agent
-name, delegate the writing to that subagent and let it own the format. If it is
-`self`, write the piece yourself.
+name, delegate the writing to that subagent and let it own the format. The
+delegate cannot see `$DC_ARTICLE_SUBJECT_DIR` or the brief for itself, so hand
+both along in the delegating prompt: the subject repository's absolute path
+and what it is (the project the article is about, read-only), plus the
+brief's own title, angle, and evidence. Delegating without the subject path is
+how a cross-project piece ends up inventing its facts. If it is `self`, write
+the piece yourself.
 
-Either way, **the project owns the article's shape**. Before writing anything,
+Either way, **the venue owns the article's shape**. Before writing anything,
 read two or three existing articles in `$DC_ARTICLE_BLOG_DIR` and copy their
 structure exactly: file layout, frontmatter fields, language set, heading style,
 where the CTA goes. If this project keeps prose as data (a JSON entry rather

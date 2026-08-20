@@ -321,6 +321,39 @@ async def main() -> int:
                     return 1
                 print("ok: cross-project /articles queue renders")
 
+                # ── manual add: blank topic refused, honest evidence recorded ──
+                blank = client.post("/p/ai-dreaming-center/articles/add",
+                                    data={"title": "   ", "angle": "x"},
+                                    follow_redirects=False)
+                if blank.status_code != 400:
+                    fail(f"manual add with a blank topic: {blank.status_code}, want 400")
+                    return 1
+                made = client.post("/p/ai-dreaming-center/articles/add",
+                                   data={"title": "Smoke manual topic",
+                                         "angle": "an intro prompt from the operator",
+                                         "venue": ""},
+                                   follow_redirects=False)
+                if made.status_code != 303:
+                    fail(f"manual add: {made.status_code}, want 303")
+                    return 1
+                # the row must carry honest, non-blank evidence naming the request
+                made_row = None
+                for r in await real_db.list_article_proposals(status="proposed"):
+                    if r["slug_hint"].startswith("smoke-manual") or r["title"] == "Smoke manual topic":
+                        made_row = r
+                        break
+                if made_row is None:
+                    fail("manual proposal was not created")
+                    return 1
+                if made_row["source"] != "manual" or not made_row["evidence"].strip():
+                    fail(f"manual row: source={made_row['source']}, evidence={made_row['evidence']!r}")
+                    return 1
+                if "an intro prompt from the operator" not in made_row["angle"]:
+                    fail("the intro prompt did not reach the angle")
+                    return 1
+                await real_db.execute("DELETE FROM article_proposals WHERE id=?", (made_row["id"],))
+                print("ok: manual add -- blank topic refused, row carries honest evidence")
+
                 ai_dc_project = await ProjectsService(real_db).get_by_slug(
                     "ai-dreaming-center",
                 )
@@ -838,6 +871,29 @@ async def main() -> int:
                 fail(f"write-article.md does not mention {needle!r}")
                 return 1
         print("ok: write-article command shipped in the starter kit")
+
+        # ── delegation must hand the subject to the delegate ────────
+        # Fix round 1: the writer-resolution section told the session to
+        # delegate to a subagent without ever mentioning
+        # $DC_ARTICLE_SUBJECT_DIR, so a cross-project delegate would be
+        # asked to write about a repository it was never pointed at.
+        # Scope the check to the delegation section itself (not just
+        # "anywhere in the file", which the check above already covers) so
+        # a future edit that keeps the mention elsewhere but drops it from
+        # the delegation instruction still fails loudly here.
+        deleg_start = body2.find("## 3. Find out who writes")
+        deleg_end = body2.find("## 4. Verify")
+        if deleg_start == -1 or deleg_end == -1 or deleg_end < deleg_start:
+            fail("write-article.md: could not locate the delegation section "
+                 "to check")
+            return 1
+        delegation_section = body2[deleg_start:deleg_end]
+        if "DC_ARTICLE_SUBJECT_DIR" not in delegation_section:
+            fail("write-article.md: the delegation section never tells the "
+                 "session to hand $DC_ARTICLE_SUBJECT_DIR to the delegate")
+            return 1
+        print("ok: write-article.md's delegation section hands the subject "
+              "directory to the delegate")
 
         # ── publish: real git repo in a temp dir ───────────────────
         import re
