@@ -31,7 +31,7 @@
     <p class="text-xs font-mono faint mb-2">→ {{ a.draft_ref }}</p>
   {% endif %}
 
-  {% if a.status == 'failed' and a.error_message %}
+  {% if a.status in ('failed', 'published') and a.error_message %}
     <pre class="text-xs mb-2 overflow-x-auto">{{ a.error_message }}</pre>
   {% endif %}
 

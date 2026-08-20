@@ -409,6 +409,7 @@ async def main() -> int:
         print("ok: write-article command shipped in the starter kit")
 
         # ── publish: real git repo in a temp dir ───────────────────
+        import re
         import subprocess
         from dreaming.services import article_publish
 
@@ -433,8 +434,8 @@ async def main() -> int:
             str(repo), ["content/piece.md"],
             message="publish: piece (unverified)", push=False,
         )
-        if not sha or len(sha) < 7:
-            fail(f"publish returned no sha: {sha!r}")
+        if not re.fullmatch(r"[0-9a-f]{40}", sha or ""):
+            fail(f"publish returned a malformed sha: {sha!r}")
             return 1
         listed = git("show", "--name-only", "--pretty=format:", sha).stdout.split()
         if listed != ["content/piece.md"]:
@@ -448,6 +449,68 @@ async def main() -> int:
             fail("the unrelated file left the working tree — stash or add -A happened")
             return 1
         print("ok: publish commits only draft paths, leaves the rest alone")
+
+        # ── split_paths: whole-string-first, then comma/newline fallback ──
+        (repo / "content" / "multi-a.md").write_text("a\n", encoding="utf-8")
+        (repo / "content" / "multi-b.md").write_text("b\n", encoding="utf-8")
+        got = article_publish.split_paths(
+            "content/multi-a.md\ncontent/multi-b.md", str(repo),
+        )
+        if got != ["content/multi-a.md", "content/multi-b.md"]:
+            fail(f"split_paths (newline-separated): got {got}")
+            return 1
+        got = article_publish.split_paths(
+            "content/multi-a.md,content/multi-b.md", str(repo),
+        )
+        if got != ["content/multi-a.md", "content/multi-b.md"]:
+            fail(f"split_paths (comma-separated): got {got}")
+            return 1
+        # A comma inside a real filename must not be chopped into fragments:
+        # the whole string wins when it resolves to an existing file.
+        (repo / "content" / "notes, v2.md").write_text(
+            "comma in the filename\n", encoding="utf-8",
+        )
+        got = article_publish.split_paths("content/notes, v2.md", str(repo))
+        if got != ["content/notes, v2.md"]:
+            fail(f"split_paths must not chop a real filename's own comma: got {got}")
+            return 1
+        print("ok: split_paths — newline/comma split, whole string wins when it's a real file")
+
+        # ── build_message: title + the verification claim it may make ─────
+        row_for_msg = {"title": "My Piece", "slug_hint": "my-piece"}
+        msg = article_publish.build_message(row_for_msg, "unverified")
+        if "My Piece" not in msg or "verification: unverified" not in msg:
+            fail(f"build_message (unverified) missing title/label: {msg!r}")
+            return 1
+        msg = article_publish.build_message(row_for_msg, "verified")
+        if "My Piece" not in msg or "verification: verified" not in msg:
+            fail(f"build_message (verified) missing title/label: {msg!r}")
+            return 1
+        print("ok: build_message carries the title and the verification label")
+
+        # ── path validation: reject anything that isn't a plain in-repo file ──
+        before_cached = git("diff", "--cached", "--name-only").stdout
+        for bad, why in [
+            ("content/../.env", "a '..' segment"),
+            ("content/*.md", "a glob character"),
+            ("content", "a directory, not a file"),
+        ]:
+            try:
+                await article_publish.publish(
+                    str(repo), [bad], message="should never commit", push=False,
+                )
+            except article_publish.PublishError:
+                pass
+            else:
+                fail(f"publish accepted an invalid path ({why}): {bad!r}")
+                return 1
+        after_cached = git("diff", "--cached", "--name-only").stdout
+        if after_cached != before_cached:
+            fail("a rejected path still touched the index: "
+                 f"before={before_cached!r} after={after_cached!r}")
+            return 1
+        print("ok: publish rejects '..' segments, glob pathspecs, and directory paths, "
+              "index untouched")
 
         # A target path that someone else has already STAGED must refuse
         # rather than sweep their index entry into our commit.

@@ -225,14 +225,31 @@ async def articles_publish(request: Request, slug: str, proposal_id: int):
     try:
         commit = await article_publish.publish(
             project.working_dir,
-            article_publish.split_paths(row["draft_ref"]),
+            article_publish.split_paths(row["draft_ref"], project.working_dir),
             message=article_publish.build_message(row, label),
             push=(publish_mode == "commit+push"),
         )
+    except article_publish.PushFailed as e:
+        # The commit landed locally; only the push failed. Recording the sha
+        # keeps a retry from seeing "nothing to publish" forever, and the
+        # error_message tells a human the push still needs doing by hand.
+        await db.mark_article_published(proposal_id, commit_ref=e.commit)
+        await db.set_article_proposal_status(
+            proposal_id, "published", error_message=str(e)[:2000],
+        )
+        raise HTTPException(status_code=409, detail=str(e))
     except article_publish.PublishError as e:
         await db.set_article_proposal_status(
             proposal_id, "drafted", error_message=str(e)[:2000],
         )
         raise HTTPException(status_code=409, detail=str(e))
     await db.mark_article_published(proposal_id, commit_ref=commit)
+    # Clear a stale error_message from an earlier failed attempt on this same
+    # row (e.g. a prior commit or push failure) -- otherwise a card that just
+    # published cleanly would still show the previous failure's text, now
+    # that a 'published' row with a non-empty error_message renders it.
+    if row.get("error_message"):
+        await db.set_article_proposal_status(
+            proposal_id, "published", error_message="",
+        )
     return RedirectResponse(f"/p/{project.slug}/articles", status_code=303)
