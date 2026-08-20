@@ -175,11 +175,15 @@ class RunningSession:
     _watchdog_task: asyncio.Task | None = None
     key: str = ""  # composite key in pm.running dict
     log_path: str | None = None  # absolute path to per-session stdout log file
-    # Status from the stream-json terminal `result` event's `subtype` (or its
-    # `stop_reason` fallback), e.g. "success" / "error_during_execution" /
-    # "error_max_turns". None until (unless) that event arrives — the CLI can
-    # exit 0 after emitting a non-success result, which _cleanup must not
-    # mistake for a clean exit. See _parse_stream_json / _cleanup.
+    # Status from the stream-json terminal `result` event's `subtype` alone
+    # (the display line separately falls back to `stop_reason` when
+    # `subtype` is missing, but that fallback must not feed this field —
+    # see _parse_stream_json), e.g. "success" / "error_during_execution" /
+    # "error_max_turns". None until (unless) that event arrives, or if it
+    # arrives without a `subtype` — the CLI can exit 0 after emitting a
+    # non-success result, which _cleanup must not mistake for a clean exit,
+    # but _cleanup only downgrades on a recognised error family (subtype
+    # starting with "error"). See _parse_stream_json / _cleanup.
     terminal_status: str | None = None
 
     async def send_user_message(self, text: str) -> bool:
@@ -667,8 +671,15 @@ class ProcessManager:
             )
             # Remember it for _cleanup: the process can still exit 0 after
             # emitting a non-"success" terminal result (see module notes).
-            if status:
-                session.terminal_status = status
+            # Stored from `subtype` ALONE — not the `stop_reason` fallback
+            # used for the display line above. That fallback is a display-
+            # path leftover: a `result` event that omits `subtype` (some
+            # CLI versions do, e.g. a plain `stop_reason: "end_turn"`) would
+            # otherwise get remembered as a non-"success" terminal status
+            # and fail every clean session that hits this shape. `subtype`
+            # is the field the CLI actually defines as the terminal status.
+            if subtype:
+                session.terminal_status = subtype
 
         return lines
 
@@ -936,7 +947,18 @@ class ProcessManager:
         # success win there would resurrect exactly the bug this exists to
         # fix, just pointed the other way. Do not turn this into a two-way
         # override.
-        if target_status == "success" and session.terminal_status not in (None, "success"):
+        # Only downgrade on a *recognised error family* (subtype starting
+        # with "error", e.g. error_during_execution / error_max_turns) —
+        # not merely "anything other than success". terminal_status is
+        # already subtype-only (see _parse_stream_json), but an unfamiliar
+        # future token that isn't an error subtype (e.g. some new benign
+        # terminal state) must not be able to invent a failure for what the
+        # exit code already called a clean run.
+        if (
+            target_status == "success"
+            and session.terminal_status is not None
+            and session.terminal_status.startswith("error")
+        ):
             target_status = "failed"
             error_message = error_message or (
                 f"claude CLI ended with status={session.terminal_status}"

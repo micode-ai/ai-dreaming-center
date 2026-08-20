@@ -75,7 +75,16 @@ async def _reconcile_job(app_state):
     except Exception as e:
         log.warning("reconcile_job orchestration error: %s", e)
     try:
-        closed += await app_state.db.reconcile_stranded_article_proposals() or 0
+        # Same cmd_session_ids set as cancel_stale_orchestration_runs above —
+        # a 'writing' proposal's session_id is a cmd: write-article session,
+        # and agent_learning_sessions.status for it can already have been
+        # corrupted by the sweep inside pm.reconcile_stale_sessions (it
+        # excludes all cmd: pairs from active_pairs by construction). The
+        # live process table, not that column, is what says whether the
+        # writer is still working.
+        closed += await app_state.db.reconcile_stranded_article_proposals(
+            cmd_session_ids,
+        ) or 0
     except Exception as e:
         log.warning("reconcile_job article error: %s", e)
     return closed
