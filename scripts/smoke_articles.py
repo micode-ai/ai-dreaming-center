@@ -358,6 +358,18 @@ async def main() -> int:
             return 1
         print("ok: slugify appends a hash suffix only when truncation would collide")
 
+        # ── starter-kit template present and self-consistent ───────
+        kit = ROOT / "templates" / "starter-kit" / "commands" / "article-ideas-scan.md"
+        if not kit.exists():
+            fail("article-ideas-scan.md missing from the starter kit")
+            return 1
+        body = kit.read_text(encoding="utf-8")
+        for needle in ("/api/p/", "articles/ingest", "evidence", "DREAMING_API_URL"):
+            if needle not in body:
+                fail(f"article-ideas-scan.md does not mention {needle!r}")
+                return 1
+        print("ok: article-ideas-scan command shipped in the starter kit")
+
         print("PASS")
         return 0
     finally:

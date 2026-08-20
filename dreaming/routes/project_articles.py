@@ -98,3 +98,31 @@ async def articles_restore(request: Request, slug: str, proposal_id: int):
     if not ok:
         raise HTTPException(status_code=404, detail="proposal not found")
     return RedirectResponse(f"/p/{project.slug}/articles", status_code=303)
+
+
+@router.post("/p/{slug}/articles/scan")
+async def articles_scan(request: Request, slug: str):
+    """Dispatch /article-ideas-scan into the project. Proposes only — this
+    session never writes an article and never publishes."""
+    project = request.state.project
+    pm = request.app.state.process_manager
+    settings = request.app.state.settings
+    resolver = request.app.state.resolver_factory(request)
+    try:
+        await pm.start_command(
+            project,
+            command_name="article-ideas-scan",
+            prompt="/article-ideas-scan",
+            claude_path=await resolver.get(project, "claude_path", "claude"),
+            working_dir=project.working_dir,
+            model=await resolver.get(project, "model", "sonnet"),
+            max_turns=int(await resolver.get(project, "max_turns", 50)),
+            timeout_minutes=int(await resolver.get(project, "timeout_minutes", 30)),
+            env_overrides={
+                "DREAMING_PROJECT_SLUG": project.slug,
+                "DREAMING_API_URL": f"http://localhost:{settings.port}",
+            },
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return RedirectResponse(f"/p/{project.slug}/live", status_code=303)
