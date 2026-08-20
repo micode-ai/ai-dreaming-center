@@ -603,5 +603,10 @@
   "article.flash.proposed": "Article proposal created.",
   "article.flash.duplicate": "That subject is already proposed.",
   "article.venue": "venue",
-  "article.venue.hint": "The repository the article lands in"
+  "article.venue.hint": "The repository the article lands in",
+  "article.add.title": "Add an article",
+  "article.add.topic": "Topic",
+  "article.add.prompt": "Intro prompt — what matters, what to build on",
+  "article.add.submit": "Propose",
+  "article.venue.default": "the project's default"
 }

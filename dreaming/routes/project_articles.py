@@ -6,7 +6,8 @@
 from __future__ import annotations
 import json
 import logging
-from fastapi import APIRouter, HTTPException, Request
+from datetime import datetime, timezone
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from dreaming.lib.flash import set_flash
@@ -136,6 +137,49 @@ async def articles_page(request: Request, slug: str):
          "scan_running": f"cmd:{project.slug}:article-ideas-scan" in pm.list_running(),
          "projects": projects, "locale": locale},
     )
+
+
+@router.post("/p/{slug}/articles/add")
+async def articles_add(
+    request: Request, slug: str,
+    title: str = Form(...), angle: str = Form(""), venue: str = Form(""),
+):
+    """A human states the topic. `source='manual'`, and the evidence says so.
+
+    The API's blank-evidence 400 exists because a queue of unfalsifiable
+    suggestions is worse than an empty one. A person asking for an article is
+    a checkable fact about why the proposal exists, so we record exactly that
+    and never dress it up as a commit or a measurement.
+    """
+    project = request.state.project
+    db = request.app.state.db
+    topic = title.strip()
+    if not topic:
+        raise HTTPException(status_code=400, detail="topic required")
+    prompt = angle.strip()
+    enabled = await request.app.state.projects.list_all(only_enabled=True)
+    venue_id = None
+    if venue.strip():
+        match = next((p for p in enabled if p.slug == venue.strip()), None)
+        if match is None:
+            raise HTTPException(status_code=404, detail=f"project {venue} not found")
+        venue_id = match.id
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    evidence = f"requested by hand on {stamp}"
+    if prompt:
+        evidence += f": {prompt[:300]}"
+    slug_hint = articles.slugify(topic) or f"manual-{int(datetime.now(timezone.utc).timestamp())}"
+    new_id = await db.add_article_proposal(
+        project.id, source="manual", source_ref="", evidence=evidence,
+        title=topic[:300], angle=prompt, slug_hint=slug_hint,
+        target_project_id=venue_id,
+    )
+    locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
+    resp = RedirectResponse(f"/p/{project.slug}/articles", status_code=303)
+    key = "article.flash.duplicate" if new_id is None else "article.flash.proposed"
+    set_flash(resp, request.app.state.i18n.t(key, locale=locale),
+              level="info" if new_id is None else "success")
+    return resp
 
 
 def _back_to(request: Request, default: str) -> str:

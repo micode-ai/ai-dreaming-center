@@ -603,5 +603,10 @@
   "article.flash.proposed": "Предложение статьи создано.",
   "article.flash.duplicate": "Такой сюжет уже предложен.",
   "article.venue": "площадка",
-  "article.venue.hint": "Репозиторий, в который попадёт статья"
+  "article.venue.hint": "Репозиторий, в который попадёт статья",
+  "article.add.title": "Добавить статью",
+  "article.add.topic": "Тема",
+  "article.add.prompt": "Вводный промпт — что важно сказать, на что опереться",
+  "article.add.submit": "Предложить",
+  "article.venue.default": "по умолчанию для проекта"
 }
