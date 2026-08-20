@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 import json
+import logging
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
@@ -12,6 +13,7 @@ from dreaming.lib.flash import set_flash
 from dreaming.services import articles, starter_kit
 
 
+log = logging.getLogger(__name__)
 router = APIRouter()
 
 _ORDER = ["proposed", "approved", "writing", "drafted", "published",
@@ -302,18 +304,6 @@ async def articles_approve(request: Request, slug: str, proposal_id: int):
     blog_dir_for_session = articles.session_blog_dir(
         venue.working_dir, blog_dir, root,
     )
-    # Pin the resolved venue onto the row now, before any session is spawned
-    # — every guard above that could still refuse (status, starter-kit,
-    # blog_dir) has already passed, so this only ever records a decision
-    # that is actually about to be acted on. Without this, articles_publish
-    # re-resolving the venue from scratch could drift from what approve used
-    # here (e.g. the subject's article_venue_project setting changes between
-    # approve and publish) and derive a different working directory/article
-    # root than the one the writer actually wrote into. Pinned unconditionally
-    # — including when venue is the subject itself — so every dispatched row
-    # carries an explicit, recorded decision rather than an implicit one that
-    # could later resolve differently.
-    await db.pin_article_proposal_venue(proposal_id, venue.id)
     try:
         session_id = await pm.start_command(
             project,
@@ -344,6 +334,27 @@ async def articles_approve(request: Request, slug: str, proposal_id: int):
         )
     except RuntimeError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    # Pin the resolved venue only now that a session has actually started —
+    # not any earlier. start_command itself can still refuse (RuntimeError
+    # above, the one-command-in-flight-per-project lock: two dispatchable
+    # proposals approved in quick succession on the same project, or a
+    # double-submit racing an in-flight write-article session), and pinning
+    # before that point would lock in a decision from an attempt that never
+    # ran — sticky, so a later successful retry would silently reuse the
+    # stale resolution instead of resolving afresh. Placed here, between a
+    # successful dispatch and start_article_attempt, the invariant still
+    # holds: a row can never reach 'writing' against an unrecorded venue,
+    # because both writes now happen only on the success path.
+    if not await db.pin_article_proposal_venue(proposal_id, venue.id):
+        # The row vanished, or the update matched nothing. A silent no-op
+        # here would leave articles_publish re-resolving the venue from
+        # scratch later — the exact drift this was meant to close — so it
+        # is worth knowing about even though the dispatch itself already
+        # succeeded and should not be blocked on this.
+        log.warning(
+            "pin_article_proposal_venue no-op for proposal %s (venue %s)",
+            proposal_id, venue.id,
+        )
     started = await db.start_article_attempt(proposal_id, session_id=session_id or "")
     if not started:
         # The process_manager key ("cmd:{slug}:write-article") is one lock

@@ -725,6 +725,34 @@ async def main() -> int:
                     fail("NULL-venue row rendered the venue badge, but venue "
                          "equals the subject -- it must stay invisible")
                     return 1
+
+                # ── the positive mirror: venue actually differs from subject ──
+                # Only the pure resolve_venue_id function covered this case so
+                # far. A page render with target_project_id pre-set exercises
+                # the route wiring itself (_venue_for + the template's badge
+                # condition) without dispatching any session -- no approve, no
+                # write-article, nothing paid.
+                other_venue_dir = tmp / "other_venue_project"
+                other_venue_dir.mkdir(parents=True, exist_ok=True)
+                other_venue_project = await ProjectsService(app.state.db).create(
+                    slug="smoke-other-venue", label="Smoke Other Venue",
+                    working_dir=str(other_venue_dir),
+                )
+                await app.state.db.add_article_proposal(
+                    null_venue_project.id, source="manual", source_ref="",
+                    evidence="smoke: an explicit venue override must show its badge",
+                    title="Explicit venue smoke row", angle="…",
+                    slug_hint="smoke-explicit-venue-row",
+                    target_project_id=other_venue_project.id,
+                )
+                resp2 = page_client.get("/p/smoke-null-venue/articles")
+                if resp2.status_code != 200:
+                    fail(f"articles_page (explicit venue): {resp2.status_code}")
+                    return 1
+                if f"площадка: {other_venue_project.slug}" not in resp2.text:
+                    fail("explicit-venue row did not render the venue badge "
+                         f"naming {other_venue_project.slug!r}: {resp2.text[:2000]}")
+                    return 1
         finally:
             if prior_db_path_env is None:
                 os.environ.pop("DC_DB_PATH", None)
@@ -732,6 +760,8 @@ async def main() -> int:
                 os.environ["DC_DB_PATH"] = prior_db_path_env
         print("ok: NULL target_project_id with no article_venue_project shows "
               "the subject's own writer and no venue badge")
+        print("ok: an explicit target_project_id override renders the venue "
+              "badge, naming that project's slug")
 
         gate_cases = [
             ({"verify_ok": 1, "status": "drafted"}, "npm run build", "commit", True),
