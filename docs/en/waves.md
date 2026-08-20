@@ -18,6 +18,7 @@ History of AI Dreaming Center development: what was done in each wave, the git t
 - [Wave 5 — aggregated dashboard](#wave-5--aggregated-dashboard)
 - [Wave D1/D2 — Design system foundation](#wave-d1d2--design-system-foundation)
 - [Wave A — Article pipeline](#wave-a--article-pipeline)
+- [Wave B — Article cross-project](#wave-b--article-cross-project)
 - [Not implemented yet](#not-implemented-yet)
 
 ## Wave 0 — Foundation
@@ -371,6 +372,52 @@ History of AI Dreaming Center development: what was done in each wave, the git t
 - **`can_publish` does not guard `verify_cmd` against `None`** the way it guards `publish_mode`.
 
 **Known defect found along the way (unrelated to this wave)**: `scripts/smoke_node_skills.py` prints its result but **does not exit** — the same class already noted for `smoke_dashboard_tiles.py`: an unclosed async connection holding the event loop. A CI run would hang on it.
+
+## Wave B — Article cross-project
+
+**Branch**: `feature/article-cross-project`, range `cec9010`..`5faa7e7` — 13 commits, 10 files, +1111/−57.
+
+**Spec**: [`docs/superpowers/specs/2026-08-20-article-cross-project-design.md`](../superpowers/specs/2026-08-20-article-cross-project-design.md)
+**Plan**: [`docs/superpowers/plans/2026-08-20-article-cross-project.md`](../superpowers/plans/2026-08-20-article-cross-project.md)
+**Extends**: [Wave A — Article pipeline](#wave-a--article-pipeline)
+**Issue**: [#35](https://github.com/micode-ai/ai-dreaming-center/issues/35)
+
+**Goal**: an article about one project can be published on another project's site, a person can state a topic themselves, and the writer can ask a question and wait for the answer instead of guessing.
+
+**Problem**: Wave A's pipeline tied a proposal to a single project — the facts, the write and the publish target were all just `project_id`. That model turned out to be the exception rather than the rule: seven of the eleven managed projects have no blog directory at all, so under Wave A's rule their articles could never be written; and the company landing page already publishes articles *about* the other products (`accounting-ai-agent-architecture`, `ai-budget-assistant-ai-architecture`), evidence sitting in its own blog directory that one repository is routinely the venue for many subjects.
+
+Two capabilities were also missing outright. `source="manual"` existed in the data model with no route that ever produced it, so a person could not simply state a topic. And `write-article.md` already instructed the writer to ask when a fact was unverified, but no channel existed for it to ask anything through — the instruction pointed at infrastructure that had never been built.
+
+**What shipped**:
+
+- A nullable `article_proposals.target_project_id` column plus the per-project `article_venue_project` setting, and the pure `resolve_venue_id(subject_id, override_id, configured_slug, enabled) -> int`: override beats setting beats the subject itself, and a slug naming no enabled project falls back rather than failing.
+- `_venue_for()` in `project_articles.py`, rewiring `articles_page`, `articles_approve` and `articles_publish` to read every article setting — writer agent, verify command, publish mode, blog dir, the article root — from the resolved **venue**, while the card, the queue row and the questions stay with the **subject**. The venue is pinned onto the row (`pin_article_proposal_venue`) right after a successful dispatch, so publish reproduces approve's decision instead of re-resolving it and risking drift if the setting changes in between.
+- `DC_ARTICLE_SUBJECT_DIR` / `DC_ARTICLE_SUBJECT_SLUG` added to the session environment, and a new section in `write-article.md`: the session's own working directory is the venue (format, build, git repository); the subject directory is read-only material for the piece. The delegation section names the subject explicitly so a delegated subagent isn't left to invent facts it was never pointed at.
+- The manual add-article form (`POST /p/{slug}/articles/add`): a topic, an intro prompt and a venue selector, with `source="manual"` and evidence that states the truth — a person asked, and when — rather than fabricating a commit reference. The blank-evidence guard moved from the ingest route into `db.add_article_proposal` itself, so it holds structurally for every feeder, present and future.
+- A venue selector on a `proposed` card (`POST /p/{slug}/articles/{id}/venue`), settable only before a writer is dispatched.
+- The question channel: `write-article.md` documents `POST /api/questions/create` and polling `GET /api/questions/{id}/poll` against the subject's slug, with an explicit "do not invent the fact" rule on `dismissed` or an unanswered question. The card shows a waiting indicator, linking to `/p/{slug}/questions`, for a `writing` row with a pending question.
+
+**Defects review caught during the wave** (all fixed inside their own tasks):
+
+- A fresh `CREATE TABLE` declared `target_project_id` right after `project_id` (index 2), but the guarded `ALTER TABLE` migration path for an already-existing database can only append columns (index 25 on the live db) — same table, two different physical column orders. Moved to the end of the `CREATE TABLE` list to match what migration always produces, with a permanent smoke check asserting the full column order on a fresh database.
+- The same footgun was already sitting there from Wave A: `verify_label`, added by an earlier `ALTER TABLE`, was still declared next to `verify_ok` in the `CREATE TABLE` string instead of at its true post-migration position. Moved and covered by the same column-order assertion.
+- `articles_publish` re-resolved the venue from scratch instead of reusing approve's decision, so a row could drift if `article_venue_project` changed between the two steps. A status-guard-free `pin_article_proposal_venue` now records the resolution at approve time, and publish reads the pinned value.
+- That pin was first placed *before* the `start_command` call, so a dispatch `start_command` itself refuses (the one-in-flight lock, 409) would still lock in a venue decision for an attempt that never ran. Moved to after a successful dispatch and before `start_article_attempt`.
+- The delegation instruction in `write-article.md` never told a delegated subagent about `$DC_ARTICLE_SUBJECT_DIR`, so a cross-project delegate would have invented the facts it was never pointed at.
+- The manual-add slug fallback for a topic with no ASCII words was `manual-{timestamp}`. Since users write topics in Russian, the all-Cyrillic path (slugify drops non-ASCII, yielding an empty slug) is the *default* case, not an edge case, and a clock-derived fallback breaks dedup both ways — two different topics in the same UTC second collide, the same topic seconds apart does not. Fixed by hashing the normalized topic text instead.
+- The blank-evidence rule lived only at the `/articles/ingest` HTTP boundary, resting on every feeder composing a non-empty string by convention. Promoted into `add_article_proposal` itself so a future feeder inherits the rule structurally.
+- The venue `<select>` on the card compared its options against the *resolved* venue slug — which, by `resolve_venue_id`'s own fallback chain, always lands on some real project — making the "project's default" option effectively unreachable and silently pinning an unpinned row on save. Fixed by threading the raw per-row override to the template instead of the resolved value.
+
+**Acceptance**: [`scripts/smoke_articles.py`](../../scripts/smoke_articles.py) — 57 checks, exit 0. `scripts/smoke_ai_radar.py`, `check_i18n.py`, `check_css_tokens.py` all green; `python -c "import dreaming.main"` exits 0. Nine touched pages return 200 via `TestClient`, including `/p/budlog/articles` (the one project deliberately configured with a cross-project `article_venue_project`). The regression that matters most: a proposal with `target_project_id` NULL and no `article_venue_project` set was confirmed, project by project, to resolve its venue to the subject itself and read the subject's own `article_blog_dir` and article root, for all three currently-configured projects (`test`, `accounting-ai-agent`, `ai-budget-assistant`) — reproducing Wave A's behaviour exactly. `budlog`'s deliberately different result (`article_venue_project=test`, resolving to `test`) was confirmed as the intended cross-project demonstration, not a regression.
+
+**Deferred**:
+
+- **The live end-to-end run of writing an article has still never happened, in either wave.** Only the *proposal* half has run for real.
+- Rows that were already `drafted` before the venue pin existed keep `target_project_id` NULL and remain exposed to venue drift on a direct publish; they self-heal on any approve retry.
+- The center detects a *missing* starter-kit command but has no signal for an *outdated* one, so every project's installed copy silently ages as the templates change — this repository's own `.claude/commands/write-article.md` mirror had drifted from the template (missing the Task 6 question-channel section) and was refreshed as part of this task's verification pass; nothing catches the next drift automatically.
+- The "two different Cyrillic topics" smoke assertion does not force both posts into the same UTC second, so that direction is a probabilistic rather than airtight pin.
+- The 409 detail in the venue route interpolates a status read just before the write, so a very narrow race could name a stale status.
+- `smoke_node_skills.py` still never exits — the same unclosed-connection class already noted for `smoke_dashboard_tiles.py` in Wave D1/D2 and left as a known issue at the end of Wave A.
 
 ## Not implemented yet
 
