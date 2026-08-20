@@ -802,7 +802,8 @@ async def main() -> int:
             fail("write-article.md missing from the starter kit")
             return 1
         body2 = kit2.read_text(encoding="utf-8")
-        for needle in ("/api/articles/", "/written", "verify_ok", "draft_ref"):
+        for needle in ("/api/articles/", "/written", "verify_ok", "draft_ref",
+                       "DC_ARTICLE_SUBJECT_DIR", "DC_ARTICLE_SUBJECT_SLUG"):
             if needle not in body2:
                 fail(f"write-article.md does not mention {needle!r}")
                 return 1

@@ -22,7 +22,28 @@ empty. The project setting wins because it is the operator's explicit
 decision for this project; the payload's `locales` is only the scan's guess
 at the time it proposed the topic.
 
-## 2. Find out who writes
+## 2. Know which repository is which
+
+Your working directory for this session is the **venue** — the repository
+whose site will publish the piece. Its existing posts are the format to
+copy, its build is what step 4 verifies, and its own repository is what
+eventually receives the commit, once a human approves publishing.
+
+`$DC_ARTICLE_SUBJECT_DIR` (slug `$DC_ARTICLE_SUBJECT_SLUG`) is the
+repository the article is **about** — read it for the material: commits,
+code, specs, changelogs, closed work. It is read-only. Never write there
+and never commit there, no matter how convenient it looks to edit a file
+next to the facts it describes.
+
+When venue and subject are the same directory — still the common case —
+none of this changes anything.
+
+The format always comes from the venue, never from the subject. A subject
+whose own docs are plain markdown does not make the venue's JSON-data blog
+accept a markdown file; the venue's neighbouring posts, read in step 3
+below, are the only pattern to copy.
+
+## 3. Find out who writes
 
 `$DC_ARTICLE_WRITER` names the agent the center resolved. If it is a real agent
 name, delegate the writing to that subagent and let it own the format. If it is
@@ -43,12 +64,12 @@ are `…`. Straight quotes in Polish or Russian text are a defect.
 No invented numbers, clients, or benchmarks. If a claim is unverified, ask
 rather than guess.
 
-## 3. Verify
+## 4. Verify
 
 If `$DC_ARTICLE_VERIFY_CMD` is set, run it and capture the output verbatim. A
 failure is a result to report, not something to hide or work around.
 
-## 4. Report back
+## 5. Report back
 
 On success:
 
