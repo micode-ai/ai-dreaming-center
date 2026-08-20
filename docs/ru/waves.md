@@ -324,7 +324,7 @@
 
 ## Wave A — Article pipeline
 
-**Ветка**: `feature/article-pipeline`, диапазон `b9430e9`..`fd7668f` — 26 коммитов, 24 файла, +4342/−2.
+**Ветка**: `feature/article-pipeline`, диапазон `e4f4bcc`..`211b538` — 28 коммитов, 27 файлов, +2683/−13. (`b9430e9` был неверной базой — это коммит спека, уже слитый в master; реальная точка ветвления — `e4f4bcc`.)
 
 **Спек**: [`docs/superpowers/specs/2026-08-20-article-pipeline-design.md`](../superpowers/specs/2026-08-20-article-pipeline-design.md)
 **План**: [`docs/superpowers/plans/2026-08-20-article-pipeline.md`](../superpowers/plans/2026-08-20-article-pipeline.md)

@@ -324,7 +324,7 @@ History of AI Dreaming Center development: what was done in each wave, the git t
 
 ## Wave A — Article pipeline
 
-**Branch**: `feature/article-pipeline`, range `b9430e9`..`fd7668f` — 26 commits, 24 files, +4342/−2.
+**Branch**: `feature/article-pipeline`, range `e4f4bcc`..`211b538` — 28 commits, 27 files, +2683/−13. (`b9430e9` was the wrong base — that's the spec commit already on master; the real merge base is `e4f4bcc`.)
 
 **Spec**: [`docs/superpowers/specs/2026-08-20-article-pipeline-design.md`](../superpowers/specs/2026-08-20-article-pipeline-design.md)
 **Plan**: [`docs/superpowers/plans/2026-08-20-article-pipeline.md`](../superpowers/plans/2026-08-20-article-pipeline.md)
