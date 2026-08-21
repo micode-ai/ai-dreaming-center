@@ -1416,6 +1416,141 @@ async def main() -> int:
         print("ok: an explicit target_project_id override renders the venue "
               "badge, naming that project's slug")
 
+        # ── regression pin: the starter-kit check must target the derived ──
+        # article root, not the venue's own working_dir, when the blog lives
+        # in a nested repository (the mi-code-ai / micode-landing-page
+        # shape). Before this fix, articles_approve checked
+        # starter_kit.command_installed(venue.working_dir, "write-article")
+        # -- which can be True even though the nested repo the session
+        # actually runs in has no write-article.md at all (Claude CLI
+        # resolves project-level slash commands from its own cwd, not from a
+        # parent), burning a real paid CLI session for nothing. Own throwaway
+        # fixture + isolated DB — never the live database.
+        os.environ["DC_DB_PATH"] = str(page_db_dir / "test.db")
+        try:
+            with TestClient(app) as sk_client:
+                sk_venue_dir = tmp / "sk_venue_project"
+                _git_init(sk_venue_dir)
+                sk_nested_repo = sk_venue_dir / "micode-landing-page"
+                _git_init(sk_nested_repo)
+                (sk_nested_repo / "blog").mkdir(parents=True)
+
+                sk_project = await ProjectsService(app.state.db).create(
+                    slug="smoke-starter-kit-nested", label="Smoke SK Nested",
+                    working_dir=str(sk_venue_dir),
+                )
+                await ProjectsService(app.state.db).set_setting(
+                    sk_project.id, "article_blog_dir",
+                    "micode-landing-page/blog",
+                )
+
+                # Case A: write-article.md exists only in the venue's own
+                # .claude/commands/, NOT in the nested repo that actually
+                # owns the blog. The buggy check (against venue.working_dir)
+                # would have passed here and let a paid session dispatch
+                # into a cwd with no write-article command at all. The fixed
+                # check must refuse -- with 400, before any dispatch, and
+                # without mutating the row.
+                (sk_venue_dir / ".claude" / "commands").mkdir(parents=True)
+                (sk_venue_dir / ".claude" / "commands" / "write-article.md").write_text(
+                    "installed only in the parent, not the nested repo\n",
+                    encoding="utf-8",
+                )
+                sk_row_a = await app.state.db.add_article_proposal(
+                    sk_project.id, source="manual", source_ref="",
+                    evidence="smoke: starter-kit check must target the "
+                    "nested article root, not the venue's own working_dir",
+                    title="SK nested check A", angle="…",
+                    slug_hint="smoke-sk-nested-a",
+                )
+                resp_a = sk_client.post(
+                    f"/p/smoke-starter-kit-nested/articles/{sk_row_a}/approve",
+                    follow_redirects=False,
+                )
+                if resp_a.status_code != 400:
+                    fail(
+                        "starter-kit check (nested repo, command only in "
+                        f"parent): got {resp_a.status_code}, want 400 -- the "
+                        "check must look in the nested repo and find "
+                        "nothing there, not pass against the parent"
+                    )
+                    return 1
+                if "write-article" not in resp_a.json().get("detail", ""):
+                    fail("400 for a missing write-article command must name "
+                         f"it: {resp_a.text[:200]}")
+                    return 1
+                row_a_after = await app.state.db.get_article_proposal(sk_row_a)
+                if row_a_after["status"] != "proposed":
+                    fail("starter-kit refusal (nested, case A) must not "
+                         f"mutate the row: status={row_a_after['status']!r}")
+                    return 1
+                print("ok: starter-kit check (nested repo) refuses before "
+                      "dispatch when write-article is installed only in the "
+                      "venue's own working_dir, not the nested blog repo")
+
+                # Case B: the positive mirror. write-article.md now exists
+                # only in the nested repo. process_manager.start_command is
+                # faked so no real CLI session is ever spawned -- the fixed
+                # check must pass, and the session must be started with
+                # working_dir set to the NESTED repo's root, not the venue's.
+                (sk_venue_dir / ".claude" / "commands" / "write-article.md").unlink()
+                (sk_nested_repo / ".claude" / "commands").mkdir(parents=True)
+                (sk_nested_repo / ".claude" / "commands" / "write-article.md").write_text(
+                    "installed in the nested repo\n", encoding="utf-8",
+                )
+                from unittest.mock import AsyncMock
+                real_start_command = app.state.process_manager.start_command
+                fake_start_command = AsyncMock(
+                    return_value="smoke-sk-nested-fake-session",
+                )
+                app.state.process_manager.start_command = fake_start_command
+                try:
+                    sk_row_b = await app.state.db.add_article_proposal(
+                        sk_project.id, source="manual", source_ref="",
+                        evidence="smoke: starter-kit check must pass once "
+                        "write-article.md exists in the nested article root",
+                        title="SK nested check B", angle="…",
+                        slug_hint="smoke-sk-nested-b",
+                    )
+                    resp_b = sk_client.post(
+                        f"/p/smoke-starter-kit-nested/articles/{sk_row_b}/approve",
+                        follow_redirects=False,
+                    )
+                    if resp_b.status_code != 303:
+                        fail(
+                            "starter-kit check (nested repo, command "
+                            f"installed there): got {resp_b.status_code}, "
+                            f"want 303 -- {resp_b.text[:300]}"
+                        )
+                        return 1
+                    if fake_start_command.await_args is None:
+                        fail("approve (case B) never reached "
+                             "process_manager.start_command")
+                        return 1
+                    call_kwargs = fake_start_command.await_args.kwargs
+                    expected_root = str(sk_nested_repo.resolve())
+                    got_working_dir = str(
+                        Path(call_kwargs["working_dir"]).resolve()
+                    )
+                    if got_working_dir != expected_root:
+                        fail(
+                            "approve dispatched with working_dir="
+                            f"{got_working_dir!r}, want the nested repo "
+                            f"root {expected_root!r} -- the session would "
+                            "run with the wrong cwd"
+                        )
+                        return 1
+                finally:
+                    app.state.process_manager.start_command = real_start_command
+                print("ok: starter-kit check (nested repo) passes and "
+                      "dispatches with the nested repo as cwd once "
+                      "write-article is installed there")
+        finally:
+            if prior_db_path_env is None:
+                os.environ.pop("DC_DB_PATH", None)
+            else:
+                os.environ["DC_DB_PATH"] = prior_db_path_env
+
         gate_cases = [
             ({"verify_ok": 1, "status": "drafted"}, "npm run build", "commit", True),
             ({"verify_ok": 0, "status": "drafted"}, "npm run build", "commit", False),
