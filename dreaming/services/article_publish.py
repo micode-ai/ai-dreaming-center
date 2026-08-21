@@ -58,6 +58,25 @@ _PATHSPEC_MAGIC_CHARS = set("*?[]")
 _DRIVE_RE = re.compile(r"^[a-zA-Z]:[\\/]?")
 
 
+def _find_nested_git(tree: Path) -> Path | None:
+    """First `.git` entry (file or directory) found anywhere inside `tree`,
+    or None.
+
+    `git add` on a directory containing its own `.git` stages a `160000`
+    gitlink — a bare commit reference with none of the actual files, no
+    `.gitmodules` to resolve it, and `git add`'s own return code is 0, so
+    nothing about the add call itself catches it. Realistic for a build
+    output that vendored a themed asset by cloning it. Checked once per
+    extra path, at validation time, so it is refused before any git call —
+    no rollback is needed for a refusal that never staged anything.
+    """
+    if tree.is_file():
+        return None
+    for entry in tree.rglob(".git"):
+        return entry
+    return None
+
+
 def _validate_paths(
     paths: list[str], repo_root: Path, *, allow_dirs: bool = False,
 ) -> None:
@@ -74,8 +93,8 @@ def _validate_paths(
     `article_publish_extra_paths`, which an operator types into project
     settings rather than a session reporting it, and where a build's output
     legitimately is a subtree. Every other rule (no absolute paths, no `..`,
-    no glob characters, containment, existence) applies identically to both,
-    so the two modes cannot drift on those.
+    no glob characters, containment, existence, no nested `.git`) applies
+    identically to both, so the two modes cannot drift on those.
     """
     for p in paths:
         if p.startswith(":"):
@@ -105,6 +124,14 @@ def _validate_paths(
             raise PublishError(f"invalid path (does not exist): {p!r}")
         if not allow_dirs and not resolved.is_file():
             raise PublishError(f"invalid path (not a regular file): {p!r}")
+        if allow_dirs and resolved.is_dir():
+            nested = _find_nested_git(resolved)
+            if nested is not None:
+                raise PublishError(
+                    "invalid path (contains a nested .git, would stage a "
+                    f"dangling gitlink instead of files): "
+                    f"{nested.relative_to(repo_root)}"
+                )
 
 
 def split_paths(draft_ref: str, working_dir: str = "") -> list[str]:
@@ -149,6 +176,41 @@ async def _run(cmd: list[str], cwd: str) -> tuple[int, str, str]:
         except OSError as e:
             return -1, "", str(e)
     return await asyncio.to_thread(_do)
+
+
+async def _rollback_or_raise(
+    git: str, wd: Path, rollback_paths: list[str], *, step: str, detail: str,
+) -> None:
+    """A staging step (`git add` for either group, or `git commit`) failed.
+
+    Attempt `git reset -q --literal-pathspecs -- <rollback_paths>` to unstage
+    whatever that step (and any step before it in this same publish call)
+    may have left in the index, then raise `PublishError` with an honest
+    account of the outcome: reset succeeded (say so), or reset itself also
+    failed (name exactly what is still staged, so a human can clear it —
+    this is someone else's repository, not ours to leave dirty and silent
+    about it).
+
+    `rollback_paths` should be the full set touched so far this call — safe
+    even for paths that were never actually staged, since resetting a path
+    that is not in the index is a no-op.
+
+    Shared by every failure that can leave a partial stage behind, so the
+    disclosure — and the fact that reset's own return code is checked
+    rather than assumed — cannot drift between them.
+    """
+    reset_rc, reset_out, reset_err = await _run(
+        [git, "--literal-pathspecs", "reset", "-q", "--", *rollback_paths], str(wd),
+    )
+    if reset_rc == 0:
+        raise PublishError(f"{step} failed (staged changes rolled back): {detail}")
+    raise PublishError(
+        f"{step} failed: {detail}\n"
+        "the staging could not be rolled back -- these paths are still "
+        f"staged, run `git reset -- <path>` yourself for: "
+        f"{', '.join(rollback_paths)}\n"
+        f"reset error: {(reset_err or reset_out).strip() or str(reset_rc)}"
+    )
 
 
 async def publish(
@@ -203,17 +265,32 @@ async def publish(
     # load-bearing, it is what keeps a gitignored secret out of our commits.
     # One `git add` per group (draft_ref, then extra_paths) so a failure
     # names which group it came from, even though both land in one commit.
+    #
+    # Neither call is atomic across its own pathspecs, and the second call
+    # runs against an index the first has already mutated: `git add -- a b`
+    # can return non-zero (e.g. `b` is gitignored) while still staging `a`.
+    # Left alone that leaves the draft (or a partial extra_paths tree)
+    # staged in the caller's repository with no rollback and no mention of
+    # it in the raised error — a real reproduction, not a hypothetical: a
+    # gitignored build output triggers it directly. `_rollback_or_raise`
+    # unstages everything this call (and, for the second call, the first
+    # one too) may have touched and says plainly whether that worked.
     rc, _out, err = await _run(
         [git, "--literal-pathspecs", "add", "--", *paths], str(wd),
     )
     if rc != 0:
-        raise PublishError(f"git add failed: {err.strip() or rc}")
+        await _rollback_or_raise(
+            git, wd, all_paths, step="git add", detail=err.strip() or str(rc),
+        )
     if extra_paths:
         rc, _out, err = await _run(
             [git, "--literal-pathspecs", "add", "--", *extra_paths], str(wd),
         )
         if rc != 0:
-            raise PublishError(f"git add failed: {err.strip() or rc}")
+            await _rollback_or_raise(
+                git, wd, all_paths, step="git add",
+                detail=err.strip() or str(rc),
+            )
 
     rc, out, err = await _run(
         [git, "diff", "--cached", "--name-only"], str(wd),
@@ -259,23 +336,12 @@ async def publish(
         # by design from a human's staged work -- and refuse forever. The reset
         # is safe here specifically because the pre-check above refused unless
         # these paths were clean, so nothing but our own `git add` is undone.
-        # But the reset itself can fail too (lock file, permissions) -- check
-        # its own return code rather than asserting a rollback that may not
-        # have happened.
-        reset_rc, reset_out, reset_err = await _run(
-            [git, "--literal-pathspecs", "reset", "-q", "--", *all_paths], str(wd),
-        )
-        commit_detail = (err or out).strip() or str(rc)
-        if reset_rc == 0:
-            raise PublishError(
-                f"git commit failed (staged changes rolled back): {commit_detail}"
-            )
-        raise PublishError(
-            f"git commit failed: {commit_detail}\n"
-            "the staging could not be rolled back -- these paths are still "
-            f"staged, run `git reset -- <path>` yourself for: "
-            f"{', '.join(all_paths)}\n"
-            f"reset error: {(reset_err or reset_out).strip() or str(reset_rc)}"
+        # `_rollback_or_raise` checks the reset's own return code rather than
+        # assuming a rollback that may not have happened (lock file,
+        # permissions) -- same helper the two `git add` failures above use.
+        await _rollback_or_raise(
+            git, wd, all_paths, step="git commit",
+            detail=(err or out).strip() or str(rc),
         )
 
     rc, sha, err = await _run([git, "rev-parse", "HEAD"], str(wd))

@@ -2397,6 +2397,151 @@ async def main() -> int:
         print("ok: empty extra_paths reproduces the pre-Wave-C behaviour -- "
               "only the draft path is committed, no build-count line")
 
+        # ── review round 1, Critical: a failed extra-paths `git add` must ──
+        # roll back, not leave the draft staged with no disclosure. Every
+        # refusal tested so far is caught by _validate_paths before any git
+        # call runs -- none of them exercise a *mid-sequence* git failure.
+        # A gitignored extra path is the realistic trigger the spec's own
+        # risk table waved through without asking what state it leaves
+        # behind: `git add` on it returns non-zero, but only *after* the
+        # first `git add` call (for draft_ref) already succeeded and staged
+        # the draft. Assert the index ends up exactly where it started, and
+        # the error says a rollback happened.
+        gi_repo = tmp / "repo_gitignore_add"
+        (gi_repo / "content").mkdir(parents=True)
+        (gi_repo / "site").mkdir(parents=True)
+        def git_gi(*args, cwd=gi_repo):
+            return subprocess.run(["git", *args], cwd=str(cwd),
+                                  capture_output=True, text=True)
+        git_gi("init", "-q")
+        git_gi("config", "user.email", "smoke@example.test")
+        git_gi("config", "user.name", "Smoke")
+        (gi_repo / ".gitignore").write_text("site\n", encoding="utf-8")
+        (gi_repo / "README.md").write_text("seed\n", encoding="utf-8")
+        git_gi("add", ".gitignore", "README.md")
+        git_gi("commit", "-q", "-m", "seed")
+        (gi_repo / "content" / "piece.md").write_text(
+            "# Piece\n", encoding="utf-8",
+        )
+        (gi_repo / "site" / "index.html").write_text(
+            "<html>home</html>\n", encoding="utf-8",
+        )
+        before_gi = git_gi("diff", "--cached", "--name-only").stdout
+        try:
+            await article_publish.publish(
+                str(gi_repo), ["content/piece.md"],
+                message="should roll back fully", push=False,
+                extra_paths=["site"],
+            )
+        except article_publish.PublishError as e:
+            msg = str(e)
+            if "git add failed" not in msg:
+                fail(f"gitignored extra path: wrong step named: {msg!r}")
+                return 1
+            if "staged changes rolled back" not in msg:
+                fail(f"gitignored extra path: rollback not disclosed: {msg!r}")
+                return 1
+            if "site" not in msg:
+                fail(f"gitignored extra path: git's own message lost: {msg!r}")
+                return 1
+        else:
+            fail("publish accepted a gitignored extra path")
+            return 1
+        after_gi = git_gi("diff", "--cached", "--name-only").stdout
+        if after_gi != before_gi:
+            fail("a failed extra-paths git add left the draft (or part of "
+                 f"the extra tree) staged: before={before_gi!r} "
+                 f"after={after_gi!r}")
+            return 1
+        draft_status = git_gi(
+            "status", "--porcelain", "--", "content/piece.md",
+        ).stdout
+        if not draft_status.lstrip().startswith("??"):
+            fail("the draft must be back to untracked/dirty after the "
+                 f"rollback, got: {draft_status!r}")
+            return 1
+        print("ok: a gitignored extra path fails the (second) git add "
+              "mid-sequence, and the draft staged by the first add is "
+              "rolled back too -- not left behind with no disclosure")
+
+        # -- the worse case the review flagged: a single `git add` call can
+        #    return non-zero for one bad pathspec while still silently
+        #    staging another good one in the same call. extra_paths=[good,
+        #    bad] reaches git as ONE `git add -- good bad` invocation. --
+        (gi_repo / "good").mkdir(parents=True)
+        (gi_repo / "good" / "ok.txt").write_text("fine\n", encoding="utf-8")
+        (gi_repo / "content" / "piece2.md").write_text(
+            "# Piece two\n", encoding="utf-8",
+        )
+        before_multi = git_gi("diff", "--cached", "--name-only").stdout
+        try:
+            await article_publish.publish(
+                str(gi_repo), ["content/piece2.md"],
+                message="should roll back fully", push=False,
+                extra_paths=["good", "site"],
+            )
+        except article_publish.PublishError as e:
+            if "staged changes rolled back" not in str(e):
+                fail(f"multi-entry rollback not disclosed: {e}")
+                return 1
+        else:
+            fail("publish accepted a multi-entry extra_paths list "
+                 "containing a gitignored path")
+            return 1
+        after_multi = git_gi("diff", "--cached", "--name-only").stdout
+        if after_multi != before_multi:
+            fail("the good pathspec's partial stage (from the same failing "
+                 "git add call) survived the rollback: "
+                 f"before={before_multi!r} after={after_multi!r}")
+            return 1
+        print("ok: a multi-entry extra_paths list where one path is "
+              "gitignored rolls back the other, partially-staged path too")
+
+        # ── review round 1, Important: a nested .git becomes a dangling ──
+        # gitlink, not a refusal, unless caught explicitly -- git add's own
+        # return code is 0 for this. Refused at validation time, before any
+        # git call, so nothing is ever staged.
+        vendored_repo = tmp / "repo_vendored_git"
+        (vendored_repo / "content").mkdir(parents=True)
+        def git_vendored(*args, cwd=vendored_repo):
+            return subprocess.run(["git", *args], cwd=str(cwd),
+                                  capture_output=True, text=True)
+        git_vendored("init", "-q")
+        git_vendored("config", "user.email", "smoke@example.test")
+        git_vendored("config", "user.name", "Smoke")
+        (vendored_repo / "README.md").write_text("seed\n", encoding="utf-8")
+        git_vendored("add", "README.md")
+        git_vendored("commit", "-q", "-m", "seed")
+        (vendored_repo / "content" / "piece.md").write_text(
+            "# Piece\n", encoding="utf-8",
+        )
+        vendored_asset = vendored_repo / "site" / "vendor" / "theme" / ".git"
+        vendored_asset.mkdir(parents=True)
+        (vendored_asset / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+        before_vendored = git_vendored("diff", "--cached", "--name-only").stdout
+        try:
+            await article_publish.publish(
+                str(vendored_repo), ["content/piece.md"],
+                message="should never commit", push=False,
+                extra_paths=["site"],
+            )
+        except article_publish.PublishError as e:
+            msg = str(e)
+            if "nested .git" not in msg or "gitlink" not in msg:
+                fail(f"nested .git refusal message unexpected: {msg!r}")
+                return 1
+        else:
+            fail("publish accepted an extra path whose tree contains a "
+                 "nested .git (would stage a dangling gitlink)")
+            return 1
+        after_vendored = git_vendored("diff", "--cached", "--name-only").stdout
+        if after_vendored != before_vendored:
+            fail("a rejected nested-.git path still touched the index: "
+                 f"before={before_vendored!r} after={after_vendored!r}")
+            return 1
+        print("ok: an extra path whose tree contains a nested .git is "
+              "refused (would stage a dangling gitlink), index untouched")
+
         # ── a rollback that itself fails must say so honestly ──────────
         # A separate throwaway repo so this doesn't disturb `repo`'s state.
         # The commit failure itself is real (a plain failing pre-commit
