@@ -8,6 +8,7 @@ import hashlib
 import json
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
@@ -189,8 +190,14 @@ async def articles_page(request: Request, slug: str):
             # its button can only reach a command living there. A venue that
             # nests its blog in a second repository has to be updated by
             # hand — offering a button that cannot reach it would be worse
-            # than saying plainly that it cannot.
-            "fixable_here": str(root) == str(project.working_dir),
+            # than saying plainly that it cannot. Compared as resolved paths
+            # rather than strings: on Windows the same directory reaches here
+            # spelled several ways (trailing separator, drive-letter case),
+            # and a string mismatch would tell the operator to go edit by
+            # hand while the button beside it would have worked.
+            "fixable_here": (
+                Path(root).resolve() == Path(project.working_dir).resolve()
+            ),
         })
     return request.app.state.templates.TemplateResponse(
         request, "project_articles.html",
