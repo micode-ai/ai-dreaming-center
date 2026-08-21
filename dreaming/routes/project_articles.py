@@ -22,6 +22,13 @@ router = APIRouter()
 _ORDER = ["proposed", "approved", "writing", "drafted", "published",
           "failed", "rejected"]
 
+# A draft_ref can name a generated registry or a whole editorial plan
+# alongside the article — accounting-ai-agent's includes a content.ts, and
+# ai-budget-assistant's a content-plan.md — and those have no size the writer
+# promised to respect. The preview truncates rather than streaming an
+# unbounded file into a page, and says so when it does.
+_PREVIEW_MAX_CHARS = 200_000
+
 # Statuses from which (re)dispatching a writer is legal — mirrors
 # SqliteDB._DISPATCHABLE_STATUSES, which is the precondition that actually
 # enforces this at the write. Checked here too, and *before* start_command,
@@ -596,6 +603,103 @@ async def articles_cancel(request: Request, slug: str, proposal_id: int):
     # not stay 'pending' forever.
     await db.dismiss_article_proposal_questions(proposal_id)
     return RedirectResponse(f"/p/{project.slug}/articles", status_code=303)
+
+
+@router.get("/p/{slug}/articles/{proposal_id}/preview")
+async def articles_preview(
+    request: Request, slug: str, proposal_id: int, lang: str = "",
+    file: str = "",
+):
+    """Read-only look at what the writer actually produced, per language.
+
+    Shows the working tree, not the commit: for a published row this is the
+    file as it stands now, which may have moved on since it was committed.
+    That is the useful reading before pressing Publish, and the honest one
+    after — but it is not a view of history.
+
+    Files are read from the *venue's* article root — the same resolution the
+    publish route uses — because a draft written into a nested landing-page
+    repository is not reachable from the subject's own working_dir, and a
+    preview that quietly read a different tree than publish commits would be
+    worse than none.
+
+    Every path goes through the publish validator before it is opened.
+    `draft_ref` is self-reported by a Claude session over unauthenticated
+    localhost HTTP, so without that this route would be an arbitrary-file
+    reader wearing a preview's clothes. A path that fails is listed with its
+    reason instead of aborting the page: one deleted file must not hide the
+    other eight languages.
+    """
+    from dreaming.services import article_publish
+
+    project = request.state.project
+    db = request.app.state.db
+    row = await db.get_article_proposal(proposal_id)
+    if row is None or row["project_id"] != project.id:
+        # Scoped to the project in the URL: the id space is global, and this
+        # page must not become a way to read another project's drafts.
+        raise HTTPException(status_code=404, detail="proposal not found")
+    venue, blog_dir = await _venue_for(request, project, row)
+    root = Path(await articles.resolve_article_root(venue.working_dir, blog_dir))
+    locales = [p.strip() for p in (row.get("locales") or "").split(",") if p.strip()]
+
+    variants: list[dict] = []
+    others: list[dict] = []
+    problems: list[dict] = []
+    for rel in article_publish.split_paths(row.get("draft_ref") or ""):
+        try:
+            article_publish._validate_paths([rel], root)
+        except article_publish.PublishError as e:
+            problems.append({"path": rel, "reason": str(e)})
+            continue
+        target = (root / rel).resolve()
+        try:
+            text = target.read_text(encoding="utf-8", errors="replace")
+        except OSError as e:
+            problems.append({"path": rel, "reason": f"read failed: {e}"})
+            continue
+        # A generated registry or a whole content plan can be far larger than
+        # any article; truncate rather than shipping megabytes into a page.
+        truncated = len(text) > _PREVIEW_MAX_CHARS
+        entry = {
+            "path": rel,
+            "text": text[:_PREVIEW_MAX_CHARS],
+            "truncated": truncated,
+            "lang": (
+                articles.frontmatter_language(text)
+                or articles.locale_from_path(rel, locales)
+            ),
+        }
+        (variants if entry["lang"] else others).append(entry)
+
+    # Ordered by the row's own locales so the tabs read the way the article was
+    # commissioned, with anything the row never declared trailing behind.
+    order = {loc.lower(): i for i, loc in enumerate(locales)}
+    variants.sort(key=lambda v: (order.get(v["lang"], len(order)), v["lang"]))
+    # `lang` picks a language tab; `file` picks one of the non-article files a
+    # draft_ref can carry (a registry, an editorial plan), which have no
+    # language to be picked by. `file` is matched against the paths this row
+    # itself reported — never used to open anything — so it cannot widen what
+    # the validator above already allowed.
+    wanted = (lang or "").strip().lower()
+    wanted_file = (file or "").strip()
+    selected = next(
+        (e for e in variants + others if e["path"] == wanted_file), None,
+    ) if wanted_file else None
+    if selected is None and wanted:
+        selected = next((v for v in variants if v["lang"] == wanted), None)
+    if selected is None:
+        selected = variants[0] if variants else (others[0] if others else None)
+    locale = request.cookies.get(
+        "dc_locale", request.app.state.settings.default_locale,
+    )
+    return request.app.state.templates.TemplateResponse(
+        request, "project_article_preview.html",
+        {"project": project, "row": row, "variants": variants,
+         "others": others, "problems": problems, "selected": selected,
+         "venue_slug": venue.slug, "article_root": str(root),
+         "locale": locale},
+    )
 
 
 @router.post("/p/{slug}/articles/{proposal_id}/publish")
