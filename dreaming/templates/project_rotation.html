@@ -21,6 +21,29 @@
         </form>
       </div>
     </div>
+  {% elif kit_status.stale %}
+    <div class="mb-4 banner banner-warn">
+      <div class="banner__body">
+        <p class="banner__title">Starter-kit commands differ from the template</p>
+        <p class="mb-2">
+          Every file is present, but {{ kit_status.stale|length }} of them no longer
+          match <code>templates/starter-kit/</code> — either left behind as the
+          templates moved on, or edited locally on purpose. Nothing here can tell
+          those apart, so read the diff before overwriting: a session started from
+          a copy left behind follows the older instructions silently, with no error
+          to say so.
+        </p>
+        <p class="text-xs mb-2">
+          Drifted: {% for f in kit_status.stale %}<code class="mr-1">{{ f }}</code>{% endfor %}
+        </p>
+        <form method="post" action="/p/{{ project.slug }}/starter-kit/install" class="inline"
+              data-confirm="Overwrite the drifted starter-kit files with the latest template?"
+              data-confirm-variant="danger">
+          <input type="hidden" name="force" value="1">
+          <button class="btn btn-warn">Update starter kit</button>
+        </form>
+      </div>
+    </div>
   {% else %}
     <details class="mb-4 text-xs muted">
       <summary class="cursor-pointer">✓ starter kit installed ({{ kit_status.installed|length }} file{{ "s" if kit_status.installed|length != 1 else "" }})</summary>
