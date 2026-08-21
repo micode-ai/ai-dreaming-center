@@ -3046,6 +3046,211 @@ async def main() -> int:
               "database's (verify_label, target_project_id trail in "
               "append order)")
 
+        # ---- preview: language derivation and file scoping -----------------
+        # The number of languages is per project, not a constant: the two
+        # projects writing multi-language articles today ship 9 and 3, and a
+        # third could ship one. Nothing here may hard-code a count.
+        from dreaming.services.articles import (
+            frontmatter_language, locale_from_path,
+        )
+
+        fm_cases = [
+            # ai-budget-assistant's spelling, quoted.
+            ('---\ntitle: x\nlang: "pl"\ndate: "1"\n---\n\n# body\n', "pl"),
+            # accounting-ai-agent's spelling, unquoted, different key.
+            ("---\nslug: y\nlocale: pl\ntranslationKey: y\n---\nbody", "pl"),
+            ("---\nlang: en\n---\nx", "en"),
+            # A lang: line in the *body* is prose about languages, not a
+            # declaration — the article that says "set lang: de in frontmatter"
+            # is not a German article.
+            ("---\ntitle: t\n---\nlang: de\n", ""),
+            ("# no frontmatter at all\nlang: pl\n", ""),
+            ("---\nunterminated\nlang: fr\n", ""),
+        ]
+        for text, want in fm_cases:
+            got = frontmatter_language(text)
+            if got != want:
+                fail(f"frontmatter_language({text[:24]!r}) = {got!r}, "
+                     f"want {want!r}")
+                return 1
+        print(f"ok: frontmatter_language reads both spellings seen in the wild "
+              f"({len(fm_cases)} cases, body-vs-frontmatter included)")
+
+        declared = ["en", "pl", "de", "ua"]
+        path_cases = [
+            ("docs/marketing/seo/en/22-x.md", "en"),
+            # The nine-language set keeps its Polish article at the blog root
+            # with no language segment — the case that makes guessing from the
+            # locales order wrong, since that row's list starts with 'en'.
+            ("docs/marketing/seo/22-x.md", ""),
+            ("packages/web/content/blog/pl/a.md", "pl"),
+            # Not declared by the row: not a language this article has.
+            ("content/blog/fr/a.md", ""),
+        ]
+        for path, want in path_cases:
+            got = locale_from_path(path, declared)
+            if got != want:
+                fail(f"locale_from_path({path!r}) = {got!r}, want {want!r}")
+                return 1
+        if locale_from_path("any/en/x.md", []) != "":
+            fail("locale_from_path invented a language for a row that "
+                 "declared no locales")
+            return 1
+        print(f"ok: locale_from_path only names locales the row declared "
+              f"({len(path_cases)} cases)")
+
+        prev_dir = Path(tempfile.mkdtemp(prefix="dc_smoke_preview_"))
+        (prev_dir / "blog" / "en").mkdir(parents=True)
+        (prev_dir / "blog" / "ru").mkdir(parents=True)
+        (prev_dir / "blog" / "de").mkdir(parents=True)
+        # Polish at the root, declaring itself in frontmatter; English and
+        # Russian in language directories with the two different spellings;
+        # German declaring nothing, so only its path can name it.
+        (prev_dir / "blog" / "22-pl.md").write_text(
+            '---\nlang: "pl"\n---\n\n# Polski tytul\n', encoding="utf-8")
+        (prev_dir / "blog" / "en" / "22-en.md").write_text(
+            "---\nlang: en\n---\n\n# English title\n", encoding="utf-8")
+        (prev_dir / "blog" / "ru" / "22-ru.md").write_text(
+            "---\nlocale: ru\n---\n\n# Russkiy zagolovok\n", encoding="utf-8")
+        (prev_dir / "blog" / "de" / "22-de.md").write_text(
+            "# Deutscher Titel\n", encoding="utf-8")
+        # No frontmatter and no language: an editorial plan, not a variant.
+        (prev_dir / "blog" / "plan.md").write_text(
+            "# Editorial plan\n", encoding="utf-8")
+        # Outside the article root: must be refused, not read.
+        (prev_dir.parent / "secret.md").write_text(
+            "TOPSECRET\n", encoding="utf-8")
+
+        single_dir = Path(tempfile.mkdtemp(prefix="dc_smoke_preview_one_"))
+        (single_dir / "blog").mkdir(parents=True)
+        (single_dir / "blog" / "only.md").write_text(
+            "---\nlang: ru\n---\n\n# Odna statya\n", encoding="utf-8")
+
+        os.environ["DC_DB_PATH"] = str(page_db_dir / "preview.db")
+        try:
+            with TestClient(app) as page_client:
+                svc = ProjectsService(app.state.db)
+                multi = await svc.create(
+                    slug="smoke-preview-multi", label="Smoke Preview Multi",
+                    working_dir=str(prev_dir),
+                )
+                await svc.set_setting(multi.id, "article_blog_dir", "blog")
+                one = await svc.create(
+                    slug="smoke-preview-one", label="Smoke Preview One",
+                    working_dir=str(single_dir),
+                )
+                await svc.set_setting(one.id, "article_blog_dir", "blog")
+
+                pid = await app.state.db.add_article_proposal(
+                    multi.id, source="manual", source_ref="smoke",
+                    evidence="checked by hand", title="Preview fixture",
+                    angle="", slug_hint="preview-fixture",
+                    locales="pl,en,ru,de",
+                )
+                await app.state.db.set_article_proposal_status(pid, "approved")
+                await app.state.db.start_article_attempt(pid, session_id="s1")
+                await app.state.db.mark_article_written(
+                    pid,
+                    draft_ref=(
+                        "blog/22-pl.md, blog/en/22-en.md, blog/ru/22-ru.md, "
+                        "blog/de/22-de.md, blog/plan.md, ../secret.md"
+                    ),
+                    verify_output="", writer_agent="self", verify_ok=True,
+                )
+                r = page_client.get(
+                    f"/p/smoke-preview-multi/articles/{pid}/preview")
+                if r.status_code != 200:
+                    fail(f"preview page: {r.status_code}")
+                    return 1
+                for loc in ("pl", "en", "ru", "de"):
+                    if f"preview?lang={loc}" not in r.text:
+                        fail(f"preview page is missing the {loc} tab — "
+                             f"language tabs must come from the draft's own "
+                             f"files, whatever their number")
+                        return 1
+                if "plan.md" not in r.text:
+                    fail("preview page dropped the non-article file instead "
+                         "of listing it separately")
+                    return 1
+                if "TOPSECRET" in r.text:
+                    fail("preview page read a file outside the article root — "
+                         "draft_ref is session-reported, so this route would "
+                         "be an arbitrary-file reader")
+                    return 1
+                if "secret.md" not in r.text:
+                    fail("preview page silently dropped a refused path "
+                         "instead of naming it as a problem")
+                    return 1
+                # Default tab follows the row's declared order (pl first here).
+                if "Polski tytul" not in r.text:
+                    fail("preview did not default to the first declared locale")
+                    return 1
+                r_ru = page_client.get(
+                    f"/p/smoke-preview-multi/articles/{pid}/preview?lang=ru")
+                if "Russkiy zagolovok" not in r_ru.text:
+                    fail("?lang=ru did not switch the shown file")
+                    return 1
+                if "Polski tytul" in r_ru.text:
+                    fail("?lang=ru still showed the Polish body")
+                    return 1
+                r_plan = page_client.get(
+                    f"/p/smoke-preview-multi/articles/{pid}/preview"
+                    f"?file=blog/plan.md")
+                if "Editorial plan" not in r_plan.text:
+                    fail("?file= did not open the named non-article file")
+                    return 1
+                r_bad = page_client.get(
+                    f"/p/smoke-preview-multi/articles/{pid}/preview"
+                    f"?file=../secret.md")
+                if "TOPSECRET" in r_bad.text:
+                    fail("?file= opened a path outside the article root — the "
+                         "parameter must only select among paths this row "
+                         "already reported and the validator already allowed")
+                    return 1
+                print("ok: preview derives 4 language tabs from the draft's "
+                      "own files (root-level frontmatter, two key spellings, "
+                      "path fallback), separates the non-article file, and "
+                      "refuses to read outside the article root")
+
+                # A single-language project: nothing to switch between.
+                pid1 = await app.state.db.add_article_proposal(
+                    one.id, source="manual", source_ref="smoke",
+                    evidence="checked by hand", title="One language",
+                    angle="", slug_hint="one-language", locales="ru",
+                )
+                await app.state.db.set_article_proposal_status(pid1, "approved")
+                await app.state.db.start_article_attempt(pid1, session_id="s2")
+                await app.state.db.mark_article_written(
+                    pid1, draft_ref="blog/only.md", verify_output="",
+                    writer_agent="self", verify_ok=True,
+                )
+                r1 = page_client.get(
+                    f"/p/smoke-preview-one/articles/{pid1}/preview")
+                if r1.status_code != 200 or "Odna statya" not in r1.text:
+                    fail(f"single-language preview: {r1.status_code}")
+                    return 1
+                if "preview?lang=" in r1.text:
+                    fail("single-language preview still rendered a language "
+                         "switcher — there is nothing to switch to")
+                    return 1
+                print("ok: a single-language draft previews with no language "
+                      "switcher, and a nine-language one is not special-cased")
+
+                # The id space is global; this page must not cross projects.
+                r404 = page_client.get(
+                    f"/p/smoke-preview-one/articles/{pid}/preview")
+                if r404.status_code != 404:
+                    fail(f"preview served another project's proposal: "
+                         f"{r404.status_code}")
+                    return 1
+                print("ok: preview refuses a proposal that belongs to another "
+                      "project")
+        finally:
+            if prior_db_path_env is None:
+                os.environ.pop("DC_DB_PATH", None)
+            else:
+                os.environ["DC_DB_PATH"] = prior_db_path_env
+
         # ---- starter-kit command drift ------------------------------------
         # The center saw a command missing but never one gone stale, so an
         # installed copy aged silently as the templates moved on. The signal

@@ -36,6 +36,11 @@
 
   {% if a.draft_ref %}
     <p class="text-xs font-mono faint mb-2">→ {{ a.draft_ref }}</p>
+    <p class="mb-2">
+      <a class="btn btn-sm" href="/p/{{ project.slug }}/articles/{{ a.id }}/preview">
+        {{ "article.btn.preview" | t(locale=locale) }}
+      </a>
+    </p>
   {% endif %}
 
   {% if a.status in ('failed', 'published', 'drafted') and a.error_message %}

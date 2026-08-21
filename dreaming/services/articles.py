@@ -263,3 +263,48 @@ def slugify(text: str, *, max_words: int = _SLUG_WORDS) -> str:
         digest = hashlib.sha1(low.encode("utf-8")).hexdigest()[:6]
         return "-".join(words[:max_words] + [digest])
     return "-".join(words)
+
+
+# A draft's language is declared by the file itself, and the two projects that
+# actually write multi-language articles spell that declaration differently:
+# ai-budget-assistant writes `lang: "pl"`, accounting-ai-agent writes
+# `locale: pl`. Both are read, because guessing from the path or from the
+# order of the row's `locales` would mislabel real drafts — the Polish article
+# of a nine-language set sits at the blog root with no language segment at
+# all, while that row's locales list happens to start with `en`.
+_FM_LANG_RE = re.compile(
+    r"^\s*(?:lang|locale)\s*:\s*[\"']?([A-Za-z-]{2,10})[\"']?\s*$",
+    re.MULTILINE,
+)
+
+
+def frontmatter_language(text: str) -> str:
+    """Language a draft declares in its own YAML frontmatter, or "".
+
+    Only the leading `---` fenced block is consulted: a `lang:` line further
+    down the body is prose about languages, not a declaration about this file.
+    """
+    if not text.startswith("---"):
+        return ""
+    end = text.find("\n---", 3)
+    if end == -1:
+        return ""
+    m = _FM_LANG_RE.search(text[3:end])
+    return m.group(1).strip().lower() if m else ""
+
+
+def locale_from_path(path: str, locales: list[str]) -> str:
+    """Locale named by one of a path's own segments, or "".
+
+    The fallback for a project whose frontmatter carries no language field.
+    Matched against the row's declared locales rather than any two-letter
+    segment, so an unrelated directory (`content`, `de` inside `code/`) cannot
+    invent a language the article was never written in.
+    """
+    wanted = {loc.strip().lower() for loc in locales if loc.strip()}
+    if not wanted:
+        return ""
+    for seg in re.split(r"[\/]+", path):
+        if seg.strip().lower() in wanted:
+            return seg.strip().lower()
+    return ""

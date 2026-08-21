@@ -1,0 +1,74 @@
+{% extends "_project_layout.html" %}
+{% set active = 'articles' %}
+{% block project_content %}
+<header class="mb-4">
+  <div class="flex items-baseline gap-3 flex-wrap">
+    <a class="text-xs underline faint" href="/p/{{ project.slug }}/articles">
+      &larr; {{ "article.title" | t(locale=locale) }}
+    </a>
+    <h2 class="text-lg font-semibold strong">{{ row.title }}</h2>
+    <span class="badge badge-neutral">{{ ("article.status." ~ row.status) | t(locale=locale) }}</span>
+  </div>
+  <p class="text-xs faint mt-1">
+    #{{ row.id }} &middot; {{ "article.venue" | t(locale=locale) }}:
+    <span class="font-mono">{{ venue_slug }}</span> &middot;
+    <span class="font-mono">{{ article_root }}</span>
+  </p>
+</header>
+
+{# One language and nothing else means there is nothing to switch between --
+   projects range from a single locale to nine, and a lone tab is noise. #}
+{% if variants | length + others | length > 1 %}
+  <nav class="mb-3 flex gap-1 flex-wrap items-center">
+    {% for v in variants %}
+      <a class="btn btn-sm {{ 'btn-primary' if selected and v.path == selected.path }}"
+         href="/p/{{ project.slug }}/articles/{{ row.id }}/preview?lang={{ v.lang }}">{{ v.lang }}</a>
+    {% endfor %}
+  </nav>
+
+  {% if others %}
+    <p class="text-xs faint mb-3">
+      {{ "article.preview.others" | t(locale=locale) }}
+      {% for o in others %}
+        <a class="font-mono underline mr-2 {{ 'strong' if selected and o.path == selected.path }}"
+           href="/p/{{ project.slug }}/articles/{{ row.id }}/preview?file={{ o.path | urlencode }}">{{ o.path }}</a>
+      {% endfor %}
+    </p>
+  {% endif %}
+{% endif %}
+
+{% if problems %}
+  <div class="mb-3 banner banner-warn">
+    <div class="banner__body">
+      <p class="banner__title">{{ "article.preview.problems" | t(locale=locale) }}</p>
+      <ul class="text-xs list-disc ml-5">
+        {% for p in problems %}
+        <li><code>{{ p.path }}</code> — {{ p.reason }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+{% endif %}
+
+{% if selected %}
+  <p class="text-xs font-mono faint mb-2">{{ selected.path }}</p>
+  {% if selected.truncated %}
+    <p class="text-xs mb-2 banner banner-warn"><span class="banner__body">
+      {{ "article.preview.truncated" | t(locale=locale) }}
+    </span></p>
+  {% endif %}
+  {% include "_markdown_partial.html" %}
+  <script id="article-md-src" type="text/markdown">{{ selected.text }}</script>
+  <div class="card">
+    <div id="article-md-body" class="markdown-body"></div>
+  </div>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const src = document.getElementById('article-md-src').textContent;
+      window.dcRenderMarkdown(document.getElementById('article-md-body'), src);
+    });
+  </script>
+{% else %}
+  <p class="empty-state">{{ "article.preview.empty" | t(locale=locale) }}</p>
+{% endif %}
+{% endblock %}
