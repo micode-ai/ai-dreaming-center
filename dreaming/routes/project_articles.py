@@ -8,6 +8,7 @@ import hashlib
 import json
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
@@ -165,9 +166,43 @@ async def articles_page(request: Request, slug: str):
         "dc_locale", request.app.state.settings.default_locale,
     )
     pm = request.app.state.process_manager
+    # The center could always see a starter-kit command *missing* but never
+    # one gone stale, so an installed copy aged silently as the templates
+    # moved on. That is not hypothetical: a project ran a wave-A
+    # write-article.md for a day after the question channel shipped, and its
+    # writer simply could not ask a question — a requested feature absent
+    # with no error anywhere to say so, and a paid session to discover it.
+    # Checked at the two roots the two sessions actually start in, which are
+    # not always the same directory: the scan runs in the subject's own
+    # working_dir (articles_scan below), the writer in the repository that
+    # owns the blog (articles_approve below).
+    stale_commands = []
+    for command_name, root in (
+        ("article-ideas-scan", project.working_dir),
+        ("write-article", article_root),
+    ):
+        if not starter_kit.command_stale(root, command_name):
+            continue
+        stale_commands.append({
+            "command": command_name,
+            "root": str(root),
+            # The install route writes into the project's own working_dir, so
+            # its button can only reach a command living there. A venue that
+            # nests its blog in a second repository has to be updated by
+            # hand — offering a button that cannot reach it would be worse
+            # than saying plainly that it cannot. Compared as resolved paths
+            # rather than strings: on Windows the same directory reaches here
+            # spelled several ways (trailing separator, drive-letter case),
+            # and a string mismatch would tell the operator to go edit by
+            # hand while the button beside it would have worked.
+            "fixable_here": (
+                Path(root).resolve() == Path(project.working_dir).resolve()
+            ),
+        })
     return request.app.state.templates.TemplateResponse(
         request, "project_articles.html",
         {"project": project,
+         "stale_commands": stale_commands,
          "groups": [(st, items) for st, items in groups if items],
          "total": true_total, "shown": shown,
          "capped": shown < true_total,

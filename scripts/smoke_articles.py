@@ -22,6 +22,7 @@ sys.path.insert(0, str(ROOT))
 sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")
 sys.stderr.reconfigure(encoding="utf-8", errors="backslashreplace")
 
+from dreaming.services import starter_kit  # noqa: E402
 from dreaming.services.db import SqliteDB  # noqa: E402
 from dreaming.services.projects import ProjectsService  # noqa: E402
 
@@ -3044,6 +3045,97 @@ async def main() -> int:
         print("ok: article_proposals column order matches a migrated "
               "database's (verify_label, target_project_id trail in "
               "append order)")
+
+        # ---- starter-kit command drift ------------------------------------
+        # The center saw a command missing but never one gone stale, so an
+        # installed copy aged silently as the templates moved on. The signal
+        # only earns trust if it never cries wolf: the templates in this repo
+        # are CRLF and a checkout elsewhere is routinely LF, so a
+        # line-ending difference must NOT read as drift, while a single
+        # changed heading must.
+        kit_dir = Path(tempfile.mkdtemp(prefix="dc_smoke_kit_"))
+        cmds = kit_dir / ".claude" / "commands"
+        cmds.mkdir(parents=True)
+        tpl = starter_kit.TEMPLATE_DIR / "commands" / "write-article.md"
+        raw = tpl.read_bytes()
+        installed = cmds / "write-article.md"
+
+        noise_cases = [
+            ("byte-identical", raw),
+            ("LF instead of CRLF", raw.replace(b"\r\n", b"\n")),
+            ("no trailing newline", raw.rstrip(b"\r\n")),
+            ("extra trailing newlines", raw + b"\n\n"),
+        ]
+        for label, content in noise_cases:
+            installed.write_bytes(content)
+            if starter_kit.command_stale(kit_dir, "write-article"):
+                fail(f"command_stale called {label} drift — a false alarm here "
+                     f"trains the operator to ignore the real signal")
+                return 1
+        print(f"ok: command_stale ignores {len(noise_cases)} kinds of "
+              f"line-ending / trailing-newline noise")
+
+        drift_cases = [
+            ("a renamed heading", raw.replace(b"## 4. Verify", b"## Sprawdzenie")),
+            ("the wave-A truncation that shipped for real", raw[:3680]),
+            ("an empty file", b""),
+        ]
+        for label, content in drift_cases:
+            installed.write_bytes(content)
+            if not starter_kit.command_stale(kit_dir, "write-article"):
+                fail(f"command_stale missed {label}")
+                return 1
+        print(f"ok: command_stale catches {len(drift_cases)} kinds of real "
+              f"content drift, including the wave-A copy that actually shipped")
+
+        installed.unlink()
+        if starter_kit.command_stale(kit_dir, "write-article"):
+            fail("command_stale reported an absent command as drifted — that "
+                 "is command_installed's signal, and reporting both would say "
+                 "two different things about one file")
+            return 1
+        if starter_kit.command_installed(kit_dir, "write-article"):
+            fail("command_installed reported an absent command as present")
+            return 1
+        print("ok: an absent command is missing, not stale — one signal per "
+              "file")
+
+        # status() over a whole kit, which is what the rotation page renders.
+        kit2 = Path(tempfile.mkdtemp(prefix="dc_smoke_kit2_"))
+        starter_kit.install(kit2, force=True)
+        st = starter_kit.status(kit2)
+        if st.stale or not st.up_to_date or not st.all_present:
+            fail(f"a fresh install is not up to date: missing={st.missing} "
+                 f"stale={st.stale} up_to_date={st.up_to_date}")
+            return 1
+        print("ok: status() calls a fresh install up_to_date with nothing stale")
+
+        (kit2 / ".claude" / "commands" / "self-study.md").write_bytes(b"stub\n")
+        st = starter_kit.status(kit2)
+        if st.stale != ["commands/self-study.md"]:
+            fail(f"status().stale should name exactly the drifted file, got "
+                 f"{st.stale}")
+            return 1
+        if not st.all_present:
+            fail("all_present must keep meaning 'nothing missing' — three "
+                 "pages already render it, and folding drift into it would "
+                 "change what they claim without touching them")
+            return 1
+        if st.up_to_date:
+            fail("up_to_date must be False when a file has drifted")
+            return 1
+        print("ok: status() separates drift from absence — all_present stays "
+              "True, up_to_date goes False, stale names the one file")
+
+        for p in (kit2 / ".claude").rglob("*"):
+            if p.is_file():
+                p.write_bytes(p.read_bytes().replace(b"\r\n", b"\n"))
+        st = starter_kit.status(kit2)
+        if st.stale != ["commands/self-study.md"]:
+            fail(f"converting the whole kit to LF changed the drift verdict: "
+                 f"{st.stale}")
+            return 1
+        print("ok: converting an entire installed kit to LF adds no drift")
 
         print("PASS")
         return 0

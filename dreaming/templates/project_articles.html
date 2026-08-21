@@ -19,6 +19,33 @@
 <p class="text-xs faint mb-4">{{ "article.capped" | t(locale=locale, shown=shown, total=total) }}</p>
 {% endif %}
 
+{% if stale_commands %}
+<div class="mb-4 banner banner-warn">
+  <div class="banner__body">
+    <p class="banner__title">{{ "article.kit_stale.title" | t(locale=locale) }}</p>
+    <p class="text-sm mb-2">{{ "article.kit_stale.body" | t(locale=locale) }}</p>
+    <ul class="text-xs list-disc ml-5 mb-3 space-y-1">
+      {% for c in stale_commands %}
+      <li><code>.claude/commands/{{ c.command }}.md</code>
+        {{ "article.kit_stale.in" | t(locale=locale) }} <code>{{ c.root }}</code>
+        {% if not c.fixable_here %}
+        — {{ "article.kit_stale.by_hand" | t(locale=locale) }}
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% if stale_commands | selectattr("fixable_here") | list %}
+    <form method="post" action="/p/{{ project.slug }}/starter-kit/install" class="inline"
+          data-confirm="{{ 'article.kit_stale.confirm' | t(locale=locale) }}"
+          data-confirm-variant="danger">
+      <input type="hidden" name="force" value="1">
+      <button class="btn btn-warn btn-sm">{{ "article.kit_stale.update" | t(locale=locale) }}</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
 <details class="card mb-4">
   <summary class="text-sm cursor-pointer strong">{{ "article.add.title" | t(locale=locale) }}</summary>
   <form method="post" action="/p/{{ project.slug }}/articles/add" class="mt-3 flex flex-col gap-2">
