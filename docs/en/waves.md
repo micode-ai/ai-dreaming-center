@@ -19,6 +19,7 @@ History of AI Dreaming Center development: what was done in each wave, the git t
 - [Wave D1/D2 — Design system foundation](#wave-d1d2--design-system-foundation)
 - [Wave A — Article pipeline](#wave-a--article-pipeline)
 - [Wave B — Article cross-project](#wave-b--article-cross-project)
+- [Wave C — Article committed build output](#wave-c--article-committed-build-output)
 - [Not implemented yet](#not-implemented-yet)
 
 ## Wave 0 — Foundation
@@ -420,6 +421,38 @@ Two capabilities were also missing outright. `source="manual"` existed in the da
 - The "two different Cyrillic topics" smoke assertion does not force both posts into the same UTC second, so that direction is a probabilistic rather than airtight pin.
 - The 409 detail in the venue route interpolates a status read just before the write, so a very narrow race could name a stale status.
 - `smoke_node_skills.py` still never exits — the same unclosed-connection class already noted for `smoke_dashboard_tiles.py` in Wave D1/D2 and left as a known issue at the end of Wave A.
+
+## Wave C — Article committed build output
+
+**Branch**: `feature/article-build-output`, range `cdfb3f9`..`e02fe32` — 4 commits, 5 files, +626/−25. No separate plan document: the wave is a single task, and the spec describes it in full.
+
+**Spec**: [`docs/superpowers/specs/2026-08-21-article-committed-build-output-design.md`](../superpowers/specs/2026-08-21-article-committed-build-output-design.md)
+**Extends**: [Wave A — Article pipeline](#wave-a--article-pipeline), [Wave B — Article cross-project](#wave-b--article-cross-project)
+**Issue**: [#36](https://github.com/micode-ai/ai-dreaming-center/issues/36)
+
+**Goal**: publishing must reach the live site on the project that commits its built site, not only its sources.
+
+**Problem**: waves A and B committed exactly the paths the writer reported. That is right for two projects out of three — `mi-code-ai` and `accounting-ai-agent` commit sources and let CI build. The third works differently, and it is the one the user tried first: `ai-budget-assistant` tracks 208 files of generated site under `docs/marketing/seo/site/blog`, and `web-deploy.yml` copies precisely that directory to the server — "Committed builds (regenerate then commit)" is written in the workflow itself. The first live run proved it: the writer produced a correct 10 KB Polish article with frontmatter matching its 21 siblings, and there was no path from that file to `ai-budget.pl/blog`.
+
+**Rejected design**: "publish runs the build." `build_blog.py` renders every language, generates OG images with PIL and rebuilds the sitemap — minutes inside a POST from a hand-pressed button. The build already has a lawful home: the verify command, which the session runs, not a web request. For this project the build *is* the verification in the strongest sense — it proves the article rendered into the directory the deploy will carry.
+
+**What landed**: one venue setting, `article_publish_extra_paths` — comma- or newline-separated paths relative to the article root, staged alongside `draft_ref`. Empty means wave A/B behaviour byte for byte, so nothing changes for the other two projects.
+
+The asymmetry is the point, not an oversight: these paths **may** name a directory and `draft_ref` may not. `draft_ref` arrives from a Claude session over unauthenticated localhost HTTP, and a directory there would let one report stage a whole subtree. `article_publish_extra_paths` is typed by a human into project settings, and a build output *is* a 208-file subtree. Everything else — refusing `..`, absolute paths and glob characters, the containment check, `--literal-pathspecs`, never passing `-f` — applies to both identically.
+
+**Defects review caught during the wave** (all fixed inside their own tasks):
+
+- The spec's risk table closed the "build output is gitignored" case with "`git add` without `-f` refuses it, and the publish fails with git's own message." Formally true — and dangerous for that reason: it described the outcome but not the state left behind. `git add` is not atomic across paths: having refused the ignored one it still stages the rest — so the article's file stayed in **someone else's** repository index, and a human would have had to clean up after us. Fixed with a shared `_rollback_or_raise` covering both `git add` calls and `git commit`, checking the rollback's own exit code and saying honestly what remains.
+- A directory carrying a nested `.git` (a vendored repository inside the build output) would have been staged as a dangling gitlink — a commit referencing an object the repository does not contain. The refusal moved into validation, before any git call.
+
+**Acceptance**: [`scripts/smoke_articles.py`](../../scripts/smoke_articles.py) — 90 assertions, exit 0. `scripts/smoke_ai_radar.py`, `check_i18n.py`, `check_css_tokens.py` all green; `python -c "import dreaming.main"` exits 0. Verified in throwaway repositories, separately from the implementer's own run: the build tree is committed together with the article; an unrelated file a human had staged stays **out** of the commit and stays staged; `draft_ref` still refuses a directory while a configured path accepts one; and every refusal — ignored output, nested `.git`, `..`, absolute path, glob, missing path — leaves the index byte-identical to what it was.
+
+**Deferred**:
+
+- `article_publish_mode` for `ai-budget-assistant` is set to `commit`, one notch below the user's chosen `commit+push`: a first live commit touching a 208-file directory deserves human eyes before a push. That is my call, not the user's.
+- **A live end-to-end — write, publish, appear on the site — has still never happened in any wave.**
+- A huge accidental path (`.`) in the setting passes containment and existence and will commit the working tree. Mitigated only by it being an operator setting shown back on the settings page — the same trust level as `article_publish_mode`.
+- The starter-kit installer cannot target an article root inside a nested repository (worked around by hand for `mi-code-ai`). That gap belongs to the installer, not to publishing.
 
 ## Not implemented yet
 
