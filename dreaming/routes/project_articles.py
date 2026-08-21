@@ -397,16 +397,6 @@ async def articles_approve(request: Request, slug: str, proposal_id: int):
     # With no override and no article_venue_project setting this resolves to
     # `project` itself, which is byte-identical to wave A's behaviour.
     venue, blog_dir = await _venue_for(request, project, row)
-    # write-article has to exist where the session will actually run, so the
-    # starter-kit check targets the venue's working directory, not the
-    # subject's.
-    if not starter_kit.command_installed(venue.working_dir, "write-article"):
-        raise HTTPException(
-            status_code=400,
-            detail=f"write-article is not installed for venue '{venue.slug}' — "
-            "re-run the starter-kit install to add "
-            ".claude/commands/write-article.md",
-        )
     if not blog_dir:
         raise HTTPException(
             status_code=400,
@@ -415,11 +405,29 @@ async def articles_approve(request: Request, slug: str, proposal_id: int):
         )
     # The blog does not always live in the venue's own repository (e.g. a
     # nested landing-page repo with its own .git and remote). Deriving the
-    # containing repo's root once means the writer autodetect, the session's
-    # cwd, and the publish commit (in articles_publish below) all agree on
-    # which repository owns the article. For the two projects whose blog is
-    # inside their own repo this equals venue.working_dir unchanged.
+    # containing repo's root here — before the starter-kit check right below
+    # — means that check, the writer autodetect, the session's cwd, and the
+    # publish commit (in articles_publish below) all agree on which
+    # repository owns the article. For the two projects whose blog is inside
+    # their own repo this equals venue.working_dir unchanged.
     root = await articles.resolve_article_root(venue.working_dir, blog_dir)
+    # write-article has to exist where the session's cwd will actually be —
+    # the repository that owns the blog directory — which is NOT always
+    # venue.working_dir: a venue can nest its blog inside a second repository
+    # with its own .git and its own remote (e.g. a landing-page repo checked
+    # out inside the parent). Claude CLI resolves project-level slash
+    # commands from its own cwd, not from a parent, so checking
+    # venue.working_dir here missed exactly that case: the check could pass
+    # against the venue's own .claude/commands/ while the session actually
+    # runs inside the nested repo, which has none — burning a real paid
+    # session for nothing, precisely what this check exists to prevent.
+    if not starter_kit.command_installed(root, "write-article"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"write-article is not installed for venue '{venue.slug}' — "
+            "re-run the starter-kit install to add "
+            ".claude/commands/write-article.md",
+        )
     writer = articles.resolve_writer(
         root,
         await resolver.get(venue, "article_writer_agent", ""),
