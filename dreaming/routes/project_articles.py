@@ -623,12 +623,19 @@ async def articles_publish(request: Request, slug: str, proposal_id: int):
     # venue.working_dir. Publishing against the wrong root would validate
     # and commit paths in a repository that never saw the write.
     root = await articles.resolve_article_root(venue.working_dir, blog_dir)
+    # Wave C: article_publish_extra_paths stages a build's output (e.g. a
+    # committed generated site) alongside draft_ref. Read from the venue,
+    # like every other article setting on this route — the build runs in
+    # the same article root the venue owns. Empty (the default) means
+    # split_paths returns [] and publish() behaves exactly as before.
+    extra_paths_setting = await resolver.get(venue, "article_publish_extra_paths", "")
     try:
         commit = await article_publish.publish(
             root,
             article_publish.split_paths(row["draft_ref"], root),
             message=article_publish.build_message(row, label),
             push=(mode == "commit+push"),
+            extra_paths=article_publish.split_paths(extra_paths_setting, root),
         )
     except article_publish.PushFailed as e:
         # The commit landed locally; only the push failed. Recording the sha

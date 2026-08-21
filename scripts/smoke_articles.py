@@ -2194,6 +2194,354 @@ async def main() -> int:
             fail("dirty article path published anyway")
             return 1
 
+        # ── Wave C: article_publish_extra_paths stages a build's output ──
+        # A fresh repo: draft_ref keeps committing single files, but
+        # extra_paths (unlike draft_ref) may name a directory -- a build
+        # output is a subtree.
+        extra_repo = tmp / "repo_extra"
+        (extra_repo / "content").mkdir(parents=True)
+        def git_extra(*args, cwd=extra_repo):
+            return subprocess.run(["git", *args], cwd=str(cwd),
+                                  capture_output=True, text=True)
+        git_extra("init", "-q")
+        git_extra("config", "user.email", "smoke@example.test")
+        git_extra("config", "user.name", "Smoke")
+        (extra_repo / "README.md").write_text("seed\n", encoding="utf-8")
+        git_extra("add", "README.md")
+        git_extra("commit", "-q", "-m", "seed")
+
+        site_dir = extra_repo / "site"
+        (site_dir / "blog").mkdir(parents=True)
+        (site_dir / "index.html").write_text("<html>home</html>\n", encoding="utf-8")
+        (site_dir / "blog" / "post.html").write_text("<html>post</html>\n", encoding="utf-8")
+        (extra_repo / "content" / "extra-piece.md").write_text(
+            "# Extra piece\n", encoding="utf-8",
+        )
+        extra_sha = await article_publish.publish(
+            str(extra_repo), ["content/extra-piece.md"],
+            message="publish: extra piece (unverified)", push=False,
+            extra_paths=["site"],
+        )
+        extra_listed = set(git_extra(
+            "show", "--name-only", "--pretty=format:", extra_sha,
+        ).stdout.split())
+        want = {"content/extra-piece.md", "site/index.html", "site/blog/post.html"}
+        if extra_listed != want:
+            fail(f"extra_paths directory staging: got {extra_listed}, want {want}")
+            return 1
+        extra_commit_msg = git_extra("log", "-1", "--format=%B", extra_sha).stdout
+        if "build: 2 files from article_publish_extra_paths" not in extra_commit_msg:
+            fail(f"commit message missing the build-count line: {extra_commit_msg!r}")
+            return 1
+        print("ok: extra_paths stages a directory tree -- the commit contains "
+              "both the draft file and the tree's files, message names the count")
+
+        # -- Wave A's guarantee, re-asserted with extra_paths in play: an
+        #    unrelated modified file outside both draft_ref and extra_paths
+        #    stays uncommitted and still dirty afterward --
+        outside = extra_repo / "unrelated.txt"
+        outside.write_text("leave me alone\n", encoding="utf-8")
+        (extra_repo / "content" / "extra-piece-2.md").write_text(
+            "# Extra piece two\n", encoding="utf-8",
+        )
+        (site_dir / "blog" / "post2.html").write_text(
+            "<html>post2</html>\n", encoding="utf-8",
+        )
+        await article_publish.publish(
+            str(extra_repo), ["content/extra-piece-2.md"],
+            message="publish: extra piece two (unverified)", push=False,
+            extra_paths=["site"],
+        )
+        status_outside = git_extra(
+            "status", "--porcelain", "--", "unrelated.txt",
+        ).stdout
+        if not status_outside.strip() or not status_outside.lstrip().startswith("??"):
+            fail("wave A guarantee broken: the unrelated file outside "
+                 f"draft_ref and extra_paths did not stay dirty: {status_outside!r}")
+            return 1
+        print("ok: an unrelated file outside draft_ref and extra_paths stays "
+              "dirty and uncommitted -- Wave A's guarantee holds with "
+              "extra_paths in play")
+
+        # -- a build that changed nothing is not an error: the draft still
+        #    publishes and the message carries no build-count line --
+        (extra_repo / "content" / "extra-piece-4.md").write_text(
+            "# Extra piece four\n", encoding="utf-8",
+        )
+        noop_sha = await article_publish.publish(
+            str(extra_repo), ["content/extra-piece-4.md"],
+            message="publish: extra piece four (unverified)", push=False,
+            extra_paths=["site"],
+        )
+        noop_listed = git_extra(
+            "show", "--name-only", "--pretty=format:", noop_sha,
+        ).stdout.split()
+        if noop_listed != ["content/extra-piece-4.md"]:
+            fail(f"an unchanged build output leaked into the commit: {noop_listed}")
+            return 1
+        noop_msg = git_extra("log", "-1", "--format=%B", noop_sha).stdout
+        if "build:" in noop_msg:
+            fail("a build that changed nothing must not add a build-count "
+                 f"line: {noop_msg!r}")
+            return 1
+        print("ok: an extra_paths build that changed nothing is not an "
+              "error, and adds no build-count line")
+
+        # -- a non-existent extra path refuses the publish, naming it, and
+        #    leaves the index clean --
+        (extra_repo / "content" / "extra-piece-3.md").write_text(
+            "# Extra piece three\n", encoding="utf-8",
+        )
+        before_missing = git_extra("diff", "--cached", "--name-only").stdout
+        try:
+            await article_publish.publish(
+                str(extra_repo), ["content/extra-piece-3.md"],
+                message="should never commit", push=False,
+                extra_paths=["site-missing"],
+            )
+        except article_publish.PublishError as e:
+            if "site-missing" not in str(e):
+                fail(f"non-existent extra path error didn't name it: {e}")
+                return 1
+        else:
+            fail("publish accepted a non-existent extra path")
+            return 1
+        after_missing = git_extra("diff", "--cached", "--name-only").stdout
+        if after_missing != before_missing:
+            fail("a refused extra path still touched the index: "
+                 f"before={before_missing!r} after={after_missing!r}")
+            return 1
+        print("ok: a non-existent extra path refuses the publish, naming "
+              "it, and leaves the index clean")
+
+        # -- extra_paths get the same '..'/absolute/glob refusals as
+        #    draft_ref; only the directory rule differs --
+        before_bad_extra = git_extra("diff", "--cached", "--name-only").stdout
+        abs_site = str((extra_repo / "site").resolve())
+        for bad, why in [
+            ("site/../site", "a '..' segment"),
+            (abs_site, "an absolute path"),
+            ("site/*.html", "a glob character"),
+        ]:
+            try:
+                await article_publish.publish(
+                    str(extra_repo), ["content/extra-piece-3.md"],
+                    message="should never commit", push=False,
+                    extra_paths=[bad],
+                )
+            except article_publish.PublishError:
+                pass
+            else:
+                fail(f"publish accepted an invalid extra path ({why}): {bad!r}")
+                return 1
+        after_bad_extra = git_extra("diff", "--cached", "--name-only").stdout
+        if after_bad_extra != before_bad_extra:
+            fail("a rejected extra path still touched the index: "
+                 f"before={before_bad_extra!r} after={after_bad_extra!r}")
+            return 1
+        print("ok: extra_paths get the same '..'/absolute/glob refusals as "
+              "draft_ref, index untouched")
+
+        # -- the asymmetry this wave exists to establish: draft_ref may
+        #    never be a directory, even when extra_paths, in the very same
+        #    call, names one and is accepted --
+        try:
+            await article_publish.publish(
+                str(extra_repo), ["content"], message="should never commit",
+                push=False, extra_paths=["site"],
+            )
+        except article_publish.PublishError as e:
+            if "not a regular file" not in str(e):
+                fail(f"draft_ref-as-directory refusal message unexpected: {e}")
+                return 1
+        else:
+            fail("publish accepted a directory as draft_ref merely because "
+                 "extra_paths allows directories")
+            return 1
+        print("ok: draft_ref still refuses a directory even though "
+              "extra_paths, in the same call, accepts one -- the asymmetry "
+              "this wave exists to establish")
+
+        # -- empty extra_paths (article_publish_extra_paths="" -> []) must
+        #    reproduce today's behaviour exactly: same set of committed
+        #    files, no build-count line in the message --
+        empty_repo = tmp / "repo_extra_empty"
+        (empty_repo / "content").mkdir(parents=True)
+        def git_empty(*args, cwd=empty_repo):
+            return subprocess.run(["git", *args], cwd=str(cwd),
+                                  capture_output=True, text=True)
+        git_empty("init", "-q")
+        git_empty("config", "user.email", "smoke@example.test")
+        git_empty("config", "user.name", "Smoke")
+        (empty_repo / "README.md").write_text("seed\n", encoding="utf-8")
+        git_empty("add", "README.md")
+        git_empty("commit", "-q", "-m", "seed")
+        (empty_repo / "content" / "empty-extra.md").write_text(
+            "# No extra paths\n", encoding="utf-8",
+        )
+        empty_sha = await article_publish.publish(
+            str(empty_repo), ["content/empty-extra.md"],
+            message="publish: no extra paths (unverified)", push=False,
+            extra_paths=[],
+        )
+        empty_listed = git_empty(
+            "show", "--name-only", "--pretty=format:", empty_sha,
+        ).stdout.split()
+        if empty_listed != ["content/empty-extra.md"]:
+            fail(f"extra_paths=[] committed {empty_listed}, want only the draft path")
+            return 1
+        empty_msg = git_empty("log", "-1", "--format=%B", empty_sha).stdout
+        if "build:" in empty_msg:
+            fail(f"extra_paths=[] must not add a build-count line: {empty_msg!r}")
+            return 1
+        print("ok: empty extra_paths reproduces the pre-Wave-C behaviour -- "
+              "only the draft path is committed, no build-count line")
+
+        # ── review round 1, Critical: a failed extra-paths `git add` must ──
+        # roll back, not leave the draft staged with no disclosure. Every
+        # refusal tested so far is caught by _validate_paths before any git
+        # call runs -- none of them exercise a *mid-sequence* git failure.
+        # A gitignored extra path is the realistic trigger the spec's own
+        # risk table waved through without asking what state it leaves
+        # behind: `git add` on it returns non-zero, but only *after* the
+        # first `git add` call (for draft_ref) already succeeded and staged
+        # the draft. Assert the index ends up exactly where it started, and
+        # the error says a rollback happened.
+        gi_repo = tmp / "repo_gitignore_add"
+        (gi_repo / "content").mkdir(parents=True)
+        (gi_repo / "site").mkdir(parents=True)
+        def git_gi(*args, cwd=gi_repo):
+            return subprocess.run(["git", *args], cwd=str(cwd),
+                                  capture_output=True, text=True)
+        git_gi("init", "-q")
+        git_gi("config", "user.email", "smoke@example.test")
+        git_gi("config", "user.name", "Smoke")
+        (gi_repo / ".gitignore").write_text("site\n", encoding="utf-8")
+        (gi_repo / "README.md").write_text("seed\n", encoding="utf-8")
+        git_gi("add", ".gitignore", "README.md")
+        git_gi("commit", "-q", "-m", "seed")
+        (gi_repo / "content" / "piece.md").write_text(
+            "# Piece\n", encoding="utf-8",
+        )
+        (gi_repo / "site" / "index.html").write_text(
+            "<html>home</html>\n", encoding="utf-8",
+        )
+        before_gi = git_gi("diff", "--cached", "--name-only").stdout
+        try:
+            await article_publish.publish(
+                str(gi_repo), ["content/piece.md"],
+                message="should roll back fully", push=False,
+                extra_paths=["site"],
+            )
+        except article_publish.PublishError as e:
+            msg = str(e)
+            if "git add failed" not in msg:
+                fail(f"gitignored extra path: wrong step named: {msg!r}")
+                return 1
+            if "staged changes rolled back" not in msg:
+                fail(f"gitignored extra path: rollback not disclosed: {msg!r}")
+                return 1
+            if "site" not in msg:
+                fail(f"gitignored extra path: git's own message lost: {msg!r}")
+                return 1
+        else:
+            fail("publish accepted a gitignored extra path")
+            return 1
+        after_gi = git_gi("diff", "--cached", "--name-only").stdout
+        if after_gi != before_gi:
+            fail("a failed extra-paths git add left the draft (or part of "
+                 f"the extra tree) staged: before={before_gi!r} "
+                 f"after={after_gi!r}")
+            return 1
+        draft_status = git_gi(
+            "status", "--porcelain", "--", "content/piece.md",
+        ).stdout
+        if not draft_status.lstrip().startswith("??"):
+            fail("the draft must be back to untracked/dirty after the "
+                 f"rollback, got: {draft_status!r}")
+            return 1
+        print("ok: a gitignored extra path fails the (second) git add "
+              "mid-sequence, and the draft staged by the first add is "
+              "rolled back too -- not left behind with no disclosure")
+
+        # -- the worse case the review flagged: a single `git add` call can
+        #    return non-zero for one bad pathspec while still silently
+        #    staging another good one in the same call. extra_paths=[good,
+        #    bad] reaches git as ONE `git add -- good bad` invocation. --
+        (gi_repo / "good").mkdir(parents=True)
+        (gi_repo / "good" / "ok.txt").write_text("fine\n", encoding="utf-8")
+        (gi_repo / "content" / "piece2.md").write_text(
+            "# Piece two\n", encoding="utf-8",
+        )
+        before_multi = git_gi("diff", "--cached", "--name-only").stdout
+        try:
+            await article_publish.publish(
+                str(gi_repo), ["content/piece2.md"],
+                message="should roll back fully", push=False,
+                extra_paths=["good", "site"],
+            )
+        except article_publish.PublishError as e:
+            if "staged changes rolled back" not in str(e):
+                fail(f"multi-entry rollback not disclosed: {e}")
+                return 1
+        else:
+            fail("publish accepted a multi-entry extra_paths list "
+                 "containing a gitignored path")
+            return 1
+        after_multi = git_gi("diff", "--cached", "--name-only").stdout
+        if after_multi != before_multi:
+            fail("the good pathspec's partial stage (from the same failing "
+                 "git add call) survived the rollback: "
+                 f"before={before_multi!r} after={after_multi!r}")
+            return 1
+        print("ok: a multi-entry extra_paths list where one path is "
+              "gitignored rolls back the other, partially-staged path too")
+
+        # ── review round 1, Important: a nested .git becomes a dangling ──
+        # gitlink, not a refusal, unless caught explicitly -- git add's own
+        # return code is 0 for this. Refused at validation time, before any
+        # git call, so nothing is ever staged.
+        vendored_repo = tmp / "repo_vendored_git"
+        (vendored_repo / "content").mkdir(parents=True)
+        def git_vendored(*args, cwd=vendored_repo):
+            return subprocess.run(["git", *args], cwd=str(cwd),
+                                  capture_output=True, text=True)
+        git_vendored("init", "-q")
+        git_vendored("config", "user.email", "smoke@example.test")
+        git_vendored("config", "user.name", "Smoke")
+        (vendored_repo / "README.md").write_text("seed\n", encoding="utf-8")
+        git_vendored("add", "README.md")
+        git_vendored("commit", "-q", "-m", "seed")
+        (vendored_repo / "content" / "piece.md").write_text(
+            "# Piece\n", encoding="utf-8",
+        )
+        vendored_asset = vendored_repo / "site" / "vendor" / "theme" / ".git"
+        vendored_asset.mkdir(parents=True)
+        (vendored_asset / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+        before_vendored = git_vendored("diff", "--cached", "--name-only").stdout
+        try:
+            await article_publish.publish(
+                str(vendored_repo), ["content/piece.md"],
+                message="should never commit", push=False,
+                extra_paths=["site"],
+            )
+        except article_publish.PublishError as e:
+            msg = str(e)
+            if "nested .git" not in msg or "gitlink" not in msg:
+                fail(f"nested .git refusal message unexpected: {msg!r}")
+                return 1
+        else:
+            fail("publish accepted an extra path whose tree contains a "
+                 "nested .git (would stage a dangling gitlink)")
+            return 1
+        after_vendored = git_vendored("diff", "--cached", "--name-only").stdout
+        if after_vendored != before_vendored:
+            fail("a rejected nested-.git path still touched the index: "
+                 f"before={before_vendored!r} after={after_vendored!r}")
+            return 1
+        print("ok: an extra path whose tree contains a nested .git is "
+              "refused (would stage a dangling gitlink), index untouched")
+
         # ── a rollback that itself fails must say so honestly ──────────
         # A separate throwaway repo so this doesn't disturb `repo`'s state.
         # The commit failure itself is real (a plain failing pre-commit

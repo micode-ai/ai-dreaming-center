@@ -77,6 +77,12 @@ class AppSettings(BaseSettings):
     article_locales: str = ""
     article_verify_cmd: str = ""
     article_publish_mode: str = "off"
+    # Comma- or newline-separated paths, relative to the article root, staged
+    # at publish in addition to draft_ref. Empty means today's behaviour
+    # exactly. Unlike draft_ref these may be directories — a build output is
+    # a subtree — because this value is typed by an operator into project
+    # settings, not self-reported by a Claude session over localhost HTTP.
+    article_publish_extra_paths: str = ""
     article_max_turns: int = 300
     article_timeout_minutes: int = 120
     article_venue_project: str = ""
@@ -193,6 +199,7 @@ SETTINGS_GROUPS: list[tuple[str, list[str]]] = [
     ("Articles", [
         "article_writer_agent", "article_blog_dir", "article_locales",
         "article_verify_cmd", "article_publish_mode",
+        "article_publish_extra_paths",
         "article_max_turns", "article_timeout_minutes",
         "article_venue_project",
     ]),
