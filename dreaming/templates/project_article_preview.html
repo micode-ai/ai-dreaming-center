@@ -96,7 +96,13 @@
       </label>
     {% endfor %}
     {% if not findings %}
-      <p class="text-xs faint">{{ "article.revise.no_findings" | t(locale=locale) }}</p>
+      <p class="text-xs faint">
+        {% if has_rules %}
+          {{ "article.revise.all_pass" | t(locale=locale) }}
+        {% else %}
+          {{ "article.revise.no_findings" | t(locale=locale) }}
+        {% endif %}
+      </p>
     {% endif %}
     <textarea name="notes" rows="3"
               placeholder="{{ 'article.revise.placeholder' | t(locale=locale) }}"

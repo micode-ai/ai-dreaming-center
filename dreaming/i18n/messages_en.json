@@ -580,6 +580,7 @@
   "article.revise.short": "too short: {lang} is {actual} characters, articles on this blog run at least {expected}",
   "article.revise.marker": "no {marker} in {langs} — this venue renders them and the neighbouring articles use them",
   "article.revise.no_findings": "No automatic checks configured for this venue (article_min_chars, article_required_markers) — write the notes yourself.",
+  "article.revise.all_pass": "This venue's automatic checks all pass — nothing flagged. If you see something they cannot, write it.",
   "article.revise.placeholder": "What to improve: add a process diagram, a comparison with alternatives, a worked example with numbers…",
   "article.revise.submit": "Send back for revision",
   "article.preview.others": "other files touched:",

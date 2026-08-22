@@ -580,6 +580,7 @@
   "article.revise.short": "коротко: {lang} — {actual} знаков, у статей этого блога не меньше {expected}",
   "article.revise.marker": "нет {marker} в {langs} — площадка их отрисовывает, соседние статьи используют",
   "article.revise.no_findings": "Автопроверок для этой площадки не задано (article_min_chars, article_required_markers) — напишите замечания сами.",
+  "article.revise.all_pass": "Автопроверки площадки пройдены — замечаний по ним нет. Если видите что-то ещё, напишите.",
   "article.revise.placeholder": "Что именно доработать: добавить схему процесса, сравнение с альтернативами, пример с числами…",
   "article.revise.submit": "Отправить на доработку",
   "article.preview.others": "прочие затронутые файлы:",

@@ -776,6 +776,7 @@ async def articles_preview(
     # other status, and offering a form that will be refused is worse than
     # showing none.
     findings: list[dict] = []
+    has_rules = False
     if row["status"] == "drafted":
         resolver = request.app.state.resolver_factory(request)
         try:
@@ -789,6 +790,11 @@ async def articles_preview(
         findings = articles.draft_findings(
             variants, min_chars=min_chars, required_markers=markers,
         )
+        # "nothing flagged" and "nothing configured to flag" are different
+        # facts and the form must not tell the operator the second when the
+        # first is true — that is the difference between "your venue has no
+        # rules" and "your article passes them".
+        has_rules = bool(min_chars or markers)
     locale = request.cookies.get(
         "dc_locale", request.app.state.settings.default_locale,
     )
@@ -797,7 +803,8 @@ async def articles_preview(
         {"project": project, "row": row, "variants": variants,
          "others": others, "problems": problems, "selected": selected,
          "venue_slug": venue.slug, "article_root": str(root),
-         "findings": findings, "locale": locale},
+         "findings": findings, "has_rules": has_rules,
+         "locale": locale},
     )
 
 
