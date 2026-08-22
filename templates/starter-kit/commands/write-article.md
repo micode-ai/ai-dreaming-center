@@ -62,6 +62,18 @@ than a markdown file), add a data entry — do not invent a markdown file beside
 it. If adding an article requires registering it somewhere (a build entry, an
 index, a route), do that too; a piece that does not build is not written.
 
+**Sample one entry, never read a large data file whole.** When the venue keeps
+prose as data, "read two or three existing articles" means two or three
+*entries*, not the file they live in. `micode-landing-page` keeps 17 articles
+with three full language bodies each in one 778 KB `src/data/blog-posts.json`;
+a session that read it whole four times died of `error_during_execution` after
+11 minutes and $1.66 with nothing written. So: check the size first (`wc -c`).
+Over roughly 100 KB, print only what you need — the key names and one short
+field of one entry — and mutate the file with a script that reads, appends and
+writes in a single pass **without printing its contents back**. Pulling a large
+file into your own context to edit it is how a writing session runs out of room
+before it writes anything.
+
 Match the existing typography per language. In this house style Polish quotes
 are `„…”`, Russian are `«…»`, English are `"…"`, dashes are `—`, and ellipses
 are `…`. Straight quotes in Polish or Russian text are a defect.
