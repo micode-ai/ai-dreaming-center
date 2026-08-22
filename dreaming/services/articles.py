@@ -366,3 +366,66 @@ def data_entry_variants(
         variants.append({"lang": lang, "text": head + lede + parts["body"]})
     return variants, str(entry.get("slug", ""))
 
+
+
+def draft_findings(
+    variants: list[dict], *, min_chars: int = 0,
+    required_markers: tuple[str, ...] | list[str] = (),
+) -> list[dict]:
+    """What is checkably wrong with a drafted article, as proposed revisions.
+
+    Both checks are opt-in per venue, because neither has a defensible default:
+    "long enough" is whatever that blog's other articles are, and a marker like
+    `[[diagram:` only means something where the venue renders it. With both
+    unset this returns nothing and the revision form is just a free-text box.
+
+    Each finding carries `note`, the English sentence sent to the writer, and
+    the fields a template needs to render the same thing in the reader's
+    language. The note is deliberately about substance -- "expand it with
+    substance, not filler" -- because an agent told only "make it longer"
+    makes it longer.
+    """
+    findings: list[dict] = []
+    for v in variants:
+        n = len(v.get("text") or "")
+        if min_chars and n < min_chars:
+            findings.append({
+                "kind": "short",
+                "lang": v.get("lang", ""),
+                "actual": n,
+                "expected": min_chars,
+                "note": (
+                    f"The {v.get('lang', '')} text is {n} characters; articles "
+                    f"on this blog run at least {min_chars}. Expand it with "
+                    f"substance -- more of the concrete mechanics, numbers and "
+                    f"worked examples this piece already gestures at -- not "
+                    f"filler or restatement."
+                ),
+            })
+    for marker in required_markers:
+        marker = marker.strip()
+        if not marker:
+            continue
+        # Per language, not per article: a marker lives in each language's own
+        # body, so one present only in English is a gap in the other eight,
+        # not a box ticked.
+        missing = [
+            v.get("lang", "") for v in variants
+            if marker not in (v.get("text") or "")
+        ]
+        if not missing:
+            continue
+        where = "every language" if len(missing) == len(variants) else \
+            ", ".join(m for m in missing if m)
+        findings.append({
+            "kind": "marker",
+            "marker": marker,
+            "langs": missing,
+            "note": (
+                f"No `{marker}` in {where}. This venue renders those and the "
+                f"neighbouring articles use them; add them where a diagram or "
+                f"a table carries the point better than a paragraph does, "
+                f"defined the way those articles define theirs."
+            ),
+        })
+    return findings

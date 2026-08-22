@@ -22,6 +22,28 @@ empty. The project setting wins because it is the operator's explicit
 decision for this project; the payload's `locales` is only the scan's guess
 at the time it proposed the topic.
 
+## 1a. If this is a revision, it is not a new article
+
+When `$DC_ARTICLE_REVISION_NOTES` is non-empty, a human read your draft and
+sent it back. `$DC_ARTICLE_DRAFT_REF` lists the files you produced last time.
+
+- **Improve those files in place.** Same slug, same entry, same paths. Writing
+  a second article on the same subject leaves the venue with two, and the one
+  the reader finds is whichever the index sorts first.
+- **Address every note.** They are specific on purpose. "Too short" means add
+  the mechanics, numbers and worked examples the piece gestures at and never
+  shows — not more adjectives around the same claims, and not a summary
+  section repeating what the reader just read.
+- If a note asks for something the venue supports but you have not used
+  (a diagram, a table, an image), find how the neighbouring articles do it
+  before inventing your own way. Look at what they reference and add yours the
+  same way.
+- If a note is wrong or impossible, say so in your report rather than
+  half-doing it — and if it needs a fact you cannot verify, ask (see below).
+
+Then verify and report exactly as a first write does; the center moves the row
+back to `drafted` on your report either way.
+
 ## 2. Know which repository is which
 
 Your working directory for this session is the **venue** — the repository

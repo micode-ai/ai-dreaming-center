@@ -92,6 +92,14 @@ class AppSettings(BaseSettings):
     # a subtree — because this value is typed by an operator into project
     # settings, not self-reported by a Claude session over localhost HTTP.
     article_publish_extra_paths: str = ""
+    # Draft checks shown on the preview page as proposed revisions. Both are
+    # opt-in because neither has a defensible default: "long enough" is
+    # whatever a given blog's other articles are, and a marker only means
+    # something where the venue renders it (micode-landing-page reads
+    # `[[diagram:<id>]]` and `[[table:<id>]]` out of an article body). Unset,
+    # the revision form is just a free-text box.
+    article_min_chars: int = 0
+    article_required_markers: str = ""
     article_max_turns: int = 300
     article_timeout_minutes: int = 120
     article_venue_project: str = ""
@@ -209,6 +217,7 @@ SETTINGS_GROUPS: list[tuple[str, list[str]]] = [
         "article_writer_agent", "article_blog_dir", "article_locales",
         "article_verify_cmd", "article_publish_mode",
         "article_publish_extra_paths",
+        "article_min_chars", "article_required_markers",
         "article_max_turns", "article_timeout_minutes",
         "article_venue_project",
     ]),

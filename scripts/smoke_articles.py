@@ -3037,6 +3037,7 @@ async def main() -> int:
             "verify_output", "verify_ok", "commit_ref", "session_id",
             "error_message", "created_at", "decided_at", "written_at",
             "published_at", "verify_label", "target_project_id",
+            "revision_notes",
         ]
         if fresh_cols != want_cols:
             fail(f"article_proposals column order: got {fresh_cols}, "
@@ -3382,6 +3383,93 @@ async def main() -> int:
                 os.environ.pop("DC_DB_PATH", None)
             else:
                 os.environ["DC_DB_PATH"] = prior_db_path_env
+
+        # ---- revision loop -------------------------------------------------
+        from dreaming.services.articles import draft_findings
+
+        short_and_bare = [{"lang": "pl", "text": "x" * 8402},
+                          {"lang": "en", "text": "y" * 20000 + "[[diagram:a]]"}]
+        if draft_findings(short_and_bare):
+            fail("draft_findings complained with no venue rules configured — "
+                 "neither 'long enough' nor a marker has a defensible default")
+            return 1
+        got = draft_findings(
+            short_and_bare, min_chars=15000,
+            required_markers=["[[diagram:", "[[table:"],
+        )
+        kinds = sorted((f["kind"], f.get("lang") or f.get("marker")) for f in got)
+        want = [("marker", "[[diagram:"), ("marker", "[[table:"),
+                ("short", "pl")]
+        if kinds != want:
+            fail(f"draft_findings returned {kinds}, want {want} — the English "
+                 f"text is long enough and does carry [[diagram:, so only "
+                 f"Polish is short and only [[table: is absent from both")
+            return 1
+        diag = next(f for f in got if f.get("marker") == "[[diagram:")
+        if diag["langs"] != ["pl"]:
+            fail(f"a marker present in en but not pl must be reported for pl "
+                 f"alone, got {diag['langs']} — markers live in each "
+                 f"language's own body")
+            return 1
+        if not all(f["note"].strip() for f in got):
+            fail("a finding with no note would send the writer an empty "
+                 "instruction")
+            return 1
+        print("ok: draft_findings is silent without venue rules, and with them "
+              "reports per language, not per article")
+
+        rev_id = await db.add_article_proposal(
+            pid, source="manual", source_ref="smoke",
+            evidence="checked by hand", title="Revision loop",
+            angle="", slug_hint="revision-loop", locales="pl",
+        )
+        if await db.set_article_revision_notes(rev_id, "too short"):
+            fail("a 'proposed' row accepted revision notes — only a drafted "
+                 "article can be sent back")
+            return 1
+        await db.set_article_proposal_status(rev_id, "approved")
+        await db.start_article_attempt(rev_id, session_id="rev1")
+        if await db.set_article_revision_notes(rev_id, "too short"):
+            fail("a 'writing' row accepted revision notes — it would race the "
+                 "attempt already in flight")
+            return 1
+        await db.mark_article_written(
+            rev_id, draft_ref="a.md", verify_output="", writer_agent="self",
+            verify_ok=True,
+        )
+        if not await db.set_article_revision_notes(rev_id, "add a diagram"):
+            fail("a drafted row refused revision notes")
+            return 1
+        row = await db.get_article_proposal(rev_id)
+        if row["revision_notes"] != "add a diagram":
+            fail(f"revision_notes stored {row['revision_notes']!r}")
+            return 1
+        # The dispatch is shared with a first write, so the notes have to
+        # survive into 'writing' and then be cleared by the write-back —
+        # otherwise a later plain retry silently resends an instruction the
+        # writer already carried out.
+        await db.start_article_attempt(rev_id, session_id="rev2")
+        row = await db.get_article_proposal(rev_id)
+        if row["revision_notes"] != "add a diagram":
+            fail("revision notes were lost when the revision attempt started, "
+                 "so the session would never see them")
+            return 1
+        await db.mark_article_written(
+            rev_id, draft_ref="a.md", verify_output="", writer_agent="self",
+            verify_ok=True,
+        )
+        row = await db.get_article_proposal(rev_id)
+        if row["revision_notes"] != "":
+            fail(f"revision notes survived the write-back as "
+                 f"{row['revision_notes']!r}; a later retry would resend them")
+            return 1
+        if await db.set_article_revision_notes(rev_id, "x" * 9000):
+            row = await db.get_article_proposal(rev_id)
+            if len(row["revision_notes"]) > 8000:
+                fail("revision notes are not capped")
+                return 1
+        print("ok: revision notes are accepted only while drafted, survive "
+              "into the attempt, are cleared by the write-back and capped")
 
         # ---- starter-kit command drift ------------------------------------
         # The center saw a command missing but never one gone stale, so an

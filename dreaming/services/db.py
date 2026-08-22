@@ -325,7 +325,8 @@ CREATE TABLE IF NOT EXISTS article_proposals (
     -- order, so any future ALTER TABLE ADD COLUMN addition belongs here
     -- too, appended in the same order it is appended live.
     verify_label    TEXT NOT NULL DEFAULT '',
-    target_project_id INTEGER
+    target_project_id INTEGER,
+    revision_notes  TEXT NOT NULL DEFAULT ''
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_article_project_slug
     ON article_proposals (project_id, slug_hint);
@@ -466,6 +467,19 @@ class SqliteDB:
                 )
             except Exception as e:
                 log.warning("Failed to add target_project_id column: %s", e)
+
+        # --- articles: revision_notes is what the human sent the draft back
+        # with. Empty means this attempt is a first write, not a revision, so
+        # every row that existed before this column reads correctly. Appended
+        # last, per the column-order note on the CREATE TABLE above. ---
+        if "revision_notes" not in article_cols:
+            try:
+                await self._conn.execute(
+                    "ALTER TABLE article_proposals ADD COLUMN "
+                    "revision_notes TEXT NOT NULL DEFAULT ''"
+                )
+            except Exception as e:
+                log.warning("Failed to add revision_notes column: %s", e)
 
         try:
             await self._conn.execute(
@@ -1496,11 +1510,41 @@ class SqliteDB:
         """
         now_iso = datetime.now(timezone.utc).isoformat()
         async with self._conn.execute(
+            # revision_notes is cleared here because it describes THIS
+            # attempt's instructions and the attempt has just reported. Left
+            # standing, a later plain retry would silently resend a revision
+            # request the writer already acted on. A revision attempt that
+            # FAILS keeps its notes, which is what makes retrying it resend
+            # them — the one case where that is correct.
             "UPDATE article_proposals SET status='drafted', draft_ref=?, "
             "verify_output=?, writer_agent=?, verify_ok=?, verify_label=?, "
-            "written_at=? WHERE id=? AND status='writing'",
+            "written_at=?, revision_notes='' "
+            "WHERE id=? AND status='writing'",
             (draft_ref, verify_output[:8000], writer_agent,
              1 if verify_ok else 0, verify_label, now_iso, proposal_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
+    async def set_article_revision_notes(
+        self, proposal_id: int, notes: str,
+    ) -> bool:
+        """Record what a drafted article is being sent back for.
+
+        Only a 'drafted' row can be sent back: a 'writing' one is already
+        being worked on and would race the attempt in flight, and a
+        'published' one has left the building — improving that is a new
+        article's worth of decisions (does the commit get amended? does the
+        live page change under readers?) and is deliberately not this.
+
+        Returns False when the row is not 'drafted', so the caller can say so
+        instead of dispatching a session against a stale reading of the page.
+        """
+        async with self._conn.execute(
+            "UPDATE article_proposals SET revision_notes=? "
+            "WHERE id=? AND status='drafted'",
+            (notes[:8000], proposal_id),
         ) as cur:
             n = cur.rowcount
         await self._conn.commit()

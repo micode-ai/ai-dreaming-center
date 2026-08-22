@@ -513,6 +513,11 @@ async def articles_approve(request: Request, slug: str, proposal_id: int):
                 "DC_ARTICLE_LOCALES": locales or row["locales"],
                 "DC_ARTICLE_SUBJECT_DIR": project.working_dir,
                 "DC_ARTICLE_SUBJECT_SLUG": project.slug,
+                # Set only when a human sent this draft back. The writer keys
+                # off it to improve the files already named in DRAFT_REF
+                # rather than starting a second article on the same subject.
+                "DC_ARTICLE_REVISION_NOTES": row.get("revision_notes") or "",
+                "DC_ARTICLE_DRAFT_REF": row.get("draft_ref") or "",
             },
         )
     except RuntimeError as e:
@@ -604,6 +609,51 @@ async def articles_cancel(request: Request, slug: str, proposal_id: int):
     # not stay 'pending' forever.
     await db.dismiss_article_proposal_questions(proposal_id)
     return RedirectResponse(f"/p/{project.slug}/articles", status_code=303)
+
+
+@router.post("/p/{slug}/articles/{proposal_id}/revise")
+async def articles_revise(
+    request: Request, slug: str, proposal_id: int,
+    notes: str = Form(""), finding: list[str] | None = Form(None),
+):
+    """Send a drafted article back to its writer with what to fix.
+
+    The checked findings and the free-text box are one instruction set: the
+    findings are this venue's checkable rules stated in the writer's own terms,
+    the box is everything a person can see and a check cannot. Both land in
+    `revision_notes`, which the dispatch passes to the session next to the
+    draft it already produced.
+
+    Refuses an empty request. A revision that says nothing would spend a real
+    session to re-read its own output and change nothing.
+    """
+    db = request.app.state.db
+    project = request.state.project
+    # Checked before the write, not only inside the dispatch below: the id
+    # space is global, and notes must not land on another project's row even
+    # if the dispatch would refuse to act on it a moment later.
+    row = await db.get_article_proposal(proposal_id)
+    if row is None or row["project_id"] != project.id:
+        raise HTTPException(status_code=404, detail="proposal not found")
+    combined = "\n".join(
+        [*(finding or []), (notes or "").strip()],
+    ).strip()
+    if not combined:
+        raise HTTPException(
+            status_code=400,
+            detail="a revision needs at least one note — tick a finding or "
+                   "write what to change",
+        )
+    if not await db.set_article_revision_notes(proposal_id, combined):
+        raise HTTPException(
+            status_code=409,
+            detail="only a drafted article can be sent back for revision — "
+                   "this one is no longer drafted",
+        )
+    # Same dispatch as the first write, on purpose: one code path decides the
+    # venue, the writer, the session's cwd and its limits, so a revision can
+    # never resolve any of those differently than the write it revises.
+    return await articles_approve(request, slug, proposal_id)
 
 
 @router.get("/p/{slug}/articles/{proposal_id}/preview")
@@ -721,6 +771,24 @@ async def articles_preview(
         selected = next((v for v in variants if v["lang"] == wanted), None)
     if selected is None:
         selected = variants[0] if variants else (others[0] if others else None)
+    # Proposed revisions, computed from what the page just rendered rather
+    # than from the files again. Only for a drafted row: `revise` refuses any
+    # other status, and offering a form that will be refused is worse than
+    # showing none.
+    findings: list[dict] = []
+    if row["status"] == "drafted":
+        resolver = request.app.state.resolver_factory(request)
+        try:
+            min_chars = int(
+                await resolver.get(venue, "article_min_chars", 0) or 0)
+        except (TypeError, ValueError):
+            min_chars = 0
+        raw_markers = await resolver.get(venue, "article_required_markers", "")
+        markers = [m.strip() for m in re.split(r"[,\n]+", raw_markers or "")
+                   if m.strip()]
+        findings = articles.draft_findings(
+            variants, min_chars=min_chars, required_markers=markers,
+        )
     locale = request.cookies.get(
         "dc_locale", request.app.state.settings.default_locale,
     )
@@ -729,7 +797,7 @@ async def articles_preview(
         {"project": project, "row": row, "variants": variants,
          "others": others, "problems": problems, "selected": selected,
          "venue_slug": venue.slug, "article_root": str(root),
-         "locale": locale},
+         "findings": findings, "locale": locale},
     )
 
 

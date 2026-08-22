@@ -76,4 +76,35 @@
 {% else %}
   <p class="empty-state">{{ "article.preview.empty" | t(locale=locale) }}</p>
 {% endif %}
+
+{% if row.status == 'drafted' %}
+<section class="card mt-6">
+  <h3 class="text-sm strong mb-2">{{ "article.revise.title" | t(locale=locale) }}</h3>
+  <p class="text-xs faint mb-3">{{ "article.revise.hint" | t(locale=locale) }}</p>
+  <form method="post" action="/p/{{ project.slug }}/articles/{{ row.id }}/revise"
+        class="flex flex-col gap-2">
+    {% for f in findings %}
+      <label class="text-xs flex items-start gap-2">
+        <input type="checkbox" name="finding" value="{{ f.note }}" checked>
+        <span>
+          {% if f.kind == 'short' %}
+            {{ "article.revise.short" | t(locale=locale, lang=f.lang, actual=f.actual, expected=f.expected) }}
+          {% elif f.kind == 'marker' %}
+            {{ "article.revise.marker" | t(locale=locale, marker=f.marker, langs=f.langs | join(', ')) }}
+          {% endif %}
+        </span>
+      </label>
+    {% endfor %}
+    {% if not findings %}
+      <p class="text-xs faint">{{ "article.revise.no_findings" | t(locale=locale) }}</p>
+    {% endif %}
+    <textarea name="notes" rows="3"
+              placeholder="{{ 'article.revise.placeholder' | t(locale=locale) }}"
+              class="rounded px-2 py-1 bg-elevated text-sm"></textarea>
+    <div>
+      <button class="btn btn-sm btn-primary">{{ "article.revise.submit" | t(locale=locale) }}</button>
+    </div>
+  </form>
+</section>
+{% endif %}
 {% endblock %}
