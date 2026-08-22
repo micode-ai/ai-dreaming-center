@@ -1,0 +1,80 @@
+{% extends "_project_layout.html" %}
+{% set active = 'creatives' %}
+{% block project_content %}
+<header class="mb-4 flex items-baseline gap-3 flex-wrap">
+  <h2 class="text-lg font-semibold strong">{{ "creative.title" | t(locale=locale) }}</h2>
+  <span class="text-xs faint">{{ total }} {{ "creative.total" | t(locale=locale) }}</span>
+  <span class="text-xs faint">
+    {{ "creative.agent" | t(locale=locale) }}:
+    {% if agent == 'self' %}{{ "creative.agent.self" | t(locale=locale) }}{% else %}<span class="font-mono">{{ agent }}</span>{% endif %}
+  </span>
+  <form method="post" action="/p/{{ project.slug }}/creatives/scan" class="ml-auto inline">
+    <button class="btn btn-sm btn-primary" {% if scan_running %}disabled{% endif %}>
+      {{ "creative.btn.scan" | t(locale=locale) }}
+    </button>
+  </form>
+</header>
+
+{% if not creative_dir %}
+<div class="mb-4 banner banner-warn">
+  <div class="banner__body">
+    <p class="banner__title">{{ "creative.no_dir.title" | t(locale=locale) }}</p>
+    <p class="text-sm">{{ "creative.no_dir.body" | t(locale=locale) }}
+      <a class="underline" href="/p/{{ project.slug }}/settings">{{ "creative.no_dir.settings" | t(locale=locale) }}</a>.
+    </p>
+  </div>
+</div>
+{% else %}
+<p class="text-xs faint mb-4">
+  <span class="font-mono">{{ creative_dir }}</span>
+  {% if formats %} &middot; {{ formats | join(', ') }}{% endif %}
+  {% if locales_cfg %} &middot; {{ locales_cfg | join(', ') }}{% endif %}
+</p>
+{% endif %}
+
+{% if capped %}
+<p class="text-xs faint mb-4">{{ "creative.capped" | t(locale=locale, shown=shown, total=total) }}</p>
+{% endif %}
+
+<details class="card mb-4">
+  <summary class="text-sm cursor-pointer strong">{{ "creative.add.title" | t(locale=locale) }}</summary>
+  <form method="post" action="/p/{{ project.slug }}/creatives/add" class="mt-3 flex flex-col gap-2">
+    <input type="text" name="title" required
+           placeholder="{{ 'creative.add.topic' | t(locale=locale) }}"
+           class="rounded px-2 py-1 bg-elevated text-sm">
+    <textarea name="angle" rows="3"
+              placeholder="{{ 'creative.add.prompt' | t(locale=locale) }}"
+              class="rounded px-2 py-1 bg-elevated text-sm"></textarea>
+    <div class="flex items-center gap-2 text-xs flex-wrap">
+      <input type="text" name="formats"
+             placeholder="{{ 'creative.add.formats' | t(locale=locale) }}"
+             class="rounded px-2 py-1 bg-elevated">
+      <input type="text" name="locales"
+             placeholder="{{ 'creative.add.locales' | t(locale=locale) }}"
+             class="rounded px-2 py-1 bg-elevated">
+      <label>{{ "creative.venue" | t(locale=locale) }}</label>
+      <select name="venue" class="rounded px-2 py-1 bg-elevated">
+        <option value="">{{ "creative.venue.default" | t(locale=locale) }}</option>
+        {% for p in projects %}<option value="{{ p.slug }}">{{ p.label }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-sm btn-primary">{{ "creative.add.submit" | t(locale=locale) }}</button>
+    </div>
+  </form>
+</details>
+
+{% if groups %}
+  {% for status, items in groups %}
+    <section class="mb-6">
+      <h3 class="text-sm strong mb-2">
+        {% if status in ('proposed','approved','making','drafted','published','failed','rejected') %}
+          {{ ("creative.status." ~ status) | t(locale=locale) }}
+        {% else %}{{ status }}{% endif %}
+        <span class="faint">({{ items | length }})</span>
+      </h3>
+      {% for c in items %}{% include "_creative_card.html" %}{% endfor %}
+    </section>
+  {% endfor %}
+{% else %}
+  <p class="empty-state">{{ "creative.empty" | t(locale=locale) }}</p>
+{% endif %}
+{% endblock %}

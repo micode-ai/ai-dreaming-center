@@ -104,6 +104,28 @@ class AppSettings(BaseSettings):
     article_timeout_minutes: int = 120
     article_venue_project: str = ""
 
+    # === Creatives — promotional content through the article pipeline's loop.
+    # All empty by default: a project that never sets creative_dir has the
+    # feature off, and every route refuses with a message naming the setting
+    # rather than dispatching a paid session into a directory that isn't there.
+    # Spec: docs/superpowers/specs/2026-08-22-creative-pipeline-design.md
+    creative_dir: str = ""
+    creative_agent: str = ""
+    # Format ids the venue actually produces. The center knows the declared
+    # pixel size of each (see creatives.FORMAT_SIZES) and nothing else about
+    # them — how they are built is creative_verify_cmd's business.
+    creative_formats: str = "post-4x5,story,reel-4x5,reel"
+    creative_locales: str = ""
+    # Run by the maker session in the campaign's own directory. Reels take
+    # minutes and ffmpeg; that is exactly why the build lives here and never
+    # inside a publish request.
+    creative_verify_cmd: str = ""
+    creative_publish_mode: str = "off"
+    creative_publish_extra_paths: str = ""
+    creative_venue_project: str = ""
+    creative_max_turns: int = 300
+    creative_timeout_minutes: int = 120
+
     # === Scheduling — nightly ===
     cron_expression: str = "0 2 * * *"
     cron_enabled: bool = True
@@ -220,6 +242,12 @@ SETTINGS_GROUPS: list[tuple[str, list[str]]] = [
         "article_min_chars", "article_required_markers",
         "article_max_turns", "article_timeout_minutes",
         "article_venue_project",
+    ]),
+    ("Creatives", [
+        "creative_dir", "creative_agent", "creative_formats",
+        "creative_locales", "creative_verify_cmd", "creative_publish_mode",
+        "creative_publish_extra_paths", "creative_venue_project",
+        "creative_max_turns", "creative_timeout_minutes",
     ]),
     ("Scheduling — nightly", [
         "cron_expression", "cron_enabled", "agents_per_night",

@@ -442,6 +442,31 @@ class ArticleWrittenIn(BaseModel):
     error_message: str = ""
 
 
+class CreativeIngestIn(BaseModel):
+    title: str
+    slug_hint: str
+    evidence: str
+    angle: str = ""
+    source: str = "project_scan"
+    source_ref: str = ""
+    formats: str = ""
+    locales: str = ""
+    tags: list[str] = []
+    related_product: str = ""
+
+
+class CreativeMadeIn(BaseModel):
+    # draft_ref defaults to "" for the same reason ArticleWrittenIn's does:
+    # the documented failure report carries only error_message, and a required
+    # field here would 422 an honest failure before the handler ran. The
+    # success branch below still demands it.
+    draft_ref: str = ""
+    verify_output: str = ""
+    maker_agent: str = ""
+    verify_ok: bool = False
+    error_message: str = ""
+
+
 _ARTICLE_SOURCES = {"project_scan", "radar", "center", "manual"}
 
 
@@ -482,6 +507,127 @@ async def articles_ingest(request: Request, slug: str, payload: ArticleIngestIn)
             status_code=200,
         )
     return JSONResponse({"id": new_id, "duplicate": False}, status_code=201)
+
+
+@router.post("/p/{slug}/creatives/ingest")
+async def creatives_ingest(request: Request, slug: str, payload: CreativeIngestIn):
+    """Called by /creative-ideas-scan running inside the project.
+
+    Same evidence rule as articles, for the same reason: a promotional claim
+    nobody can check is worse than no claim, and this is where the rule holds
+    rather than in the prompt that is supposed to follow it.
+    """
+    project = await _resolve_project(request, slug)
+    title = payload.title.strip()
+    slug_hint = payload.slug_hint.strip()
+    evidence = payload.evidence.strip()
+    if not title or not slug_hint:
+        raise HTTPException(status_code=422, detail="title and slug_hint required")
+    if not evidence:
+        raise HTTPException(
+            status_code=400,
+            detail="evidence required: state the fact this campaign traces to",
+        )
+    if payload.source not in _ARTICLE_SOURCES:
+        raise HTTPException(status_code=422, detail=f"bad source: {payload.source}")
+    db = request.app.state.db
+    new_id = await db.add_creative_proposal(
+        project.id, source=payload.source,
+        source_ref=payload.source_ref.strip(), evidence=evidence, title=title,
+        angle=payload.angle.strip(), slug_hint=slug_hint,
+        formats=payload.formats.strip(), locales=payload.locales.strip(),
+        tags_json=json.dumps(payload.tags, ensure_ascii=False),
+        related_product=payload.related_product.strip(),
+    )
+    if new_id is None:
+        existing = await db.find_creative_proposal_by_slug(project.id, slug_hint)
+        return JSONResponse(
+            {"id": existing["id"] if existing else None, "duplicate": True},
+            status_code=200,
+        )
+    return JSONResponse({"id": new_id, "duplicate": False}, status_code=201)
+
+
+@router.get("/p/{slug}/creatives/list")
+async def creatives_list(request: Request, slug: str):
+    """Called by /creative-ideas-scan to skip campaigns already proposed."""
+    project = await _resolve_project(request, slug)
+    rows = await request.app.state.db.list_creative_proposals(
+        project_id=project.id)
+    return JSONResponse([
+        {"id": r["id"], "slug_hint": r["slug_hint"], "title": r["title"],
+         "status": r["status"]}
+        for r in rows
+    ])
+
+
+@router.get("/creatives/{proposal_id}")
+async def creative_detail(request: Request, proposal_id: int):
+    """Called by /make-creative to read the brief and any revision notes."""
+    row = await request.app.state.db.get_creative_proposal(proposal_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="proposal not found")
+    return JSONResponse(row)
+
+
+@router.post("/creatives/{proposal_id}/made")
+async def creative_made(
+    request: Request, proposal_id: int, payload: CreativeMadeIn,
+):
+    """Called by /make-creative when the renders exist (or it failed)."""
+    from dreaming.services import creatives as creatives_svc
+    db = request.app.state.db
+    row = await db.get_creative_proposal(proposal_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="proposal not found")
+    if row["status"] != "making":
+        raise HTTPException(
+            status_code=409,
+            detail=f"proposal {proposal_id} is '{row['status']}', not 'making'",
+        )
+    if payload.error_message.strip():
+        ok = await db.set_creative_proposal_status(
+            proposal_id, "failed",
+            error_message=payload.error_message.strip()[:2000],
+            expect_statuses=("making",),
+        )
+        if not ok:
+            raise HTTPException(
+                status_code=409,
+                detail=f"proposal {proposal_id} changed status before the "
+                       f"failure could be recorded",
+            )
+        return JSONResponse({"status": "failed"})
+    if not payload.draft_ref.strip():
+        raise HTTPException(
+            status_code=422, detail="draft_ref required on success")
+    # Read from the VENUE, like every other creative setting: the row's pinned
+    # target_project_id carries the venue the dispatch resolved, and a NULL
+    # only ever means a row that predates the pin.
+    subject = await request.app.state.projects.get_by_id(row["project_id"])
+    venue = subject
+    target_id = row.get("target_project_id")
+    if target_id is not None:
+        pinned = await request.app.state.projects.get_by_id(target_id)
+        if pinned is not None:
+            venue = pinned
+    resolver = request.app.state.resolver_factory(request)
+    verify_cmd = await resolver.get(
+        venue, "creative_verify_cmd", "") if venue else ""
+    verify_label = creatives_svc.publish_label(payload.verify_ok, verify_cmd)
+    ok = await db.mark_creative_made(
+        proposal_id, draft_ref=payload.draft_ref.strip(),
+        verify_output=payload.verify_output,
+        maker_agent=payload.maker_agent.strip() or "self",
+        verify_ok=payload.verify_ok, verify_label=verify_label,
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=409,
+            detail=f"proposal {proposal_id} changed status before the "
+                   f"renders could be recorded",
+        )
+    return JSONResponse({"status": "drafted", "verify_label": verify_label})
 
 
 @router.get("/p/{slug}/articles/list")

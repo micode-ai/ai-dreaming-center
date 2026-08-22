@@ -30,6 +30,7 @@ from dreaming.routes.project_review import router as review_router
 from dreaming.routes.project_bulk import router as bulk_router
 from dreaming.routes.project_ai_radar import router as project_ai_radar_router
 from dreaming.routes.project_articles import router as articles_router
+from dreaming.routes.project_creatives import router as creatives_router
 
 
 router = APIRouter()
@@ -55,6 +56,7 @@ router.include_router(contracts_router)
 router.include_router(sidecar_router)
 router.include_router(wiki_health_router)
 router.include_router(loops_templates_router)
+router.include_router(creatives_router)
 router.include_router(help_router)
 router.include_router(review_router)
 router.include_router(bulk_router)
