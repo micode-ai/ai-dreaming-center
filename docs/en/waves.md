@@ -20,6 +20,7 @@ History of AI Dreaming Center development: what was done in each wave, the git t
 - [Wave A — Article pipeline](#wave-a--article-pipeline)
 - [Wave B — Article cross-project](#wave-b--article-cross-project)
 - [Wave C — Article committed build output](#wave-c--article-committed-build-output)
+- [Wave E — Creative pipeline](#wave-e--creative-pipeline)
 - [Not implemented yet](#not-implemented-yet)
 
 ## Wave 0 — Foundation
@@ -460,6 +461,41 @@ The asymmetry is the point, not an oversight: these paths **may** name a directo
 - **A live end-to-end — write, publish, appear on the site — has still never happened in any wave.**
 - A huge accidental path (`.`) in the setting passes containment and existence and will commit the working tree. Mitigated only by it being an operator setting shown back on the settings page — the same trust level as `article_publish_mode`.
 - The starter-kit installer cannot target an article root inside a nested repository (worked around by hand for `mi-code-ai`). That gap belongs to the installer, not to publishing.
+
+## Wave E — Creative pipeline
+
+**Branch**: `feature/creative-pipeline`, range `5cd74f0`..`6de80c8` — 2 commits, 17 files, +2691/−2.
+
+**Spec**: [`docs/superpowers/specs/2026-08-22-creative-pipeline-design.md`](../superpowers/specs/2026-08-22-creative-pipeline-design.md)
+**Sibling of**: [Wave A — Article pipeline](#wave-a--article-pipeline), [Wave B](#wave-b--article-cross-project), [Wave C](#wave-c--article-committed-build-output)
+**Issue**: [#37](https://github.com/micode-ai/ai-dreaming-center/issues/37)
+
+**Goal**: promotional creatives run the loop articles run — proposed by the center or by a human, approved, built by the venue's own agent, reviewed, sent back with notes, published.
+
+**Problem**: three projects already make promotional content by hand and the center had no part in it. Their layouts differ: `accounting-ai-agent` has 77 files — an HTML template per format per locale, `assets/`, `build.mjs`, `build-reel.mjs`, `renders/pl/`, copy in `creatives/captions/`; `ai-budget-assistant` has 249 — source screenshots per campaign, then `renders/`, copy in `docs/marketing/copy/`; the landing has 310 — `<slug>/src/` and `<slug>/renders/`. The same three things (rendered media, post copy, a plan) under three shapes — the lesson the article waves taught: **the venue owns the shape**, and the center must learn none of it.
+
+**Decisions taken before designing** (with the operator): publish means commit, not posting through social APIs — that is the one irreversible action here and it needs per-network credentials; video is in from the first wave because reels are how this content is consumed; a human attaches source material after the idea step, which is already how `ai-budget-assistant` works.
+
+**What landed**:
+
+- Its own `creative_proposals` table rather than a `kind` column on articles: a creative carries formats, attachments and binary outputs an article does not, and four nullable columns on every article row would make every article query explain itself. The **discipline** is reused, not the schema: evidence enforced in the DB method, subject vs venue, path-scoped `git add` without `-f`, `revision_notes` cleared by the write-back, one dispatch path shared by the first build and every revision. Generic helpers (git-root derivation, publish gate, mode normalisation) are imported from `articles`, not copied.
+- The campaign slug is fixed when the proposal is created rather than chosen by the maker: attachments land in `<creative_dir>/<slug>/src/` **before** any session runs, so the directory name has to exist before the maker does.
+- Uploads assume a careless caller and refuse either way: only the basename survives (a path-shaped name is **reduced**, not rejected — a browser sending one is ordinary), the name is normalised to `[a-z0-9._-]`, the extension is allow-listed, the size is capped while streaming, the destination is fixed, and the path is then checked by the publish validator — so this route cannot write anywhere publishing could not commit from.
+- **A media route**, which articles have no equivalent for: an ad cannot be approved unless it is seen. Three gates — the path must be one the row itself reported in `draft_ref`, it must pass the publish validator, and its type must be one this pipeline produces. The first is what makes the parameter select rather than open.
+- Revision checks computable without knowing the venue's toolchain: a format that produced nothing, a render whose pixels do not match its format's declared size (read from the PNG/JPEG/GIF header, no image library), a locale with no renders, no post copy. A video's size is never guessed, only its presence checked.
+- Starter-kit `creative-ideas-scan.md` and `make-creative.md`, the latter with a revision section modelled on the writer's 1a.
+
+**Found along the way**: the agent autodetect first picked `blog-writer` for the landing page — the `writer` hint was too loose, and reel production would have gone to a prose agent. The hint is gone; a venue with nothing marketing-shaped gets `self` and the session does the work itself, which is honester than the nearest-sounding name.
+
+**Acceptance**: [`scripts/smoke_creatives.py`](../../scripts/smoke_creatives.py) — 13 checks, exit 0, including seven hostile filenames neutralised, an archive and an oversized file refused with nothing left on disk, attach refused while making, PNG dimensions read from headers, and the media route refusing an unreported path, a non-media type and traversal. `smoke_articles.py` (107 checks), `smoke_ai_radar.py`, `check_i18n.py`, `check_css_tokens.py` all green; `python -c "import dreaming.main"` exits 0. The page returns 200 on four projects, including the one whose creatives directory sits in a nested repository (`test` → `micode-landing-page`) and the one with nothing configured, where it shows the `creative_dir` banner instead.
+
+**Configured**: `creative_dir` on three venues (`accounting-ai-agent`, `ai-budget-assistant`, and `test` pointing into the nested repository), locales on two. `creative_verify_cmd` deliberately left empty: each accounting campaign has its own `build.mjs`, and inventing a build command on the project's behalf is worse than the honest "no build check" label.
+
+**Deferred**:
+
+- Posting to social networks through platform APIs — the operator's choice, not a gap.
+- A cross-project `/creatives` queue and scheduled scans — next, in the same order the article waves took.
+- No live build has run: the pipeline is built and checked, but no campaign has been through it yet. The same place the article waves started.
 
 ## Not implemented yet
 

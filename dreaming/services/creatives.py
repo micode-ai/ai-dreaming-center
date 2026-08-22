@@ -36,13 +36,21 @@ FORMAT_SIZES: dict[str, tuple[int, int]] = {
 # outside this map is served at all: the route is reading files from a
 # directory an operator configured, so the answer to "what else could be in
 # there" must be "it does not matter".
+#
+# No `.svg`, deliberately. An SVG is a script container, and this route serves
+# from the center's own origin with the operator's cookies attached — a
+# `draft_ref` is self-reported by a Claude session over unauthenticated
+# localhost HTTP, so a session that wrote an SVG could get script executed in
+# the center simply by reporting it. UPLOAD_EXTS below excluded svg for exactly
+# this reason and serving it here would have undone that. A social render is
+# png/jpg/mp4 anyway; an svg in a campaign shows up in the preview's
+# "problems" list instead of rendering, which is the honest outcome.
 MEDIA_TYPES: dict[str, str] = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
     ".gif": "image/gif",
     ".webp": "image/webp",
-    ".svg": "image/svg+xml",
     ".mp4": "video/mp4",
     ".webm": "video/webm",
     ".mov": "video/quicktime",

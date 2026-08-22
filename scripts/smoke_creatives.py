@@ -418,6 +418,29 @@ async def main() -> int:  # noqa: C901
                 if r.status_code == 200:
                     fail("the media route served a traversal path")
                     return 1
+                # An SVG is a script container and this route answers from the
+                # center's own origin with the operator's cookies. draft_ref is
+                # self-reported by a session, so a reported .svg must not be
+                # servable even though it is nominally an image.
+                if creatives.media_type("evil.svg") is not None:
+                    fail("svg is servable as media — a session that wrote one "
+                         "could get script executed in the center's origin")
+                    return 1
+                (cdir / "renders" / "evil.svg").write_text(
+                    "<svg xmlns='http://www.w3.org/2000/svg'></svg>",
+                    encoding="utf-8")
+                await app.state.db.set_creative_proposal_status(
+                    cid, "making", expect_statuses=("drafted",))
+                await app.state.db.mark_creative_made(
+                    cid,
+                    draft_ref=(f"{base}/renders/voice-post-4x5-pl.png, "
+                               f"{base}/renders/evil.svg, {base}/copy-pl.md"),
+                    verify_output="", maker_agent="self", verify_ok=True)
+                r = client.get(url, params={
+                    "path": f"{base}/renders/evil.svg"})
+                if r.status_code == 200:
+                    fail("the media route served a reported .svg")
+                    return 1
                 print("ok: the media route serves only reported media, and "
                       "refuses an unreported path, a non-media type and "
                       "traversal")
