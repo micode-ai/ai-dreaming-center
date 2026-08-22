@@ -8,6 +8,7 @@ normalisation are about pipelines, not about prose, and two copies would drift.
 Spec: docs/superpowers/specs/2026-08-22-creative-pipeline-design.md
 """
 from __future__ import annotations
+import hashlib
 import re
 import struct
 from pathlib import Path
@@ -307,6 +308,49 @@ def resolve_agent(working_dir: str | Path, configured: str = "") -> str:
             if hint in name.lower():
                 return name
     return "self"
+
+
+# Cyrillic -> Latin, enough for the locales this center actually runs (ru, ua,
+# be). Multi-character results are intentional: `щ` -> `shch` reads back, and a
+# campaign slug is a directory name a human will be looking at.
+_TRANSLIT = {
+    "а": "a", "б": "b", "в": "v", "г": "g", "ґ": "g", "д": "d", "е": "e",
+    "ё": "e", "є": "ie", "ж": "zh", "з": "z", "и": "i", "і": "i", "ї": "i",
+    "й": "i", "к": "k", "л": "l", "м": "m", "н": "n", "о": "o", "п": "p",
+    "р": "r", "с": "s", "т": "t", "у": "u", "ў": "u", "ф": "f", "х": "kh",
+    "ц": "ts", "ч": "ch", "ш": "sh", "щ": "shch", "ъ": "", "ы": "y",
+    "ь": "", "э": "e", "ю": "iu", "я": "ia", "'": "", "’": "",
+}
+_SLUG_KEEP = re.compile(r"[^a-z0-9]+")
+
+
+def campaign_slug(title: str, *, max_words: int = 6) -> str:
+    """A campaign's directory name, derived from its title. Never empty.
+
+    This is deliberately NOT `articles.slugify`. That one documents dropping
+    Cyrillic on purpose, because an article's `slug_hint` is only a seed and
+    the writer picks the published slug afterwards. A campaign slug is not a
+    seed: it is the directory attachments land in, before any session runs, and
+    it never changes. An empty one would put a human's footage in the shared
+    creatives root and make the next same-shaped title collide with it on the
+    unique index — silently, as a "duplicate" it never was.
+
+    So Cyrillic is transliterated rather than dropped (`Дашборды и отчёты` ->
+    `dashbordy-i-otchety`, a name an operator can recognise in a directory
+    listing), and a title that still leaves nothing usable — punctuation only,
+    emoji only, a script not in the table — falls back to a digest of the
+    title, which keeps identical titles colliding and distinct ones apart.
+    """
+    low = (title or "").strip().lower()
+    latin = "".join(_TRANSLIT.get(ch, ch) for ch in low)
+    words = [w for w in _SLUG_KEEP.sub(" ", latin).split() if w]
+    if not words:
+        digest = hashlib.sha1(low.encode("utf-8")).hexdigest()[:10]
+        return f"campaign-{digest}"
+    if len(words) > max_words:
+        digest = hashlib.sha1(low.encode("utf-8")).hexdigest()[:6]
+        return "-".join(words[:max_words] + [digest])
+    return "-".join(words)
 
 
 def build_message(row: dict, label: str, *, formats: list[str] | None = None) -> str:

@@ -324,16 +324,21 @@ async def creatives_add(
     projects = await request.app.state.projects.list_all(only_enabled=True)
     target = next((p.id for p in projects if p.slug == venue.strip()), None) \
         if venue.strip() else None
+    # Computed once and reused for both the insert and the duplicate lookup:
+    # deriving it twice invites the two from drifting, and then the lookup
+    # would miss the very row the insert collided with. campaign_slug rather
+    # than articles.slugify — this becomes the campaign's directory name, so it
+    # transliterates Cyrillic instead of dropping it, and is never empty.
+    slug = creatives.campaign_slug(title)
     new_id = await db.add_creative_proposal(
         project.id, source="manual", source_ref="operator",
         evidence="proposed by the operator", title=title.strip(),
-        angle=angle.strip(), slug_hint=creatives.slugify(title),
+        angle=angle.strip(), slug_hint=slug,
         formats=formats.strip(), locales=locales.strip(),
         target_project_id=target,
     )
     row = await db.get_creative_proposal(new_id) if new_id else \
-        await db.find_creative_proposal_by_slug(
-            project.id, creatives.slugify(title))
+        await db.find_creative_proposal_by_slug(project.id, slug)
     has_files = bool(files)
     resp = RedirectResponse(f"/p/{project.slug}/creatives", status_code=303)
 

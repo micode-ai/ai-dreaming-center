@@ -228,6 +228,52 @@ async def main() -> int:  # noqa: C901
         print("ok: classify_render prefers the longest format id and invents "
               "nothing")
 
+        # A campaign slug is the directory attachments land in, before any
+        # session runs, and it never changes — so unlike an article's slug_hint
+        # (a seed the writer replaces) it must never be empty and should be
+        # readable. articles.slugify drops Cyrillic by documented design, which
+        # for an all-Russian campaign title would have put a human's footage in
+        # the shared creatives root and made the next such title collide with
+        # it on the unique index.
+        slug_cases = [
+            ("Дашборды в  eKsiegowyAI", "dashbordy-v-eksiegowyai"),
+            ("Дашборды и отчёты", "dashbordy-i-otchety"),
+            ("Щупальця і їжак", "shchupaltsia-i-izhak"),
+            ("Wykresy i raporty", "wykresy-i-raporty"),
+        ]
+        for title, want in slug_cases:
+            got = creatives.campaign_slug(title)
+            if got != want:
+                fail(f"campaign_slug({title!r}) = {got!r}, want {want!r}")
+                return 1
+        for title in ("...", "🎬", "", "   "):
+            got = creatives.campaign_slug(title)
+            if not got or "/" in got or got.startswith("-"):
+                fail(f"campaign_slug({title!r}) = {got!r} — a campaign slug is "
+                     f"a directory name and can never be empty")
+                return 1
+            if not got.startswith("campaign-"):
+                fail(f"campaign_slug({title!r}) = {got!r}; an unusable title "
+                     f"should fall back to a digest, not to a bare fragment")
+                return 1
+        if creatives.campaign_slug("...") == creatives.campaign_slug("🎬"):
+            fail("two different unusable titles produced the same slug, so the "
+                 "second campaign would swallow the first as a duplicate")
+            return 1
+        if creatives.campaign_slug("Отчёты") != creatives.campaign_slug("отчёты"):
+            fail("the same title in different case produced different slugs, "
+                 "so dedup would stop working")
+            return 1
+        long_slug = creatives.campaign_slug(
+            "Voice entry: an expense in three seconds flat, no typing at all")
+        if len(long_slug.split("-")) != 7:
+            fail(f"a long title should truncate to six words plus a digest, "
+                 f"got {long_slug!r}")
+            return 1
+        print(f"ok: campaign_slug transliterates Cyrillic ({len(slug_cases)} "
+              f"cases), never returns empty, keeps distinct titles apart and "
+              f"case-folds the same one together")
+
         camp = tmp / "camp"
         camp.mkdir()
         (camp / "x-post-4x5-pl.png").write_bytes(png_bytes(1080, 1350))
