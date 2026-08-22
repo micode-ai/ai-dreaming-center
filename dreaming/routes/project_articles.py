@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import APIRouter, Form, HTTPException, Request
@@ -646,7 +647,16 @@ async def articles_preview(
     variants: list[dict] = []
     others: list[dict] = []
     problems: list[dict] = []
-    for rel in article_publish.split_paths(row.get("draft_ref") or ""):
+    draft_paths = article_publish.split_paths(row.get("draft_ref") or "")
+    # A venue that keeps prose as data has all its languages inside one entry
+    # of one file, so no path can name a language. The entry is found by slug:
+    # the proposal's own hint, plus every path segment of its draft, because
+    # the writer is free to pick a slug other than the hint.
+    candidate_slugs = [row.get("slug_hint") or ""]
+    for rel in draft_paths:
+        candidate_slugs.extend(re.split(r"[\\/]+", rel))
+
+    for rel in draft_paths:
         try:
             article_publish._validate_paths([rel], root)
         except article_publish.PublishError as e:
@@ -670,6 +680,27 @@ async def articles_preview(
                 or articles.locale_from_path(rel, locales)
             ),
         }
+        if not entry["lang"] and rel.lower().endswith(".json"):
+            # Before treating a data file as an unreadable blob: if it holds
+            # this article as an entry, its `body<Lang>` fields ARE the
+            # languages, and rendering them is the whole point of the page.
+            # Without this, the venue whose blog is a 780 KB JSON array showed
+            # a truncated dump and no language tabs at all.
+            data_variants, _matched = articles.data_entry_variants(
+                text, candidate_slugs,
+            )
+            if data_variants:
+                for v in data_variants:
+                    variants.append({
+                        "path": f"{rel} — {v['lang']}",
+                        "text": v["text"][:_PREVIEW_MAX_CHARS],
+                        "truncated": len(v["text"]) > _PREVIEW_MAX_CHARS,
+                        "lang": v["lang"],
+                    })
+                # The file itself stays reachable: the entry is what a reader
+                # wants, but the raw data is what a debugger wants.
+                others.append(entry)
+                continue
         (variants if entry["lang"] else others).append(entry)
 
     # Ordered by the row's own locales so the tabs read the way the article was

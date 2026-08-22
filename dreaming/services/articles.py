@@ -8,6 +8,7 @@ publish button is allowed to claim the draft was verified.
 from __future__ import annotations
 import asyncio
 import hashlib
+import json
 import re
 import shutil
 import subprocess
@@ -308,3 +309,60 @@ def locale_from_path(path: str, locales: list[str]) -> str:
         if seg.strip().lower() in wanted:
             return seg.strip().lower()
     return ""
+
+# Some venues keep prose as data rather than as files: micode-landing-page
+# stores each article as one object with titlePl/bodyPl, titleEn/bodyEn and so
+# on, all inside a single JSON array. A per-file language tab can never work
+# there — every language lives in the same file — so the languages are read out
+# of the matching entry instead.
+_DATA_FIELD_RE = re.compile(r"^(body|title|summary)([A-Z][a-z]{1,3})$")
+
+
+def data_entry_variants(
+    text: str, candidate_slugs: list[str],
+) -> tuple[list[dict], str]:
+    """Per-language variants held as fields of one entry in a JSON data file.
+
+    `candidate_slugs` are the slugs this proposal could be — its `slug_hint`
+    plus every path segment of its own `draft_ref`, because the writer is free
+    to pick a slug other than the hint and the entry has to be found either
+    way.
+
+    Returns `(variants, matched_slug)`; an empty list when the text is not a
+    JSON array of objects, when no entry matches, or when the matching entry
+    carries no `body<Lang>` field. Never raises: a data file that does not fit
+    this shape simply has no variants, and the caller falls back to showing
+    the file itself.
+    """
+    try:
+        data = json.loads(text)
+    except (ValueError, TypeError):
+        return [], ""
+    if not isinstance(data, list):
+        return [], ""
+    wanted = {s.strip().lower() for s in candidate_slugs if s and s.strip()}
+    entry = next(
+        (e for e in data
+         if isinstance(e, dict) and str(e.get("slug", "")).lower() in wanted),
+        None,
+    )
+    if entry is None:
+        return [], ""
+    by_lang: dict[str, dict[str, str]] = {}
+    for key, value in entry.items():
+        m = _DATA_FIELD_RE.match(key)
+        if m and isinstance(value, str) and value.strip():
+            by_lang.setdefault(m.group(2).lower(), {})[m.group(1)] = value
+    variants = []
+    for lang, parts in by_lang.items():
+        if "body" not in parts:
+            # A title without a body is a stub, not a language this article
+            # was written in — claiming a tab for it would promise a read
+            # that has nothing to show.
+            continue
+        title, summary = parts.get("title"), parts.get("summary")
+        head = f"# {title}\n\n" if title else ""
+        lede = f"_{summary}_\n\n" if summary else ""
+        variants.append({"lang": lang, "text": head + lede + parts["body"]})
+    return variants, str(entry.get("slug", ""))
+

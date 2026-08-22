@@ -3099,6 +3099,50 @@ async def main() -> int:
         print(f"ok: locale_from_path only names locales the row declared "
               f"({len(path_cases)} cases)")
 
+        # A venue can keep prose as data instead of files. Then every language
+        # lives in the same file and no path can name one, so the languages
+        # have to come out of the matching entry — without this the venue whose
+        # blog is a 780 KB JSON array previewed as a truncated dump with no
+        # tabs at all.
+        from dreaming.services.articles import data_entry_variants
+        data_doc = json.dumps([
+            {"slug": "other", "titlePl": "Inny", "bodyPl": "inne"},
+            {"slug": "mine", "titlePl": "Tytul", "summaryPl": "Lede",
+             "bodyPl": "Tresc", "titleEn": "Title", "bodyEn": "Body",
+             "titleRu": "Zagl", "bodyRu": "Tekst",
+             # must be ignored: not a language field of the article body
+             "metaTitleEn": "ignored", "tags": ["a"], "date": "2026-08-22"},
+        ])
+        got, matched = data_entry_variants(data_doc, ["mine"])
+        if sorted(v["lang"] for v in got) != ["en", "pl", "ru"]:
+            fail(f"data_entry_variants found {[v['lang'] for v in got]}, "
+                 f"want en/pl/ru")
+            return 1
+        if matched != "mine":
+            fail(f"data_entry_variants matched {matched!r}, want 'mine'")
+            return 1
+        pl = next(v for v in got if v["lang"] == "pl")
+        if "Tytul" not in pl["text"] or "Tresc" not in pl["text"]:
+            fail("the pl variant does not carry its own title and body")
+            return 1
+        if "Inny" in pl["text"] or "inne" in pl["text"]:
+            fail("data_entry_variants leaked another entry's content")
+            return 1
+        for label, doc, slugs in [
+            ("no matching slug", data_doc, ["absent"]),
+            ("a JSON object, not an array", json.dumps({"a": 1}), ["mine"]),
+            ("not JSON at all", "# markdown", ["mine"]),
+            ("an entry with a title but no body",
+             json.dumps([{"slug": "mine", "titleDe": "stub"}]), ["mine"]),
+        ]:
+            v, _ = data_entry_variants(doc, slugs)
+            if v:
+                fail(f"data_entry_variants invented variants for {label}")
+                return 1
+        print("ok: data_entry_variants reads languages out of the matching "
+              "entry, ignores meta fields and other entries, and claims "
+              "nothing for 4 shapes that do not fit")
+
         prev_dir = Path(tempfile.mkdtemp(prefix="dc_smoke_preview_"))
         (prev_dir / "blog" / "en").mkdir(parents=True)
         (prev_dir / "blog" / "ru").mkdir(parents=True)
@@ -3283,6 +3327,56 @@ async def main() -> int:
                     return 1
                 print("ok: a proposal that never ran renders no log link, and "
                       "the row is on the page so the check is real")
+
+                # End to end for a data-driven venue: the page must show
+                # language tabs read out of the JSON entry, and still keep the
+                # raw file reachable for whoever is debugging.
+                (prev_dir / "blog" / "data.json").write_text(
+                    json.dumps([{
+                        "slug": "data-venue-piece",
+                        "titlePl": "Polski tytul", "bodyPl": "Polska tresc",
+                        "titleEn": "English title", "bodyEn": "English body",
+                    }]), encoding="utf-8")
+                pid_data = await app.state.db.add_article_proposal(
+                    multi.id, source="manual", source_ref="smoke",
+                    evidence="checked by hand", title="Data venue",
+                    angle="", slug_hint="data-venue-piece", locales="pl,en",
+                )
+                await app.state.db.set_article_proposal_status(
+                    pid_data, "approved")
+                await app.state.db.start_article_attempt(
+                    pid_data, session_id="s3")
+                await app.state.db.mark_article_written(
+                    pid_data, draft_ref="blog/data.json", verify_output="",
+                    writer_agent="self", verify_ok=True,
+                )
+                rd = page_client.get(
+                    f"/p/smoke-preview-multi/articles/{pid_data}/preview")
+                if rd.status_code != 200:
+                    fail(f"data-venue preview: {rd.status_code}")
+                    return 1
+                for loc in ("pl", "en"):
+                    if f"preview?lang={loc}" not in rd.text:
+                        fail(f"data-venue preview has no {loc} tab — the "
+                             f"languages are fields of the entry, so a "
+                             f"per-file tab can never appear")
+                        return 1
+                if "Polska tresc" not in rd.text:
+                    fail("data-venue preview did not render the entry's own "
+                         "body for the default language")
+                    return 1
+                if "preview?file=blog/data.json" not in rd.text:
+                    fail("data-venue preview dropped the raw file instead of "
+                         "keeping it reachable")
+                    return 1
+                rd_en = page_client.get(
+                    f"/p/smoke-preview-multi/articles/{pid_data}/preview?lang=en")
+                if "English body" not in rd_en.text:
+                    fail("?lang=en did not switch to the entry's English body")
+                    return 1
+                print("ok: a data-driven venue previews per language from the "
+                      "JSON entry, switches languages, and keeps the raw file "
+                      "reachable")
         finally:
             if prior_db_path_env is None:
                 os.environ.pop("DC_DB_PATH", None)
