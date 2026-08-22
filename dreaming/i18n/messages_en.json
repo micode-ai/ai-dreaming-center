@@ -696,5 +696,9 @@
   "creative.flash.duplicate": "That campaign already exists — no new row created.",
   "creative.flash.attached": "Material attached.",
   "creative.flash.making": "The maker is running.",
-  "creative.flash.published": "Campaign committed."
+  "creative.flash.published": "Campaign committed.",
+  "creative.add.files": "Source material (several is fine)",
+  "creative.flash.added_with_files": "Campaign added, {n} file(s) attached.",
+  "creative.flash.added_no_files": "Campaign added, but the files were refused: {reason}",
+  "creative.flash.attach_busy": "A campaign with this topic already exists and is '{status}' — the files were not accepted, so as not to disturb a build in progress."
 }

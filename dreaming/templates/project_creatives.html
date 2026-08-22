@@ -38,13 +38,21 @@
 
 <details class="card mb-4">
   <summary class="text-sm cursor-pointer strong">{{ "creative.add.title" | t(locale=locale) }}</summary>
-  <form method="post" action="/p/{{ project.slug }}/creatives/add" class="mt-3 flex flex-col gap-2">
+  {# enctype matters: the file input below is the point of adding here rather
+     than afterwards — the prompt and the footage reach the maker together. #}
+  <form method="post" action="/p/{{ project.slug }}/creatives/add"
+        enctype="multipart/form-data" class="mt-3 flex flex-col gap-2">
     <input type="text" name="title" required
            placeholder="{{ 'creative.add.topic' | t(locale=locale) }}"
            class="rounded px-2 py-1 bg-elevated text-sm">
     <textarea name="angle" rows="3"
               placeholder="{{ 'creative.add.prompt' | t(locale=locale) }}"
               class="rounded px-2 py-1 bg-elevated text-sm"></textarea>
+    <label class="text-xs faint">{{ "creative.add.files" | t(locale=locale) }}
+      <input type="file" name="files" multiple
+             accept=".png,.jpg,.jpeg,.gif,.webp,.mp4,.mov,.webm"
+             class="block mt-1 text-xs">
+    </label>
     <div class="flex items-center gap-2 text-xs flex-wrap">
       <input type="text" name="formats"
              placeholder="{{ 'creative.add.formats' | t(locale=locale) }}"

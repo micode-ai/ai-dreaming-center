@@ -453,6 +453,79 @@ async def main() -> int:  # noqa: C901
                     return 1
                 print("ok: an empty revision is refused rather than spending a "
                       "session to change nothing")
+
+                # ---- adding a campaign with its material in one step -------
+                # The whole point of attaching on the add form: an operator's
+                # campaign usually exists BECAUSE they have footage, and a
+                # second step to hand it over is the step that gets skipped.
+                r = client.post(
+                    "/p/cr-page/creatives/add",
+                    data={"title": "Receipt scan in one tap", "angle": "one take"},
+                    files=[("files", ("Clip 1.MP4", b"\x00" * 64, "video/mp4")),
+                           ("files", ("frame.png", png_bytes(8, 8), "image/png"))],
+                )
+                if r.status_code not in (200, 303):
+                    fail(f"add with files: {r.status_code} {r.text[:200]}")
+                    return 1
+                added = await app.state.db.find_creative_proposal_by_slug(
+                    proj.id, "receipt-scan-in-one-tap")
+                if added is None:
+                    fail("adding with files did not create the campaign")
+                    return 1
+                src = (repo / "docs" / "marketing" / "creatives"
+                       / "receipt-scan-in-one-tap" / "src")
+                landed_names = sorted(p.name for p in src.glob("*")) \
+                    if src.exists() else []
+                if landed_names != ["clip-1.mp4", "frame.png"]:
+                    fail(f"the add form's files did not land normalised in "
+                         f"{src}: {landed_names}")
+                    return 1
+                print("ok: adding a campaign attaches its material in the same "
+                      "step, with the same normalisation")
+
+                # A refused file must not leave the operator guessing whether
+                # the campaign was created: it is, and the flash says why the
+                # files were not.
+                r = client.post(
+                    "/p/cr-page/creatives/add",
+                    data={"title": "Archive attempt"},
+                    files=[("files", ("payload.zip", b"PK\x03\x04",
+                                      "application/zip"))],
+                )
+                if r.status_code not in (200, 303):
+                    fail(f"add with a refused file returned {r.status_code}; it "
+                         f"should redirect and explain, since the campaign was "
+                         f"created either way")
+                    return 1
+                bad = await app.state.db.find_creative_proposal_by_slug(
+                    proj.id, "archive-attempt")
+                if bad is None:
+                    fail("a refused attachment also lost the campaign")
+                    return 1
+                zsrc = (repo / "docs" / "marketing" / "creatives"
+                        / "archive-attempt" / "src")
+                if zsrc.exists() and list(zsrc.glob("*")):
+                    fail(f"a refused type was written anyway: "
+                         f"{[p.name for p in zsrc.glob('*')]}")
+                    return 1
+                print("ok: a refused attachment on the add form keeps the "
+                      "campaign and writes nothing")
+
+                # No file chosen is a form, not an error.
+                r = client.post(
+                    "/p/cr-page/creatives/add",
+                    data={"title": "No files here"},
+                    files=[("files", ("", b"", "application/octet-stream"))],
+                )
+                if r.status_code not in (200, 303):
+                    fail(f"add with an empty file input: {r.status_code}")
+                    return 1
+                if await app.state.db.find_creative_proposal_by_slug(
+                        proj.id, "no-files-here") is None:
+                    fail("an empty file input lost the campaign")
+                    return 1
+                print("ok: an empty file input is a form with nothing chosen, "
+                      "not a refusal")
         finally:
             if prior is None:
                 os.environ.pop("DC_DB_PATH", None)

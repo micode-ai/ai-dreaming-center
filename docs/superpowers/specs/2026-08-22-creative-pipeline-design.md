@@ -83,6 +83,18 @@ last so material can be sent along with revision notes. It is refused while
 `making`: the session has already listed the directory, so a file arriving
 underneath it is a race with no upside.
 
+**The add form attaches in the same step.** An operator's campaign usually
+exists *because* they have footage, so the prompt and the files arrive
+together; a second step to hand the material over is the step that gets
+skipped. Both paths go through one storage helper, since that is the
+security-critical part and two copies would drift. Three cases the form has to
+answer for rather than swallow: a duplicate slug attaches to the campaign that
+already exists (unless it is `making`), a refused file leaves the campaign
+created and says why, and choosing no file at all is a form rather than an
+error — a browser with an empty `multiple` input posts a part with no filename,
+which is why the files are read off the raw form instead of a
+`list[UploadFile]` annotation that would 422 on it.
+
 ### Per-venue settings
 
 All optional; empty means the feature is off for that venue, so nothing

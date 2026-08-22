@@ -100,6 +100,94 @@ def _flash(request: Request, resp, key: str, level: str = "info") -> None:
     set_flash(resp, request.app.state.i18n.t(key, locale=locale), level)
 
 
+class AttachmentRefused(Exception):
+    """A file could not be stored. Carries the operator-facing reason."""
+
+
+async def _store_attachments(
+    request: Request, project, row: dict, files,
+) -> list[str]:
+    """Write attached source material into `<campaign>/src/`, or refuse.
+
+    Shared by the attach route and the add form, on purpose: this is the
+    security-critical part of both, and two copies of it would drift. Every
+    assumption here is that the caller is careless rather than hostile, and it
+    refuses either way — only the basename survives, the name is normalised,
+    the extension is allow-listed, the size is capped *while streaming* rather
+    than after, the destination is fixed, and the path is then checked by the
+    publish validator so this cannot write anywhere publishing could not commit
+    from.
+
+    Raises AttachmentRefused with a reason the operator can act on. Nothing
+    partially written is left behind: each file that fails is removed before
+    the exception leaves.
+    """
+    from dreaming.services import article_publish
+
+    venue, creative_dir = await _venue_for(request, project, row)
+    if not (creative_dir or "").strip():
+        raise AttachmentRefused(
+            "creative_dir is not set for this venue, so there is nowhere to "
+            "put attachments. Set it in the project's settings, under "
+            "Creatives."
+        )
+    _venue, root, camp_rel = await _campaign(request, project, row)
+    dest_rel = f"{camp_rel}/src"
+    dest = (root / dest_rel).resolve()
+    try:
+        dest.relative_to(root.resolve())
+    except ValueError:
+        raise AttachmentRefused(
+            f"the campaign directory resolves outside the repository: {dest_rel}"
+        )
+    dest.mkdir(parents=True, exist_ok=True)
+
+    written: list[str] = []
+    for up in files or []:
+        if not getattr(up, "filename", ""):
+            # An empty file input posts a part with no filename; that is a
+            # form with nothing chosen, not an error.
+            continue
+        name = creatives.safe_upload_name(up.filename)
+        if not name:
+            raise AttachmentRefused(
+                f"{up.filename!r} leaves no usable filename after normalisation"
+            )
+        if not creatives.upload_allowed(name):
+            raise AttachmentRefused(
+                f"{name} is not an attachable type "
+                f"({', '.join(creatives.UPLOAD_EXTS)})"
+            )
+        target = dest / name
+        size = 0
+        try:
+            with target.open("wb") as fh:
+                while True:
+                    chunk = await up.read(_UPLOAD_CHUNK)
+                    if not chunk:
+                        break
+                    size += len(chunk)
+                    if size > _UPLOAD_MAX_BYTES:
+                        fh.close()
+                        target.unlink(missing_ok=True)
+                        raise AttachmentRefused(
+                            f"{name} exceeds "
+                            f"{_UPLOAD_MAX_BYTES // (1024 * 1024)} MB"
+                        )
+                    fh.write(chunk)
+        except OSError as e:
+            target.unlink(missing_ok=True)
+            raise AttachmentRefused(f"write failed: {e}")
+        rel = f"{dest_rel}/{name}"
+        try:
+            article_publish._validate_paths([rel], root)
+        except article_publish.PublishError as e:
+            target.unlink(missing_ok=True)
+            raise AttachmentRefused(str(e))
+        written.append(rel)
+    return written
+
+
 def _require_dir(creative_dir: str) -> None:
     if not (creative_dir or "").strip():
         raise HTTPException(
@@ -208,16 +296,31 @@ async def creatives_add(
     title: str = Form(...), angle: str = Form(""), venue: str = Form(""),
     formats: str = Form(""), locales: str = Form(""),
 ):
-    """An operator's own campaign idea.
+    """An operator's own campaign idea, with its source material in one step.
 
-    `evidence` is the operator's own word here, and that is honest: they are
-    the one who checked. It is still recorded, because the queue's rule is that
-    every row says what it rests on.
+    Attaching here rather than afterwards is the point: a campaign the operator
+    proposes usually exists *because* they have footage, and making them find
+    the card afterwards to hand it over is a step that only ever gets skipped.
+    The prompt and the files arrive together, which is what the maker needs.
+
+    `evidence` is the operator's own word, and that is honest: they are the one
+    who checked. It is still recorded, because the queue's rule is that every
+    row says what it rests on.
     """
     project = request.state.project
     db = request.app.state.db
     if not title.strip():
         raise HTTPException(status_code=400, detail="a campaign needs a title")
+    # Read the file parts off the raw form rather than declaring
+    # `list[UploadFile]`: a browser with a `multiple` file input and nothing
+    # chosen posts one part with an empty filename, which FastAPI decodes as a
+    # str and then 422s against an UploadFile annotation. Choosing no file is
+    # the ordinary case for this form, not a validation error.
+    form = await request.form()
+    files = [
+        v for v in form.getlist("files")
+        if hasattr(v, "filename") and (v.filename or "").strip()
+    ]
     projects = await request.app.state.projects.list_all(only_enabled=True)
     target = next((p.id for p in projects if p.slug == venue.strip()), None) \
         if venue.strip() else None
@@ -228,11 +331,60 @@ async def creatives_add(
         formats=formats.strip(), locales=locales.strip(),
         target_project_id=target,
     )
+    row = await db.get_creative_proposal(new_id) if new_id else \
+        await db.find_creative_proposal_by_slug(
+            project.id, creatives.slugify(title))
+    has_files = bool(files)
     resp = RedirectResponse(f"/p/{project.slug}/creatives", status_code=303)
-    _flash(
-        request, resp,
-        "creative.flash.added" if new_id else "creative.flash.duplicate",
-        "success" if new_id else "info",
+
+    if not has_files:
+        _flash(
+            request, resp,
+            "creative.flash.added" if new_id else "creative.flash.duplicate",
+            "success" if new_id else "info",
+        )
+        return resp
+
+    # Files were chosen, so they must not vanish silently. A duplicate slug is
+    # not a reason to drop them — the operator is handing material to the
+    # campaign that already exists — but a campaign a maker is already building
+    # is, for the same reason the attach route refuses it.
+    if row is None:
+        _flash(request, resp, "creative.flash.duplicate", "error")
+        return resp
+    if row["status"] not in _ATTACHABLE_STATUSES:
+        locale = request.cookies.get(
+            "dc_locale", request.app.state.settings.default_locale)
+        set_flash(
+            resp,
+            request.app.state.i18n.t(
+                "creative.flash.attach_busy", locale=locale,
+                status=row["status"]),
+            "error",
+        )
+        return resp
+    try:
+        written = await _store_attachments(request, project, row, files)
+    except AttachmentRefused as e:
+        # The campaign exists either way; saying only "refused" would leave the
+        # operator wondering whether it was created.
+        locale = request.cookies.get(
+            "dc_locale", request.app.state.settings.default_locale)
+        set_flash(
+            resp,
+            request.app.state.i18n.t(
+                "creative.flash.added_no_files", locale=locale, reason=str(e)),
+            "error",
+        )
+        return resp
+    log.info("creative %s: added with %d attachment(s)", row["id"], len(written))
+    locale = request.cookies.get(
+        "dc_locale", request.app.state.settings.default_locale)
+    set_flash(
+        resp,
+        request.app.state.i18n.t(
+            "creative.flash.added_with_files", locale=locale, n=len(written)),
+        "success",
     )
     return resp
 
@@ -266,64 +418,11 @@ async def creatives_attach(
                    f"session has already listed the directory, and a file "
                    f"arriving underneath it is a race with no upside",
         )
-    venue, creative_dir = await _venue_for(request, project, row)
-    _require_dir(creative_dir)
-    _venue, root, camp_rel = await _campaign(request, project, row)
-    dest_rel = f"{camp_rel}/src"
-    dest = (root / dest_rel).resolve()
     try:
-        dest.relative_to(root.resolve())
-    except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail=f"the campaign directory resolves outside the repository: "
-                   f"{dest_rel}",
-        )
-    dest.mkdir(parents=True, exist_ok=True)
-
-    written: list[str] = []
-    for up in files:
-        name = creatives.safe_upload_name(up.filename or "")
-        if not name:
-            raise HTTPException(
-                status_code=400,
-                detail=f"{up.filename!r} leaves no usable filename after "
-                       f"normalisation",
-            )
-        if not creatives.upload_allowed(name):
-            raise HTTPException(
-                status_code=400,
-                detail=f"{name} is not an attachable type "
-                       f"({', '.join(creatives.UPLOAD_EXTS)})",
-            )
-        target = dest / name
-        size = 0
-        try:
-            with target.open("wb") as fh:
-                while True:
-                    chunk = await up.read(_UPLOAD_CHUNK)
-                    if not chunk:
-                        break
-                    size += len(chunk)
-                    if size > _UPLOAD_MAX_BYTES:
-                        fh.close()
-                        target.unlink(missing_ok=True)
-                        raise HTTPException(
-                            status_code=400,
-                            detail=f"{name} exceeds "
-                                   f"{_UPLOAD_MAX_BYTES // (1024 * 1024)} MB",
-                        )
-                    fh.write(chunk)
-        except OSError as e:
-            target.unlink(missing_ok=True)
-            raise HTTPException(status_code=500, detail=f"write failed: {e}")
-        rel = f"{dest_rel}/{name}"
-        try:
-            article_publish._validate_paths([rel], root)
-        except article_publish.PublishError as e:
-            target.unlink(missing_ok=True)
-            raise HTTPException(status_code=400, detail=str(e))
-        written.append(rel)
+        written = await _store_attachments(request, project, row, files)
+    except AttachmentRefused as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    dest_rel = f"{(await _campaign(request, project, row))[2]}/src"
     log.info("creative %d: attached %d file(s) into %s",
              proposal_id, len(written), dest_rel)
     resp = RedirectResponse(f"/p/{project.slug}/creatives", status_code=303)

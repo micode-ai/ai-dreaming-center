@@ -696,5 +696,9 @@
   "creative.flash.duplicate": "Такая кампания уже есть — новая строка не создана.",
   "creative.flash.attached": "Материал прикреплён.",
   "creative.flash.making": "Сборщик запущен.",
-  "creative.flash.published": "Кампания закоммичена."
+  "creative.flash.published": "Кампания закоммичена.",
+  "creative.add.files": "Материал для сборки (можно несколько)",
+  "creative.flash.added_with_files": "Кампания добавлена, прикреплено файлов: {n}.",
+  "creative.flash.added_no_files": "Кампания добавлена, но файлы не приняты: {reason}",
+  "creative.flash.attach_busy": "Кампания с такой темой уже есть и сейчас в статусе «{status}» — файлы не приняты, чтобы не мешать идущей сборке."
 }
