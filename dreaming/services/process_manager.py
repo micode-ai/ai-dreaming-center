@@ -279,6 +279,16 @@ class ProcessManager:
         # --bare drops OAuth auth, so the env switch is the only clean lever.)
         env.setdefault("SECURITY_GUIDANCE_DISABLE", "1")
         env.setdefault("ENABLE_STOP_REVIEW", "0")
+        # The CLI stops waiting on its own background tasks after 600s, kills
+        # them, and still reports status=success. An unattended writing session
+        # hit that: it had built its payload and was one command from
+        # registering the article when the ceiling fired, so the run ended
+        # "successfully" with nothing written and the proposal was failed by
+        # reconcile for never reporting a draft. 0 means wait indefinitely,
+        # which is safe here because every spawn already carries its own
+        # timeout_minutes — that watchdog, not a hidden 10-minute cap, is what
+        # should decide a session has gone on too long.
+        env.setdefault("CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS", "0")
         if include_resolved and self.env_resolver:
             try:
                 env.update(self.env_resolver() or {})
