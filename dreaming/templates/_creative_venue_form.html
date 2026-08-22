@@ -1,0 +1,15 @@
+{# The venue select, shared by the two statuses that may still change it.
+   The selected option comes from the RAW per-row override, never from the
+   resolved venue: the resolved value is always some real project, so using it
+   would make "the project's default" unreachable and let an untouched submit
+   silently pin a row that was tracking the default. #}
+<form method="post" action="/p/{{ project.slug }}/creatives/{{ c.id }}/venue"
+      class="inline flex items-center gap-1">
+  <select name="venue" class="text-xs rounded px-1 py-1 bg-elevated">
+    <option value="" {% if not c.venue_override_slug %}selected{% endif %}>
+      {{ "creative.venue.default" | t(locale=locale) }}</option>
+    {% for p in projects %}<option value="{{ p.slug }}"
+      {% if c.venue_override_slug == p.slug %}selected{% endif %}>{{ p.label }}</option>{% endfor %}
+  </select>
+  <button class="btn btn-sm">{{ "creative.venue.set" | t(locale=locale) }}</button>
+</form>

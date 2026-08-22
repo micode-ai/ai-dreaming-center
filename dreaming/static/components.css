@@ -416,3 +416,10 @@ dialog.app-modal::backdrop { background: var(--overlay-modal); }
 .modal-close { color: var(--text-muted); background: none; border: none; cursor: pointer; }
 .modal-close:hover { color: var(--text-strong); }
 .note-modal__body { max-height: 80vh; min-height: 12.5rem; overflow: auto; }
+
+/* ---------- Creative preview ---------- */
+/* A render is 1080x1350 or 1080x1920, so it needs a ceiling to sit next
+   to its siblings on one row. Sized here rather than inline because a
+   static style= attribute is what check_css_tokens exists to catch: the
+   ceiling belongs to the design system, not to one template. */
+.creative-render { max-width: 20rem; max-height: 35rem; height: auto; }

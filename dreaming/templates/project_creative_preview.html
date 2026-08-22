@@ -1,0 +1,133 @@
+{% extends "_project_layout.html" %}
+{% set active = 'creatives' %}
+{% block project_content %}
+<header class="mb-4">
+  <div class="flex items-baseline gap-3 flex-wrap">
+    <a class="text-xs underline faint" href="/p/{{ project.slug }}/creatives">
+      &larr; {{ "creative.title" | t(locale=locale) }}
+    </a>
+    <h2 class="text-lg font-semibold strong">{{ row.title }}</h2>
+    <span class="badge badge-neutral">{{ ("creative.status." ~ row.status) | t(locale=locale) }}</span>
+  </div>
+  <p class="text-xs faint mt-1">
+    #{{ row.id }} &middot; {{ "creative.venue" | t(locale=locale) }}:
+    <span class="font-mono">{{ venue_slug }}</span> &middot;
+    <span class="font-mono">{{ campaign_dir }}</span>
+    {% if row.session_id %}
+      &middot; <a class="underline" href="/p/{{ project.slug }}/sessions/{{ row.session_id }}/log">
+        {{ "creative.btn.log" | t(locale=locale) }}</a>
+    {% endif %}
+  </p>
+</header>
+
+{% if problems %}
+  <div class="mb-3 banner banner-warn">
+    <div class="banner__body">
+      <p class="banner__title">{{ "creative.preview.problems" | t(locale=locale) }}</p>
+      <ul class="text-xs list-disc ml-5">
+        {% for p in problems %}<li><code>{{ p.path }}</code> — {{ p.reason }}</li>{% endfor %}
+      </ul>
+    </div>
+  </div>
+{% endif %}
+
+{# One tab per format × locale the campaign actually produced. A tab that does
+   not exist is not offered: the revision findings below are where a missing
+   format is reported, not a dead tab. #}
+{% if tabs | length > 1 %}
+  <nav class="mb-3 flex gap-1 flex-wrap items-center">
+    {% for f, l in tabs %}
+      <a class="btn btn-sm {{ 'btn-primary' if selected and selected[0] == f and selected[1] == l }}"
+         href="/p/{{ project.slug }}/creatives/{{ row.id }}/preview?fmt={{ f }}&loc={{ l }}">
+        {{ f }}{% if l %} · {{ l }}{% endif %}
+      </a>
+    {% endfor %}
+  </nav>
+{% endif %}
+
+{% if selected_paths %}
+  <div class="card mb-4 flex flex-wrap gap-3 items-start">
+    {% for p in selected_paths %}
+      <figure class="text-xs">
+        {% if p.lower().endswith(('.mp4', '.webm', '.mov')) %}
+          <video controls preload="metadata" class="creative-render"
+                 src="/p/{{ project.slug }}/creatives/{{ row.id }}/media?path={{ p | urlencode }}"></video>
+        {% else %}
+          <img loading="lazy" alt="{{ p }}" class="creative-render"
+               src="/p/{{ project.slug }}/creatives/{{ row.id }}/media?path={{ p | urlencode }}">
+        {% endif %}
+        <figcaption class="font-mono faint mt-1">{{ p }}</figcaption>
+      </figure>
+    {% endfor %}
+  </div>
+{% elif not problems %}
+  <p class="empty-state mb-4">{{ "creative.preview.no_renders" | t(locale=locale) }}</p>
+{% endif %}
+
+{% if ungrouped %}
+  <p class="text-xs faint mb-4">
+    {{ "creative.preview.ungrouped" | t(locale=locale) }}
+    {% for p in ungrouped %}<code class="mr-2">{{ p }}</code>{% endfor %}
+  </p>
+{% endif %}
+
+{% if copy_items %}
+  {% include "_markdown_partial.html" %}
+  {% for item in copy_items %}
+    <p class="text-xs font-mono faint mb-1">{{ item.path }}</p>
+    {% if item.truncated %}
+      <p class="text-xs mb-2 banner banner-warn"><span class="banner__body">
+        {{ "creative.preview.truncated" | t(locale=locale) }}</span></p>
+    {% endif %}
+    <script id="creative-copy-{{ loop.index }}" type="text/markdown">{{ item.text }}</script>
+    <div class="card mb-4"><div id="creative-copy-body-{{ loop.index }}" class="markdown-body"></div></div>
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const src = document.getElementById('creative-copy-{{ loop.index }}').textContent;
+        window.dcRenderMarkdown(document.getElementById('creative-copy-body-{{ loop.index }}'), src);
+      });
+    </script>
+  {% endfor %}
+{% endif %}
+
+{% if row.status == 'drafted' %}
+<section class="card mt-6">
+  <h3 class="text-sm strong mb-2">{{ "creative.revise.title" | t(locale=locale) }}</h3>
+  <p class="text-xs faint mb-3">{{ "creative.revise.hint" | t(locale=locale) }}</p>
+  <form method="post" action="/p/{{ project.slug }}/creatives/{{ row.id }}/revise"
+        class="flex flex-col gap-2">
+    {% for f in findings %}
+      <label class="text-xs flex items-start gap-2">
+        <input type="checkbox" name="finding" value="{{ f.note }}" checked>
+        <span>
+          {% if f.kind == 'format_missing' %}
+            {{ "creative.revise.format_missing" | t(locale=locale, format=f.format) }}
+          {% elif f.kind == 'locale_missing' %}
+            {{ "creative.revise.locale_missing" | t(locale=locale, locale_id=f.locale) }}
+          {% elif f.kind == 'wrong_size' %}
+            {{ "creative.revise.wrong_size" | t(locale=locale, path=f.path, got=f.got, want=f.want) }}
+          {% elif f.kind == 'copy_missing' %}
+            {{ "creative.revise.copy_missing" | t(locale=locale) }}
+          {% endif %}
+        </span>
+      </label>
+    {% endfor %}
+    {% if not findings %}
+      <p class="text-xs faint">
+        {% if has_rules %}
+          {{ "creative.revise.all_pass" | t(locale=locale) }}
+        {% else %}
+          {{ "creative.revise.no_rules" | t(locale=locale) }}
+        {% endif %}
+      </p>
+    {% endif %}
+    <textarea name="notes" rows="3"
+              placeholder="{{ 'creative.revise.placeholder' | t(locale=locale) }}"
+              class="rounded px-2 py-1 bg-elevated text-sm"></textarea>
+    <div>
+      <button class="btn btn-sm btn-primary">{{ "creative.revise.submit" | t(locale=locale) }}</button>
+    </div>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

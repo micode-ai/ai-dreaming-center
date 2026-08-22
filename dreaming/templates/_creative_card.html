@@ -1,0 +1,119 @@
+<article class="card mb-3">
+  <header class="flex items-baseline gap-3 flex-wrap mb-2">
+    <span class="text-base font-semibold strong">{{ c.title }}</span>
+    {% if c.status_known %}
+      <span class="badge badge-neutral">{{ ("creative.status." ~ c.status) | t(locale=locale) }}</span>
+    {% else %}
+      <span class="badge badge-neutral">{{ c.status }}</span>
+    {% endif %}
+    {% if c.venue_slug != project.slug %}
+      <span class="badge badge-brand">{{ "creative.venue" | t(locale=locale) }}: {{ c.venue_slug }}</span>
+    {% endif %}
+    <span class="text-xs font-mono faint">{{ c.slug_hint }}</span>
+    <span class="text-xs faint ml-auto">{{ c.source }}</span>
+  </header>
+
+  {% if c.angle %}<p class="text-sm mb-2">{{ c.angle }}</p>{% endif %}
+
+  <p class="text-xs faint mb-2">
+    <span class="strong">{{ "creative.evidence" | t(locale=locale) }}:</span> {{ c.evidence }}
+  </p>
+
+  {% if c.formats or c.locales %}
+    <p class="text-xs faint mb-2">
+      {% if c.formats %}<span class="font-mono">{{ c.formats }}</span>{% endif %}
+      {% if c.locales %} &middot; <span class="font-mono">{{ c.locales }}</span>{% endif %}
+    </p>
+  {% endif %}
+
+  {% if c.tags %}
+    <div class="text-xs mb-2 faint">
+      {% for t in c.tags %}<span class="badge badge-neutral mr-1">#{{ t }}</span>{% endfor %}
+    </div>
+  {% endif %}
+
+  {% if c.draft_ref %}
+    <p class="text-xs font-mono faint mb-2">→ {{ c.draft_ref }}</p>
+  {% endif %}
+
+  {% if c.status in ('failed', 'published', 'drafted') and c.error_message %}
+    <pre class="text-xs mb-2 overflow-x-auto">{{ c.error_message }}</pre>
+  {% endif %}
+
+  {% if c.verify_output and c.status in ('drafted', 'failed') %}
+    <pre class="text-xs mb-2 overflow-x-auto">{{ c.verify_output }}</pre>
+  {% endif %}
+
+  {# Preview and the session log sit outside the status branches: a failed
+     campaign has a log and no renders, a published one has renders and no
+     buttons, and both are worth opening. #}
+  {% if c.draft_ref or c.session_id %}
+    <p class="mb-2 flex gap-2 items-center flex-wrap">
+      {% if c.draft_ref %}
+        <a class="btn btn-sm" href="/p/{{ project.slug }}/creatives/{{ c.id }}/preview">
+          {{ "creative.btn.preview" | t(locale=locale) }}
+        </a>
+      {% endif %}
+      {% if c.session_id %}
+        <a class="btn btn-sm" href="/p/{{ project.slug }}/sessions/{{ c.session_id }}/log">
+          {{ "creative.btn.log" | t(locale=locale) }}
+        </a>
+      {% endif %}
+    </p>
+  {% endif %}
+
+  {% if c.can_attach %}
+    <details class="mb-2">
+      <summary class="text-xs cursor-pointer">{{ "creative.attach.title" | t(locale=locale) }}</summary>
+      <p class="text-xs faint mt-1">{{ "creative.attach.hint" | t(locale=locale) }}</p>
+      <form method="post" enctype="multipart/form-data"
+            action="/p/{{ project.slug }}/creatives/{{ c.id }}/attach"
+            class="mt-2 flex items-center gap-2 flex-wrap">
+        <input type="file" name="files" multiple required
+               accept=".png,.jpg,.jpeg,.gif,.webp,.mp4,.mov,.webm"
+               class="text-xs">
+        <button class="btn btn-sm">{{ "creative.attach.submit" | t(locale=locale) }}</button>
+      </form>
+    </details>
+  {% endif %}
+
+  <footer class="flex gap-2 items-center text-xs flex-wrap mt-2">
+    {% if c.status == 'proposed' %}
+      <form method="post" action="/p/{{ project.slug }}/creatives/{{ c.id }}/approve" class="inline">
+        <button class="btn btn-sm btn-primary">{{ "creative.btn.make" | t(locale=locale) }}</button>
+      </form>
+      <form method="post" action="/p/{{ project.slug }}/creatives/{{ c.id }}/reject" class="inline">
+        <button class="btn btn-sm">{{ "creative.btn.reject" | t(locale=locale) }}</button>
+      </form>
+      {% include "_creative_venue_form.html" %}
+    {% elif c.status == 'rejected' %}
+      <form method="post" action="/p/{{ project.slug }}/creatives/{{ c.id }}/restore" class="inline">
+        <button class="btn btn-sm">{{ "creative.btn.restore" | t(locale=locale) }}</button>
+      </form>
+    {% elif c.status == 'failed' %}
+      <form method="post" action="/p/{{ project.slug }}/creatives/{{ c.id }}/approve" class="inline">
+        <button class="btn btn-sm">{{ "creative.btn.retry" | t(locale=locale) }}</button>
+      </form>
+      {% include "_creative_venue_form.html" %}
+    {% elif c.status == 'making' %}
+      <form method="post" action="/p/{{ project.slug }}/creatives/{{ c.id }}/cancel" class="inline">
+        <button class="btn btn-sm">{{ "creative.btn.cancel" | t(locale=locale) }}</button>
+      </form>
+    {% elif c.status == 'drafted' %}
+      {% if c.can_publish %}
+        <form method="post" action="/p/{{ project.slug }}/creatives/{{ c.id }}/publish" class="inline"
+              data-confirm="{{ 'creative.confirm.publish' | t(locale=locale) }}">
+          <button class="btn btn-sm btn-primary">{{ "creative.btn.publish" | t(locale=locale) }}</button>
+        </form>
+      {% else %}
+        <span class="faint">{{ ("creative.gate." ~ c.gate_reason) | t(locale=locale) }}</span>
+      {% endif %}
+      <span class="faint">{{ ("creative.verify." ~ c.verify_label) | t(locale=locale) }}</span>
+    {% elif c.status == 'published' %}
+      {% if c.commit_ref %}
+        <span class="font-mono faint">{{ c.commit_ref[:8] }}</span>
+      {% endif %}
+      <span class="faint">{{ ("creative.verify." ~ c.verify_label) | t(locale=locale) }}</span>
+    {% endif %}
+  </footer>
+</article>

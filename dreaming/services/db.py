@@ -334,6 +334,60 @@ CREATE INDEX IF NOT EXISTS idx_article_project_status
     ON article_proposals (project_id, status);
 CREATE INDEX IF NOT EXISTS idx_article_status_created
     ON article_proposals (status, created_at DESC);
+
+-- Promotional creatives. A separate table rather than a `kind` column on
+-- article_proposals: a creative carries a set of formats, a set of attached
+-- source files and outputs that are binaries, none of which an article has,
+-- and four nullable columns on every article row would make every article
+-- query explain itself. What is shared is the discipline, not the schema.
+--
+-- Unlike article_proposals this table is declared in one go, so its column
+-- order is chosen for reading rather than dictated by the order columns were
+-- once appended live. Any FUTURE addition still belongs at the end, appended
+-- here in the same order it is appended by an ALTER TABLE, so a fresh
+-- database and a migrated one never disagree.
+CREATE TABLE IF NOT EXISTS creative_proposals (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id      INTEGER NOT NULL,
+    -- The venue: whose repository the creative is produced in. NULL means
+    -- "the subject itself", i.e. no cross-project indirection at all.
+    target_project_id INTEGER,
+    source          TEXT NOT NULL,
+    source_ref      TEXT NOT NULL DEFAULT '',
+    -- The checkable fact the creative rests on. Enforced non-blank by
+    -- add_creative_proposal, not only at the HTTP boundary.
+    evidence        TEXT NOT NULL,
+    title           TEXT NOT NULL,
+    angle           TEXT NOT NULL DEFAULT '',
+    slug_hint       TEXT NOT NULL,
+    formats         TEXT NOT NULL DEFAULT '',
+    locales         TEXT NOT NULL DEFAULT '',
+    tags_json       TEXT NOT NULL DEFAULT '[]',
+    related_product TEXT NOT NULL DEFAULT '',
+    status          TEXT NOT NULL DEFAULT 'proposed',
+    maker_agent     TEXT NOT NULL DEFAULT '',
+    -- Every path the maker produced: renders and post copy alike. The preview
+    -- tells them apart by extension rather than by a second column that could
+    -- disagree with this one.
+    draft_ref       TEXT NOT NULL DEFAULT '',
+    verify_output   TEXT NOT NULL DEFAULT '',
+    verify_ok       INTEGER NOT NULL DEFAULT 0,
+    verify_label    TEXT NOT NULL DEFAULT '',
+    commit_ref      TEXT NOT NULL DEFAULT '',
+    session_id      TEXT NOT NULL DEFAULT '',
+    error_message   TEXT NOT NULL DEFAULT '',
+    revision_notes  TEXT NOT NULL DEFAULT '',
+    created_at      TEXT NOT NULL,
+    decided_at      TEXT,
+    made_at         TEXT,
+    published_at    TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_creative_project_slug
+    ON creative_proposals (project_id, slug_hint);
+CREATE INDEX IF NOT EXISTS idx_creative_project_status
+    ON creative_proposals (project_id, status);
+CREATE INDEX IF NOT EXISTS idx_creative_status_created
+    ON creative_proposals (status, created_at DESC);
 """
 
 
@@ -1721,5 +1775,275 @@ class SqliteDB:
                 "and no live process for it either -- left in 'writing', "
                 "needs a manual look: ids=%s",
                 len(no_session_row), no_session_row,
+            )
+        return failed
+
+    # ---- creatives -----------------------------------------------------
+    # The article methods above carry the reasoning for every precondition
+    # here; these mirror it for promotional content. Where a rule's "why" is
+    # identical it is not restated, only where the creative case differs.
+
+    _CREATIVE_DISPATCHABLE = ("proposed", "approved", "failed", "drafted")
+    # Attaching source files is refused while a maker session is running: it
+    # has already listed the campaign directory, so a file arriving underneath
+    # it is a race with no upside. Every other live status accepts material —
+    # 'drafted' in particular, so more footage can travel with revision notes.
+    _CREATIVE_ATTACHABLE = ("proposed", "approved", "failed", "drafted")
+
+    async def add_creative_proposal(
+        self, project_id: int, *, source: str, source_ref: str, evidence: str,
+        title: str, angle: str, slug_hint: str, formats: str = "",
+        locales: str = "", tags_json: str = "[]", related_product: str = "",
+        target_project_id: int | None = None,
+    ) -> int | None:
+        """Insert a creative proposal. None when (project_id, slug_hint) exists.
+
+        Blank evidence is refused here rather than only at the HTTP boundary,
+        for the reason add_article_proposal gives: this is the rule the whole
+        feature rests on, and a future feeder calling this directly must not be
+        able to forget it.
+        """
+        if not (evidence or "").strip():
+            raise ValueError(
+                "evidence is required — a promotional claim nobody can check "
+                "is worse than no claim"
+            )
+        now_iso = datetime.now(timezone.utc).isoformat()
+        # INSERT OR IGNORE rather than catching an integrity error, matching
+        # add_article_proposal: the unique index on (project_id, slug_hint) is
+        # what deduplicates, and rowcount says whether it fired.
+        async with self._conn.execute(
+            "INSERT OR IGNORE INTO creative_proposals ("
+            " project_id, target_project_id, source, source_ref, evidence,"
+            " title, angle, slug_hint, formats, locales, tags_json,"
+            " related_product, status, created_at"
+            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'proposed',?)",
+            (project_id, target_project_id, source, source_ref,
+             evidence.strip(), title, angle, slug_hint, formats, locales,
+             tags_json, related_product, now_iso),
+        ) as cur:
+            if cur.rowcount == 0:
+                await self._conn.commit()
+                return None
+            new_id = cur.lastrowid
+        await self._conn.commit()
+        return new_id
+
+    async def find_creative_proposal_by_slug(
+        self, project_id: int, slug_hint: str,
+    ) -> dict | None:
+        """The row a duplicate ingest collided with, so the feeder can be told
+        which id it already has rather than just 'no'."""
+        row = await self.fetch_one(
+            "SELECT * FROM creative_proposals WHERE project_id=? AND slug_hint=?",
+            (project_id, slug_hint),
+        )
+        return dict(row) if row else None
+
+    async def get_creative_proposal(self, proposal_id: int) -> dict | None:
+        row = await self.fetch_one(
+            "SELECT * FROM creative_proposals WHERE id=?", (proposal_id,),
+        )
+        return dict(row) if row else None
+
+    async def list_creative_proposals(
+        self, *, project_id: int | None = None, status: str | None = None,
+        limit: int = 200,
+    ) -> list:
+        sql = "SELECT * FROM creative_proposals WHERE 1=1"
+        params: list = []
+        if project_id is not None:
+            sql += " AND project_id=?"
+            params.append(project_id)
+        if status is not None:
+            sql += " AND status=?"
+            params.append(status)
+        sql += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        return await self.fetch_all(sql, tuple(params))
+
+    async def count_creative_proposals(
+        self, *, status: str | None = None,
+        project_ids: list[int] | None = None,
+    ) -> int:
+        sql = "SELECT COUNT(*) AS n FROM creative_proposals WHERE 1=1"
+        params: list = []
+        if status is not None:
+            sql += " AND status=?"
+            params.append(status)
+        if project_ids is not None:
+            if not project_ids:
+                return 0
+            sql += f" AND project_id IN ({','.join('?' * len(project_ids))})"
+            params.extend(project_ids)
+        row = await self.fetch_one(sql, tuple(params))
+        return int(row["n"]) if row else 0
+
+    async def set_creative_proposal_status(
+        self, proposal_id: int, status: str, *,
+        error_message: str | None = None,
+        expect_statuses: tuple[str, ...] | None = None,
+    ) -> bool:
+        sql = "UPDATE creative_proposals SET status=?, decided_at=COALESCE(decided_at, ?)"
+        params: list = [status, datetime.now(timezone.utc).isoformat()]
+        if error_message is not None:
+            sql += ", error_message=?"
+            params.append(error_message[:4000])
+        sql += " WHERE id=?"
+        params.append(proposal_id)
+        if expect_statuses:
+            sql += f" AND status IN ({','.join('?' * len(expect_statuses))})"
+            params.extend(expect_statuses)
+        async with self._conn.execute(sql, tuple(params)) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
+    async def start_creative_attempt(
+        self, proposal_id: int, *, session_id: str,
+    ) -> bool:
+        """-> 'making', stamping the session that owns this attempt.
+
+        Refuses any status outside `_CREATIVE_DISPATCHABLE`, which is what
+        makes a stale Approve click against an already-published row fail at
+        the write and not just at the route's read.
+        """
+        placeholders = ",".join("?" * len(self._CREATIVE_DISPATCHABLE))
+        async with self._conn.execute(
+            "UPDATE creative_proposals SET status='making', session_id=?, "
+            "error_message='', decided_at=COALESCE(decided_at, ?) "
+            f"WHERE id=? AND status IN ({placeholders})",
+            (session_id, datetime.now(timezone.utc).isoformat(), proposal_id,
+             *self._CREATIVE_DISPATCHABLE),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
+    async def mark_creative_made(
+        self, proposal_id: int, *, draft_ref: str, verify_output: str,
+        maker_agent: str, verify_ok: bool, verify_label: str = "",
+    ) -> bool:
+        """'making' -> 'drafted'. Clears revision_notes for the same reason
+        mark_article_written does: they described this attempt, which has just
+        reported, and left standing a later plain retry would resend them."""
+        async with self._conn.execute(
+            "UPDATE creative_proposals SET status='drafted', draft_ref=?, "
+            "verify_output=?, maker_agent=?, verify_ok=?, verify_label=?, "
+            "made_at=?, revision_notes='' "
+            "WHERE id=? AND status='making'",
+            (draft_ref, verify_output[:8000], maker_agent,
+             1 if verify_ok else 0, verify_label,
+             datetime.now(timezone.utc).isoformat(), proposal_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
+    async def set_creative_revision_notes(
+        self, proposal_id: int, notes: str,
+    ) -> bool:
+        """Only a 'drafted' creative can be sent back — see
+        set_article_revision_notes for why 'making' and 'published' cannot."""
+        async with self._conn.execute(
+            "UPDATE creative_proposals SET revision_notes=? "
+            "WHERE id=? AND status='drafted'",
+            (notes[:8000], proposal_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
+    async def mark_creative_published(
+        self, proposal_id: int, *, commit_ref: str,
+    ) -> bool:
+        """'drafted' -> 'published'. The write-side half of the double-publish
+        guard: two tabs can both pass the route's gate, only one finds the row
+        still 'drafted' here."""
+        async with self._conn.execute(
+            "UPDATE creative_proposals SET status='published', commit_ref=?, "
+            "published_at=? WHERE id=? AND status='drafted'",
+            (commit_ref, datetime.now(timezone.utc).isoformat(), proposal_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
+    async def set_creative_proposal_venue(
+        self, proposal_id: int, target_project_id: int | None,
+    ) -> bool:
+        """Operator-facing venue override. Refused once a session has run:
+        moving the venue under a produced creative would leave its files in
+        one repository while the row claims another."""
+        async with self._conn.execute(
+            "UPDATE creative_proposals SET target_project_id=? "
+            "WHERE id=? AND status IN ('proposed','failed')",
+            (target_project_id, proposal_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
+    async def pin_creative_proposal_venue(
+        self, proposal_id: int, target_project_id: int,
+    ) -> None:
+        """Record the venue a dispatch actually resolved, whatever the status.
+        Internal counterpart of the setter above — called after a session has
+        really started, so the row can never drift to a different venue later.
+        """
+        await self._conn.execute(
+            "UPDATE creative_proposals SET target_project_id=? WHERE id=?",
+            (target_project_id, proposal_id),
+        )
+        await self._conn.commit()
+
+    async def reconcile_stranded_creative_proposals(
+        self, active_session_ids: set[str] | list[str] | None = None,
+    ) -> int:
+        """Fail 'making' creatives whose session is over without a write-back.
+
+        Same contract as reconcile_stranded_article_proposals, including the
+        rule that `agent_learning_sessions.status` is never read for liveness —
+        only the live process set is. See that method for why.
+        """
+        active = set(active_session_ids or ())
+        rows = await self.fetch_all(
+            "SELECT cp.id AS id, cp.session_id AS session_id, "
+            "       s.id AS session_row_id, s.status AS session_status "
+            "FROM creative_proposals cp "
+            "LEFT JOIN agent_learning_sessions s ON s.id = cp.session_id "
+            "WHERE cp.status='making' AND cp.session_id != ''"
+        )
+        failed = 0
+        no_session_row: list[int] = []
+        for row in rows:
+            if row["session_id"] in active:
+                continue
+            if row["session_row_id"] is None:
+                no_session_row.append(row["id"])
+                continue
+            session_status = row["session_status"] or "unknown"
+            if session_status in ("running", "unknown"):
+                message = (
+                    f"session {row['session_id']} is not in the live process "
+                    f"set (row still shows '{session_status}') and never "
+                    f"reported a creative"
+                )
+            else:
+                message = (
+                    f"session {row['session_id']} ended as {session_status} "
+                    f"without reporting a creative"
+                )
+            if await self.set_creative_proposal_status(
+                row["id"], "failed", error_message=message,
+                expect_statuses=("making",),
+            ):
+                failed += 1
+        if no_session_row:
+            log.warning(
+                "reconcile_stranded_creative_proposals: %d 'making' "
+                "proposal(s) whose session_id has no session row and no live "
+                "process either -- left in 'making', needs a manual look: "
+                "ids=%s", len(no_session_row), no_session_row,
             )
         return failed
