@@ -198,6 +198,29 @@ def group_renders(
     return grouped, other
 
 
+def list_attachments(root: Path, camp_rel: str) -> list[str]:
+    """Source material a human attached, as paths relative to `root`.
+
+    Only files sitting directly in `<campaign>/src/`, only types this pipeline
+    serves, sorted. Not recursive: `src/` is where the upload route writes and
+    nothing else should be inventing subtrees there, so a recursive walk would
+    only widen what the media route has to vouch for.
+
+    This listing is also the allow-list the media route checks an attachment
+    path against — membership in a directory listing, never arithmetic on the
+    caller's string.
+    """
+    src = root / camp_rel / "src"
+    try:
+        names = sorted(
+            p.name for p in src.iterdir()
+            if p.is_file() and media_type(p.name)
+        )
+    except OSError:
+        return []
+    return [f"{camp_rel}/src/{n}" for n in names]
+
+
 def draft_findings(
     root: Path, draft_paths: list[str], *, formats: list[str],
     locales: list[str],

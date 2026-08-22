@@ -572,6 +572,51 @@ async def main() -> int:  # noqa: C901
                     return 1
                 print("ok: an empty file input is a form with nothing chosen, "
                       "not a refusal")
+
+                # ---- the card says what is attached -----------------------
+                # A campaign whose footage is on disk and whose card says
+                # nothing about it reads as a campaign with nothing to work
+                # from — which is exactly how it read before this.
+                r = client.get("/p/cr-page/creatives")
+                if "clip-1.mp4" not in r.text or "frame.png" not in r.text:
+                    fail("the card does not name the files attached to the "
+                         "campaign, so nothing in the UI says they arrived")
+                    return 1
+                added_id = added["id"]
+                thumb = (f"/p/cr-page/creatives/{added_id}/media?path="
+                         f"docs%2Fmarketing%2Fcreatives%2Freceipt-scan-in-one-tap"
+                         f"%2Fsrc%2Fframe.png")
+                if thumb.split("?")[0] not in r.text:
+                    fail("the card has no thumbnail URL for an attached image")
+                    return 1
+                # An attachment is servable even though it is not in draft_ref:
+                # it is an input, not an output, and the allow-list is the
+                # campaign's own src/ listing.
+                r = client.get(
+                    f"/p/cr-page/creatives/{added_id}/media",
+                    params={"path": "docs/marketing/creatives/"
+                                    "receipt-scan-in-one-tap/src/frame.png"})
+                if r.status_code != 200:
+                    fail(f"the media route refused an attachment: "
+                         f"{r.status_code} — the card's thumbnails would all "
+                         f"be broken images")
+                    return 1
+                # ...but only one that is really there, and only inside src/.
+                for bogus in ("docs/marketing/creatives/receipt-scan-in-one-tap/"
+                              "src/absent.png",
+                              "docs/marketing/creatives/receipt-scan-in-one-tap/"
+                              "src/../../../../secret.txt"):
+                    r = client.get(
+                        f"/p/cr-page/creatives/{added_id}/media",
+                        params={"path": bogus})
+                    if r.status_code == 200:
+                        fail(f"the media route served {bogus!r} — the "
+                             f"attachment allow-list must be a directory "
+                             f"listing, not path arithmetic")
+                        return 1
+                print("ok: the card names and thumbnails what is attached, the "
+                      "media route serves an attachment but only one its own "
+                      "listing contains")
         finally:
             if prior is None:
                 os.environ.pop("DC_DB_PATH", None)

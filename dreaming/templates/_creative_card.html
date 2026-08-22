@@ -62,9 +62,37 @@
     </p>
   {% endif %}
 
+  {# What is already attached, shown rather than implied: a campaign whose
+     footage sits on disk and whose card says nothing about it reads as a
+     campaign with nothing to work from. #}
+  {% if c.attachments %}
+    <div class="mb-2">
+      <p class="text-xs faint mb-1">
+        {{ "creative.attached.count" | t(locale=locale, n=c.attachments | length) }}
+      </p>
+      <div class="flex flex-wrap gap-2 items-start">
+        {% for a in c.attachments %}
+          {% if a.lower().endswith(('.mp4', '.webm', '.mov')) %}
+            <span class="badge badge-neutral font-mono">{{ a.rsplit('/', 1)[-1] }}</span>
+          {% else %}
+            <img loading="lazy" class="creative-thumb" alt="{{ a.rsplit('/', 1)[-1] }}"
+                 title="{{ a.rsplit('/', 1)[-1] }}"
+                 src="/p/{{ project.slug }}/creatives/{{ c.id }}/media?path={{ a | urlencode }}">
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
   {% if c.can_attach %}
     <details class="mb-2">
-      <summary class="text-xs cursor-pointer">{{ "creative.attach.title" | t(locale=locale) }}</summary>
+      <summary class="text-xs cursor-pointer">
+        {% if c.attachments %}
+          {{ "creative.attach.more" | t(locale=locale) }}
+        {% else %}
+          {{ "creative.attach.title" | t(locale=locale) }}
+        {% endif %}
+      </summary>
       <p class="text-xs faint mt-1">{{ "creative.attach.hint" | t(locale=locale) }}</p>
       <form method="post" enctype="multipart/form-data"
             action="/p/{{ project.slug }}/creatives/{{ c.id }}/attach"

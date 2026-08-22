@@ -90,6 +90,25 @@
   {% endfor %}
 {% endif %}
 
+{% if attachments %}
+  <details class="mb-4">
+    <summary class="text-xs cursor-pointer faint">
+      {{ "creative.attached.count" | t(locale=locale, n=attachments | length) }}
+    </summary>
+    <div class="flex flex-wrap gap-2 items-start mt-2">
+      {% for a in attachments %}
+        {% if a.lower().endswith(('.mp4', '.webm', '.mov')) %}
+          <span class="badge badge-neutral font-mono">{{ a.rsplit('/', 1)[-1] }}</span>
+        {% else %}
+          <img loading="lazy" class="creative-thumb" alt="{{ a.rsplit('/', 1)[-1] }}"
+               title="{{ a.rsplit('/', 1)[-1] }}"
+               src="/p/{{ project.slug }}/creatives/{{ row.id }}/media?path={{ a | urlencode }}">
+        {% endif %}
+      {% endfor %}
+    </div>
+  </details>
+{% endif %}
+
 {% if row.status == 'drafted' %}
 <section class="card mt-6">
   <h3 class="text-sm strong mb-2">{{ "creative.revise.title" | t(locale=locale) }}</h3>

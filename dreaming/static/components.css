@@ -423,3 +423,7 @@ dialog.app-modal::backdrop { background: var(--overlay-modal); }
    static style= attribute is what check_css_tokens exists to catch: the
    ceiling belongs to the design system, not to one template. */
 .creative-render { max-width: 20rem; max-height: 35rem; height: auto; }
+/* Attachment thumbnails on a campaign card: small enough that eight of
+   them do not push the card's actions off the screen, big enough to tell
+   two screenshots apart. */
+.creative-thumb { max-width: 5rem; max-height: 5rem; height: auto; border-radius: var(--radius); border: 1px solid var(--border-subtle); }

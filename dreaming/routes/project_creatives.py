@@ -219,6 +219,17 @@ async def creatives_page(request: Request, slug: str):
                 row_venue, "creative_publish_mode", "off"),
         )
         d["venue_slug"] = row_venue.slug
+        # What a human already attached, so the card can say so. A campaign
+        # whose footage is sitting on disk and whose card says nothing about it
+        # reads as a campaign with nothing to work from. One directory listing
+        # per row, no file reads.
+        try:
+            _v, row_root, row_camp = await _campaign(request, project, row_dict)
+            d["attachments"] = creatives.list_attachments(row_root, row_camp)
+        except Exception as e:  # noqa: BLE001 - a listing must never 500 a page
+            log.warning("creative %s: cannot list attachments: %s",
+                        row_dict.get("id"), e)
+            d["attachments"] = []
         override_id = row_dict.get("target_project_id")
         override = next(
             (p for p in projects if p.id == override_id), None,
@@ -644,6 +655,9 @@ async def creatives_preview(
          "campaign_dir": camp_rel, "tabs": tabs, "grouped": grouped,
          "selected": selected,
          "selected_paths": grouped.get(selected, []) if selected else [],
+         # The maker's inputs beside its outputs: judging an ad means judging
+         # it against the material it was given.
+         "attachments": creatives.list_attachments(root, camp_rel),
          "ungrouped": ungrouped, "copy_items": copy_items,
          "problems": problems, "findings": findings,
          "has_rules": bool(formats or locales), "locale": locale},
@@ -670,18 +684,24 @@ async def creatives_media(
     row = await db.get_creative_proposal(proposal_id)
     if row is None or row["project_id"] != project.id:
         raise HTTPException(status_code=404, detail="proposal not found")
-    reported = article_publish.split_paths(row.get("draft_ref") or "")
     wanted = (path or "").strip().replace("\\", "/")
-    if wanted not in reported:
-        raise HTTPException(
-            status_code=404,
-            detail="that path is not one this campaign reported",
-        )
     ctype = creatives.media_type(wanted)
     if not ctype:
         raise HTTPException(
             status_code=415, detail="not a media type this pipeline serves")
-    _venue, root, _camp = await _campaign(request, project, row)
+    _venue, root, camp_rel = await _campaign(request, project, row)
+    # Two enumerated sets, never arithmetic on the caller's string: what this
+    # row reported as its output, and what a human attached as its input. The
+    # attachment set comes from listing the campaign's own src/ directory, so
+    # the parameter still only ever selects from a list the server built.
+    allowed = set(article_publish.split_paths(row.get("draft_ref") or ""))
+    allowed.update(creatives.list_attachments(root, camp_rel))
+    if wanted not in allowed:
+        raise HTTPException(
+            status_code=404,
+            detail="that path is neither one this campaign reported nor one of "
+                   "its attachments",
+        )
     try:
         article_publish._validate_paths([wanted], root)
     except article_publish.PublishError as e:
