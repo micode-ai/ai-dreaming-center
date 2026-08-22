@@ -3245,6 +3245,44 @@ async def main() -> int:
                     return 1
                 print("ok: preview refuses a proposal that belongs to another "
                       "project")
+
+                # The session log was written and reachable all along, but
+                # nothing in the article UI pointed at it: the orchestration
+                # page lists orchestrator_runs and these are plain `cmd:`
+                # sessions, so the only path was guessing which of the
+                # dashboard's last 20 rows it had been.
+                page = page_client.get("/p/smoke-preview-multi/articles")
+                if "sessions/s1/log" not in page.text:
+                    fail("the articles page does not link a row's session log, "
+                         "so a finished or failed article's log is only "
+                         "findable by guessing on the dashboard")
+                    return 1
+                prev = page_client.get(
+                    f"/p/smoke-preview-multi/articles/{pid}/preview")
+                if "sessions/s1/log" not in prev.text:
+                    fail("the preview page does not link the session log")
+                    return 1
+                print("ok: both the card and the preview link the row's own "
+                      "session log, scoped to the subject's project")
+
+                # A row that never started a session must not render a link to
+                # /sessions//log, which would 404 on an empty id.
+                pid_nosess = await app.state.db.add_article_proposal(
+                    multi.id, source="manual", source_ref="smoke",
+                    evidence="checked by hand", title="Never dispatched",
+                    angle="", slug_hint="never-dispatched", locales="pl",
+                )
+                page = page_client.get("/p/smoke-preview-multi/articles")
+                if "sessions//log" in page.text:
+                    fail("a proposal with no session rendered an empty-id log "
+                         "link")
+                    return 1
+                if str(pid_nosess) not in page.text:
+                    fail("the never-dispatched proposal is missing from the "
+                         "page, so the check above proved nothing")
+                    return 1
+                print("ok: a proposal that never ran renders no log link, and "
+                      "the row is on the page so the check is real")
         finally:
             if prior_db_path_env is None:
                 os.environ.pop("DC_DB_PATH", None)

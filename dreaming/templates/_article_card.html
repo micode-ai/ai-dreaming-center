@@ -36,10 +36,25 @@
 
   {% if a.draft_ref %}
     <p class="text-xs font-mono faint mb-2">→ {{ a.draft_ref }}</p>
-    <p class="mb-2">
-      <a class="btn btn-sm" href="/p/{{ project.slug }}/articles/{{ a.id }}/preview">
-        {{ "article.btn.preview" | t(locale=locale) }}
-      </a>
+  {% endif %}
+
+  {# The log link is deliberately outside the draft_ref check: a failed row has
+     a session and no draft, and that is exactly when the log is the only thing
+     that explains anything. The session belongs to the subject's project (the
+     approve route passes `project`, not the venue), so this page's slug is the
+     right one even for a cross-project article. #}
+  {% if a.draft_ref or a.session_id %}
+    <p class="mb-2 flex gap-2 items-center flex-wrap">
+      {% if a.draft_ref %}
+        <a class="btn btn-sm" href="/p/{{ project.slug }}/articles/{{ a.id }}/preview">
+          {{ "article.btn.preview" | t(locale=locale) }}
+        </a>
+      {% endif %}
+      {% if a.session_id %}
+        <a class="btn btn-sm" href="/p/{{ project.slug }}/sessions/{{ a.session_id }}/log">
+          {{ "article.btn.log" | t(locale=locale) }}
+        </a>
+      {% endif %}
     </p>
   {% endif %}
 

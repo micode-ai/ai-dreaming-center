@@ -13,6 +13,11 @@
     #{{ row.id }} &middot; {{ "article.venue" | t(locale=locale) }}:
     <span class="font-mono">{{ venue_slug }}</span> &middot;
     <span class="font-mono">{{ article_root }}</span>
+    {% if row.session_id %}
+      &middot;
+      <a class="underline" href="/p/{{ project.slug }}/sessions/{{ row.session_id }}/log">
+        {{ "article.btn.log" | t(locale=locale) }}</a>
+    {% endif %}
   </p>
 </header>
 

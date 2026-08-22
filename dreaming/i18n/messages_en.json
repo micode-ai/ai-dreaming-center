@@ -574,6 +574,7 @@
   "article.queue.empty": "Nothing to approve.",
   "article.capped": "showing {shown} of {total} — list is capped",
   "article.btn.preview": "Preview",
+  "article.btn.log": "Session log",
   "article.preview.others": "other files touched:",
   "article.preview.problems": "Some files named in draft_ref could not be read",
   "article.preview.truncated": "File shown partially — too large for one page.",

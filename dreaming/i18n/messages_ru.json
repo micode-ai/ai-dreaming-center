@@ -574,6 +574,7 @@
   "article.queue.empty": "Нечего согласовывать.",
   "article.capped": "показано {shown} из {total} — список ограничен",
   "article.btn.preview": "Предпросмотр",
+  "article.btn.log": "Лог сессии",
   "article.preview.others": "прочие затронутые файлы:",
   "article.preview.problems": "Часть файлов из draft_ref прочитать не удалось",
   "article.preview.truncated": "Файл показан не полностью — слишком большой для страницы.",
