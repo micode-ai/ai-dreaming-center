@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% set active = 'g_help' %}
+{% block content %}
+<header class="page-header">
+  <div class="page-header__titles">
+    <h1 class="page-header__title">{{ "p.help" | t(locale=locale) }}</h1>
+    <span class="page-header__sub">{{ "common.app_name" | t(locale=locale) }}</span>
+  </div>
+</header>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+  <div class="card">
+    <h2 class="section-title">{{ "help.title.what" | t(locale=locale) }}</h2>
+    <p class="text-sm">{{ "help.what_desc" | t(locale=locale, code='projects') }}</p>
+  </div>
+  <div class="card">
+    <h2 class="section-title">{{ "help.title.agents" | t(locale=locale) }}</h2>
+    <p class="text-sm">
+      {%- if project -%}
+        {{ "help.agents_desc" | t(locale=locale, dir=(project.working_dir + '/.claude/agents/')) }}
+      {%- else -%}
+        {{ "help.agents_desc" | t(locale=locale, dir='<working_dir>/.claude/agents/') }}
+      {%- endif -%}
+    </p>
+  </div>
+</div>
+
+<h2 class="section-title">{{ "help.global.title" | t(locale=locale) }}</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
+  {# (help-key, title-key) -- global sections do not share the p.* title prefix
+     the project ones use, so each names its own. #}
+  {% for key, title in [
+    ('projects', 'projects.title'), ('ai_usage', 'p.ai_usage'),
+    ('ai_radar', 'radar.title'), ('articles', 'article.queue.title'),
+    ('settings', 'settings.title'),
+  ] %}
+  <div class="card">
+    <div class="text-sm font-semibold mb-1 strong">{{ title | t(locale=locale) }}</div>
+    <div class="text-xs muted">{{ ('help.section.' ~ key) | t(locale=locale) }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<h2 class="section-title">{{ "help.project.title" | t(locale=locale) }}</h2>
+{% if not project %}
+<p class="text-xs faint mb-3">{{ "help.pick_project_hint" | t(locale=locale) }}</p>
+{% endif %}
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+  {% set sections = [
+    'dashboard', 'orchestration', 'questions', 'live', 'rotation', 'topics',
+    'kanban', 'notes', 'findings', 'tech_debt', 'ideas', 'wiki', 'wiki_health',
+    'ai_usage', 'articles', 'creatives', 'evolutions', 'review', 'loops',
+    'loops_templates', 'plans', 'cascade_costs', 'contracts',
+    'sidecar_findings', 'settings',
+  ] %}
+  {% for key in sections %}
+  <div class="card">
+    <div class="text-sm font-semibold mb-1 strong">{{ ('creative.title' if key == 'creatives' else 'article.title' if key == 'articles' else 'p.' ~ key) | t(locale=locale) }}</div>
+    <div class="text-xs muted">{{ ('help.section.' ~ key) | t(locale=locale) }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

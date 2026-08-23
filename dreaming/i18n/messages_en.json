@@ -567,7 +567,6 @@
   "table.reset": "Reset",
   "table.shown_count": "{shown} of {total}",
   "table.empty": "Nothing matches your filters.",
-
   "article.title": "Articles",
   "article.total": "proposals",
   "article.queue.title": "Article queue",
@@ -702,5 +701,13 @@
   "creative.flash.added_no_files": "Campaign added, but the files were refused: {reason}",
   "creative.flash.attach_busy": "A campaign with this topic already exists and is '{status}' — the files were not accepted, so as not to disturb a build in progress.",
   "creative.attached.count": "{n} file(s) attached",
-  "creative.attach.more": "Attach more"
+  "creative.attach.more": "Attach more",
+  "help.section.articles": "Article queue: proposals from article-ideas-scan, drafts from write-article, build and publish.",
+  "help.section.creatives": "Promotional creatives: campaigns from creative-ideas-scan, material from make-creative, attachments and previews.",
+  "help.section.review": "Evolution review: agents' proposed edits to their own instructions — accept, reject, inspect the diff.",
+  "help.section.projects": "Project list: rename, enable and disable, import from projects_root.",
+  "help.section.ai_radar": "AI Radar: outside news and releases summarised against this project's topics.",
+  "help.global.title": "Global sections",
+  "help.project.title": "Project sections",
+  "help.pick_project_hint": "Project sections open once a project is picked from the menu above."
 }

@@ -567,7 +567,6 @@
   "table.reset": "Сбросить",
   "table.shown_count": "{shown} из {total}",
   "table.empty": "Ничего не найдено по фильтрам.",
-
   "article.title": "Статьи",
   "article.total": "предложений",
   "article.queue.title": "Очередь статей",
@@ -702,5 +701,13 @@
   "creative.flash.added_no_files": "Кампания добавлена, но файлы не приняты: {reason}",
   "creative.flash.attach_busy": "Кампания с такой темой уже есть и сейчас в статусе «{status}» — файлы не приняты, чтобы не мешать идущей сборке.",
   "creative.attached.count": "Прикреплено файлов: {n}",
-  "creative.attach.more": "Прикрепить ещё"
+  "creative.attach.more": "Прикрепить ещё",
+  "help.section.articles": "Очередь статей: предложения от article-ideas-scan, черновики от write-article, сборка и публикация.",
+  "help.section.creatives": "Рекламные креативы: кампании от creative-ideas-scan, материалы от make-creative, вложения и превью.",
+  "help.section.review": "Ревью эволюций: предложения агентов к их же инструкциям — принять, отклонить, посмотреть диф.",
+  "help.section.projects": "Список проектов: переименование, включение и отключение, импорт из projects_root.",
+  "help.section.ai_radar": "AI Radar: сводка внешних новостей и релизов по темам проекта.",
+  "help.global.title": "Глобальные разделы",
+  "help.project.title": "Разделы проекта",
+  "help.pick_project_hint": "Разделы проекта открываются после выбора проекта в меню сверху."
 }
