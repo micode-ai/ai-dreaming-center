@@ -31,8 +31,9 @@
     body is the full guide. The markdown is shipped inert inside a
     <script type="text/markdown"> and rendered on first open, so a page of 31
     guides does not pay for 31 renders nobody asked for. -#}
-{% macro section_card(s, href) -%}
+{% macro section_card(s, href, scope) -%}
   {% set body = bodies.get(s.key) %}
+  {% set is_hidden = scope == 'project' and s.key in hidden_sections %}
   {% if body %}
   <details class="card help-card" data-help="{{ s.key }}">
     <summary class="help-card__head">
@@ -40,7 +41,7 @@
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
       </span>
       <span class="help-card__titles">
-        <span class="text-sm font-semibold strong">{{ s.title_key | t(locale=locale) }}</span>
+        <span class="text-sm font-semibold strong">{{ s.title_key | t(locale=locale) }}{% if is_hidden %} <span class="badge badge-neutral">{{ "nav.hidden_badge" | t(locale=locale) }}</span>{% endif %}</span>
         <span class="text-xs muted">{{ ('help.section.' ~ s.key) | t(locale=locale) }}</span>
       </span>
       {% if href %}<a class="btn btn-sm btn-ghost help-card__open" href="{{ href }}">{{ "help.open_section" | t(locale=locale) }}</a>{% endif %}
@@ -52,7 +53,7 @@
   {#- Nothing written for this section yet: the card still names it, and links
       to it when there is somewhere to go. -#}
   <{{ 'a' if href else 'div' }} class="card{% if href %} card-link{% endif %}"{% if href %} href="{{ href }}"{% endif %}>
-    <div class="text-sm font-semibold mb-1 strong">{{ s.title_key | t(locale=locale) }}</div>
+    <div class="text-sm font-semibold mb-1 strong">{{ s.title_key | t(locale=locale) }}{% if is_hidden %} <span class="badge badge-neutral">{{ "nav.hidden_badge" | t(locale=locale) }}</span>{% endif %}</div>
     <div class="text-xs muted">{{ ('help.section.' ~ s.key) | t(locale=locale) }}</div>
   </{{ 'a' if href else 'div' }}>
   {% endif %}
@@ -60,15 +61,17 @@
 
 <h2 class="section-title">{{ "help.global.title" | t(locale=locale) }}</h2>
 <div class="help-grid mb-5">
-  {% for s in global_sections %}{{ section_card(s, s.path) }}{% endfor %}
+  {% for s in global_sections %}{{ section_card(s, s.path, 'global') }}{% endfor %}
 </div>
 
 <h2 class="section-title">{{ "help.project.title" | t(locale=locale) }}</h2>
 {% if not project %}
 <p class="text-xs faint mb-3">{{ "help.pick_project_hint" | t(locale=locale) }}</p>
+{% elif hidden_sections %}
+<p class="text-xs faint mb-3">{{ "help.hidden_note" | t(locale=locale, n=hidden_sections | length) }}</p>
 {% endif %}
 <div class="help-grid">
-  {% for s in project_sections %}{{ section_card(s, (project_base ~ s.path) if project_base else '') }}{% endfor %}
+  {% for s in project_sections %}{{ section_card(s, (project_base ~ s.path) if project_base else '', 'project') }}{% endfor %}
 </div>
 
 <script>

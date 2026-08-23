@@ -36,6 +36,29 @@ behaviour did not, check that you entered a number and not a word.
 Checkboxes left unticked are saved as off: an absent checkbox in the form is an
 explicit no, not a "leave it alone".
 
+## Sections in the menu
+
+A separate block at the bottom of the project settings page: tick the sections
+this project needs. Unticked ones leave the sidebar.
+
+Three things worth knowing.
+
+**Hiding is about the menu, not about access.** A hidden section stays
+reachable by direct link and by links from other sections; it does not 404.
+Bookmarks keep working.
+
+**The dashboard and settings cannot be hidden.** The first is the project's
+entry point, the second is the only place to bring the rest back. They have no
+checkboxes, and an attempt to unset them around the form is ignored.
+
+**What is stored is the hidden list, not the visible one.** So a section added
+to the app later shows up everywhere by default, instead of being invisible in
+every project configured before it existed.
+
+The help page still lists **every** section, marking the hidden ones: that is
+where you decide whether you need a section, and hiding what you switched off
+would remove your way of reconsidering.
+
 ## Directory autoconfig
 
 Directory keys have a button beside them that creates the default directory and

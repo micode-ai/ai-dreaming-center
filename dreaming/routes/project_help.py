@@ -11,7 +11,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 
 from dreaming.services import help_content
-from dreaming.services.nav_sections import GLOBAL_SECTIONS, PROJECT_SECTIONS
+from dreaming.services.nav_sections import (
+    GLOBAL_SECTIONS, NAV_HIDDEN_KEY, PROJECT_SECTIONS,
+)
 
 router = APIRouter()
 
@@ -19,6 +21,17 @@ router = APIRouter()
 async def _render(request: Request, project=None):
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
     projects = await request.app.state.projects.list_all(only_enabled=True)
+    # Help lists every section, including the ones this project hid from its
+    # sidebar. This is where you decide whether you need a section at all, so
+    # filtering it the way the nav is filtered would make what you switched off
+    # undiscoverable. They are marked instead.
+    hidden: set[str] = set()
+    if project is not None:
+        stored = await request.app.state.projects.get_setting(
+            project.id, NAV_HIDDEN_KEY,
+        )
+        if isinstance(stored, list):
+            hidden = set(stored)
     return request.app.state.templates.TemplateResponse(
         request,
         "help.html",
@@ -39,6 +52,7 @@ async def _render(request: Request, project=None):
             # hint rather than as dead links.
             "project_sections": PROJECT_SECTIONS,
             "project_base": f"/p/{project.slug}" if project else "",
+            "hidden_sections": hidden,
         },
     )
 

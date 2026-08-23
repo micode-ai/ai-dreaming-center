@@ -2,6 +2,27 @@
 {% set active='settings' %}
 {% block project_content %}
 <p class="muted mb-3">{{ "settings.project_hint" | t(locale=locale) }}</p>
+{#- Its own form, not part of the settings groups below: this posts a list of
+    checked keys rather than the inherit/override pairs those fields use. -#}
+<form method="post" action="/p/{{ project.slug }}/settings/nav" class="max-w-3xl mb-6">
+  <fieldset class="card">
+    <legend class="text-sm font-semibold px-2 strong">{{ "nav.customise.title" | t(locale=locale) }}</legend>
+    <p class="field__hint mb-3">{{ "nav.customise.hint" | t(locale=locale) }}</p>
+    <div class="nav-picker">
+      {% for r in nav_rows %}
+      <label class="nav-picker__item">
+        <input type="checkbox" name="visible" value="{{ r.key }}" {% if r.visible %}checked{% endif %}>
+        <span>{{ r.title_key | t(locale=locale) }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    <p class="field__hint mt-3">
+      {{ "nav.customise.always" | t(locale=locale, items=always_visible | join(', ')) }}
+    </p>
+    <button class="btn btn-primary mt-3">{{ "nav.customise.save" | t(locale=locale) }}</button>
+  </fieldset>
+</form>
+
 <form method="post" action="/p/{{ project.slug }}/settings" class="space-y-6 max-w-3xl">
 {% for group_name, rows in groups %}
   <fieldset class="card">
@@ -37,4 +58,5 @@
 {% endfor %}
 <button class="btn btn-primary">Save</button>
 </form>
+
 {% endblock %}

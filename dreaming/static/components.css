@@ -523,3 +523,16 @@ dialog.app-modal::backdrop { background: var(--overlay-modal); }
    them do not push the card's actions off the screen, big enough to tell
    two screenshots apart. */
 .creative-thumb { max-width: 5rem; max-height: 5rem; height: auto; border-radius: var(--radius); border: 1px solid var(--border-subtle); }
+
+/* Project settings: the pick-your-sections grid. Two dozen short labels read
+   badly as a single column and badly as free-flowing text, so: fixed columns
+   that collapse to one on a narrow screen. */
+.nav-picker {
+  display: grid; gap: var(--space-1) var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+}
+.nav-picker__item {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-1) 0; font-size: var(--text-sm); cursor: pointer;
+}
+.nav-picker__item:hover { color: var(--text-strong); }

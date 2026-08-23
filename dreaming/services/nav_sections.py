@@ -66,3 +66,31 @@ PROJECT_SECTIONS: tuple[Section, ...] = (
     Section("review", "p.review", "/review"),
     Section("settings", "p.settings", "/settings"),
 )
+
+
+# Key under which a project stores the sections it does not want in its nav.
+# Hidden, not shown: recording what is switched off means a section added to
+# the registry later appears everywhere by default, instead of being invisible
+# in every project that predates it.
+NAV_HIDDEN_KEY = "nav_hidden_sections"
+
+# Two sections cannot be hidden. The dashboard is where `/p/<slug>/` lands, so
+# removing it leaves the project with no entry point; settings is where the
+# hiding is configured, so removing it locks the choice in.
+ALWAYS_VISIBLE: frozenset[str] = frozenset({"dashboard", "settings"})
+
+
+def visible_project_sections(hidden) -> tuple[Section, ...]:
+    """Project sections minus the ones this project switched off.
+
+    Tolerant of junk in the stored value -- an unknown key is ignored rather
+    than raising, so a section removed from the registry does not break the nav
+    of every project that had hidden it.
+    """
+    off = {k for k in (hidden or ()) if k not in ALWAYS_VISIBLE}
+    return tuple(s for s in PROJECT_SECTIONS if s.key not in off)
+
+
+def hideable_sections() -> tuple[Section, ...]:
+    """The sections a project is allowed to switch off, in nav order."""
+    return tuple(s for s in PROJECT_SECTIONS if s.key not in ALWAYS_VISIBLE)

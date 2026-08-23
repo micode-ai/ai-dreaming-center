@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from dreaming.config import settings as load_settings
+from dreaming.services.nav_sections import visible_project_sections
 from dreaming.services.db import SqliteDB
 from dreaming.services.projects import ProjectsService
 from dreaming.services.config_resolver import ConfigResolver
@@ -66,6 +67,11 @@ async def lifespan(app: FastAPI):
         return str(int(newest))
 
     app.state.templates.env.globals["asset_v"] = _asset_version
+    # The sidebar renders from base.html on every page and has no route
+    # context of its own, so the section list reaches it as a global rather
+    # than through thirty handlers. `request.state.nav_hidden` is set by
+    # project_resolver_middleware.
+    app.state.templates.env.globals["nav_project_sections"] = visible_project_sections
     app.state.process_manager = ProcessManager(
         app.state.settings, app.state.db, app.state.projects)
     app.state.orchestration_hub = OrchestrationHub(app.state.db, app.state.projects)

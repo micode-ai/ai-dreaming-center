@@ -21,10 +21,11 @@ from dreaming.services.nav_sections import GLOBAL_SECTIONS, PROJECT_SECTIONS  # 
 
 SIDEBAR = Path("dreaming/templates/_sidebar.html")
 
-# nav_item('key', base ~ '/path', 'title.key', ...)
-NAV_ITEM = re.compile(
-    r"nav_item\(\s*'([^']+)'\s*,\s*base\s*~\s*'([^']*)'\s*,\s*'([^']+)'",
-)
+# The project nav now loops over the registry, so its keys, paths and labels
+# cannot drift from it. What can still go wrong is the icon map, which is
+# hand-maintained per key: a section missing from it renders a blank gap.
+#   'key': '<svg ...</svg>',
+ICON_ENTRY = re.compile(r"^\s*'([a-z0-9_]+)':\s*'<svg", re.M)
 # The global block is written out longhand: href, then the label key.
 GLOBAL_LINK = re.compile(
     r'href="(/[^"]*)"[^>]*>.*?\{\{\s*"([^"]+)"\s*\|\s*t\(', re.S,
@@ -41,25 +42,21 @@ def fail(msg: str) -> None:
 def main() -> int:
     text = SIDEBAR.read_text(encoding="utf-8")
 
-    # ---------------------------------------------------------- project nav
-    found = [(k, p, t) for k, p, t in NAV_ITEM.findall(text)]
-    want = [(s.key, s.path, s.title_key) for s in PROJECT_SECTIONS]
-    if found == want:
-        print(f"ok: sidebar's {len(found)} project links match the registry, in order")
+    # --------------------------------------------------------- the icon map
+    icons = ICON_ENTRY.findall(text)
+    want = [s.key for s in PROJECT_SECTIONS]
+    if icons == want:
+        print(f"ok: sidebar has an icon for each of the {len(icons)} project "
+              f"sections, in registry order")
     else:
-        fk = {k for k, _, _ in found}
-        wk = {k for k, _, _ in want}
-        for k in sorted(wk - fk):
-            fail(f"project section '{k}' is in the registry but not in the sidebar")
-        for k in sorted(fk - wk):
-            fail(f"project section '{k}' is in the sidebar but not in the registry")
-        for (k, p, t), (k2, p2, t2) in zip(found, want):
-            if k == k2 and (p, t) != (p2, t2):
-                fail(f"project section '{k}': sidebar has ({p}, {t}), "
-                     f"registry has ({p2}, {t2})")
-        if fk == wk and sorted(found) == sorted(want):
-            fail("project sections agree but their order does not -- the help "
-                 "page follows the registry, so the two pages would disagree")
+        for k in sorted(set(want) - set(icons)):
+            fail(f"project section '{k}' has no icon in the sidebar's ICONS map")
+        for k in sorted(set(icons) - set(want)):
+            fail(f"sidebar has an icon for '{k}', which is not a section")
+        if set(icons) == set(want):
+            print(f"ok: all {len(icons)} icons present "
+                  f"(map order differs from the registry, which does not matter "
+                  f"-- the nav is rendered by looping the registry)")
 
     # ----------------------------------------------------------- global nav
     tail = text[text.index('sidebar.section.global'):]

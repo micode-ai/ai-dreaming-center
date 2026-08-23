@@ -1,11 +1,20 @@
-"""Parses /p/{slug}/ prefix; sets request.state.project; 404 on unknown slug."""
+"""Parses /p/{slug}/ prefix; sets request.state.project; 404 on unknown slug.
+
+Also loads the project's hidden-nav list onto `request.state.nav_hidden`. The
+sidebar is rendered from `base.html` on every project page, so the alternative
+was threading the same value through thirty route handlers -- one small query
+here instead.
+"""
 from __future__ import annotations
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
 
+from dreaming.services.nav_sections import NAV_HIDDEN_KEY
+
 
 async def project_resolver_middleware(request: Request, call_next):
     request.state.project = None
+    request.state.nav_hidden = ()
     path = request.url.path
     if not path.startswith("/p/"):
         return await call_next(request)
@@ -29,4 +38,13 @@ async def project_resolver_middleware(request: Request, call_next):
             status_code=404,
         )
     request.state.project = project
+    # A malformed stored value must not take the page down; the nav simply
+    # falls back to showing everything.
+    try:
+        stored = await request.app.state.projects.get_setting(
+            project.id, NAV_HIDDEN_KEY,
+        )
+        request.state.nav_hidden = tuple(stored) if isinstance(stored, list) else ()
+    except Exception:
+        request.state.nav_hidden = ()
     return await call_next(request)

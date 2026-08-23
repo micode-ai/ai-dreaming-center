@@ -6,6 +6,9 @@ from fastapi.responses import RedirectResponse
 
 from dreaming.config import SETTINGS_GROUPS
 from dreaming.services import autoconfig
+from dreaming.services.nav_sections import (
+    ALWAYS_VISIBLE, NAV_HIDDEN_KEY, hideable_sections,
+)
 
 
 router = APIRouter()
@@ -68,13 +71,46 @@ async def project_settings_page(request: Request, slug: str):
             })
         rows.append((group_name, group_rows))
 
+    hidden = overrides.get(NAV_HIDDEN_KEY)
+    hidden_set = set(hidden) if isinstance(hidden, list) else set()
+    nav_rows = [
+        {"key": s.key, "title_key": s.title_key,
+         "visible": s.key not in hidden_set}
+        for s in hideable_sections()
+    ]
+
     locale = request.cookies.get("dc_locale", request.app.state.settings.default_locale)
     projects = await request.app.state.projects.list_all(only_enabled=True)
     return request.app.state.templates.TemplateResponse(
         request, "project_settings.html",
         {"project": project, "groups": rows,
+         "nav_rows": nav_rows,
+         "always_visible": sorted(ALWAYS_VISIBLE),
          "projects": projects, "locale": locale},
     )
+
+
+@router.post("/p/{slug}/settings/nav")
+async def project_settings_nav(request: Request, slug: str):
+    """Save which sections this project wants in its sidebar.
+
+    The form submits the sections to KEEP, because an unchecked checkbox sends
+    nothing -- so what is stored is the complement. Only hideable keys are
+    considered, which means an unchecked dashboard or settings (impossible
+    through the form, trivial through curl) cannot lock anyone out.
+    """
+    project = request.state.project
+    form = await request.form()
+    keep = set(form.getlist("visible"))
+    hidden = sorted(s.key for s in hideable_sections() if s.key not in keep)
+    svc = request.app.state.projects
+    if hidden:
+        await svc.set_setting(project.id, NAV_HIDDEN_KEY, hidden)
+    else:
+        # Nothing hidden is the default; storing an empty list would be a
+        # meaningless row that later reads as "configured".
+        await svc.unset_setting(project.id, NAV_HIDDEN_KEY)
+    return RedirectResponse(f"/p/{project.slug}/settings", status_code=303)
 
 
 @router.post("/p/{slug}/settings")
