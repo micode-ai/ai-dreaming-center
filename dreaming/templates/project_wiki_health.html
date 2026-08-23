@@ -21,22 +21,24 @@
   </form>
 </div>
 
-<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-  <div class="metric metric-success">
-    <div class="metric__label">{{ "wiki_health.modules_covered" | t(locale=locale) }}</div>
-    <div class="metric__value">{{ snapshot.covered or 0 }}</div>
+<div class="stat-bar">
+  <div class="stat-bar__item stat-bar__item--lead stat-bar__item--success">
+    <span class="stat-bar__value">{{ snapshot.covered or 0 }}</span>
+    <span class="stat-bar__label">{{ "wiki_health.modules_covered" | t(locale=locale) }}</span>
   </div>
-  <div class="metric metric-info">
-    <div class="metric__label">Learning-notes</div>
-    <div class="metric__value">{{ snapshot.learning_notes or 0 }}</div>
+  <div class="stat-bar__item">
+    <span class="stat-bar__value">{{ snapshot.learning_notes or 0 }}</span>
+    <span class="stat-bar__label">Learning-notes</span>
   </div>
-  <div class="metric metric-running metric-neutral">
-    <div class="metric__label">{{ "wiki_health.trends_points" | t(locale=locale) }}</div>
-    <div class="metric__value">{{ series|length }}</div>
+  <div class="stat-bar__item{{ ' stat-bar__item--zero' if not series|length }}">
+    <span class="stat-bar__value">{{ series|length }}</span>
+    <span class="stat-bar__label">{{ "wiki_health.trends_points" | t(locale=locale) }}</span>
   </div>
-  <div class="metric metric-timeout">
-    <div class="metric__label">{{ "wiki_health.last_snapshot" | t(locale=locale) }}</div>
-    <div class="text-sm font-mono mt-2">{{ latest.date if latest else '—' }}</div>
+  <div class="stat-bar__item">
+    <span class="stat-bar__value stat-bar__value--text">
+      {%- if latest %}<time data-ts="{{ latest.date }}">{{ latest.date }}</time>{% else %}—{% endif -%}
+    </span>
+    <span class="stat-bar__label">{{ "wiki_health.last_snapshot" | t(locale=locale) }}</span>
   </div>
 </div>
 

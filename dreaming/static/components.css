@@ -226,6 +226,8 @@
 .stat-bar__item--failed  .stat-bar__value { color: var(--status-failed); }
 .stat-bar__item--timeout .stat-bar__value { color: var(--status-timeout); }
 .stat-bar__item--zero .stat-bar__value { color: var(--text-faint); }
+/* A stat whose value is a date rather than a figure: same slot, text-sized. */
+.stat-bar__value--text { font-size: var(--text-base); font-family: var(--font-sans); }
 
 /* ---------- Row actions ----------
    Per-row buttons repeated down a long table are visual noise. Quiet until

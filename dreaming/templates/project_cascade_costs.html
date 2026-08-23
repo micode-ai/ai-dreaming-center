@@ -48,26 +48,26 @@
   </div>
 </div>
 
-<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
-  <div class="metric metric-info">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">Runs</div>
-    <div class="text-2xl font-semibold mt-1 metric__value">{{ kpi.runs }}</div>
+<div class="stat-bar">
+  <div class="stat-bar__item stat-bar__item--lead">
+    <span class="stat-bar__value">{{ kpi.runs }}</span>
+    <span class="stat-bar__label">Runs</span>
   </div>
-  <div class="metric metric-success">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">Total USD</div>
-    <div class="text-2xl font-semibold mt-1 metric__value">${{ "%.4f" | format(kpi.total_cost_usd) }}</div>
+  <div class="stat-bar__item stat-bar__item--success">
+    <span class="stat-bar__value">${{ "%.4f" | format(kpi.total_cost_usd) }}</span>
+    <span class="stat-bar__label">Total USD</span>
   </div>
-  <div class="metric metric-running metric-neutral">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">Total tokens</div>
-    <div class="text-2xl font-semibold mt-1 metric__value">{{ "{:,}".format(kpi.total_tokens) }}</div>
+  <div class="stat-bar__item">
+    <span class="stat-bar__value">{{ "{:,}".format(kpi.total_tokens) }}</span>
+    <span class="stat-bar__label">Total tokens</span>
   </div>
-  <div class="metric metric-timeout metric-neutral">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">Avg cost / run</div>
-    <div class="text-2xl font-semibold mt-1 metric__value">${{ "%.4f" | format(kpi.avg_cost_usd) }}</div>
+  <div class="stat-bar__item">
+    <span class="stat-bar__value">${{ "%.4f" | format(kpi.avg_cost_usd) }}</span>
+    <span class="stat-bar__label">Avg cost / run</span>
   </div>
-  <div class="metric metric-info">
-    <div class="text-[11px] uppercase tracking-wide muted font-medium">Events</div>
-    <div class="text-2xl font-semibold mt-1 metric__value">{{ kpi.total_events }}</div>
+  <div class="stat-bar__item">
+    <span class="stat-bar__value">{{ kpi.total_events }}</span>
+    <span class="stat-bar__label">Events</span>
   </div>
 </div>
 

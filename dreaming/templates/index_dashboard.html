@@ -8,33 +8,31 @@
 </header>
 
 <!-- Top-line metrics -->
-<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-  <div class="metric metric-success">
-    <div class="metric__label">{{ "p.metrics.success" | t(locale=locale) }} <span class="normal-case font-normal">/ wk</span></div>
-    <div class="metric__value">{{ totals.success }}</div>
+<div class="stat-bar">
+  <div class="stat-bar__item stat-bar__item--success{{ ' stat-bar__item--zero' if not totals.success }}">
+    <span class="stat-bar__value">{{ totals.success }}</span>
+    <span class="stat-bar__label">{{ "p.metrics.success" | t(locale=locale) }} / wk</span>
   </div>
-  <div class="metric metric-failed">
-    <div class="metric__label">{{ "p.metrics.failed" | t(locale=locale) }} <span class="normal-case font-normal">/ wk</span></div>
-    <div class="metric__value">{{ totals.failed }}</div>
+  <div class="stat-bar__item stat-bar__item--failed{{ ' stat-bar__item--zero' if not totals.failed }}">
+    <span class="stat-bar__value">{{ totals.failed }}</span>
+    <span class="stat-bar__label">{{ "p.metrics.failed" | t(locale=locale) }} / wk</span>
   </div>
-  <div class="metric metric-timeout">
-    <div class="metric__label">{{ "p.metrics.timeout" | t(locale=locale) }} <span class="normal-case font-normal">/ wk</span></div>
-    <div class="metric__value">{{ totals.timeout }}</div>
+  <div class="stat-bar__item stat-bar__item--timeout{{ ' stat-bar__item--zero' if not totals.timeout }}">
+    <span class="stat-bar__value">{{ totals.timeout }}</span>
+    <span class="stat-bar__label">{{ "p.metrics.timeout" | t(locale=locale) }} / wk</span>
   </div>
-  <div class="metric metric-running">
-    <div class="metric__label flex items-center gap-1.5">
-      running now
-      {% if totals.running %}<span class="dot dot-pulse text-success" aria-hidden="true"></span>{% endif %}
-    </div>
-    <div class="metric__value">{{ totals.running }}</div>
+  <div class="stat-bar__item stat-bar__item--running{{ ' stat-bar__item--zero' if not totals.running }}">
+    <span class="stat-bar__value">{{ totals.running }}</span>
+    <span class="stat-bar__label">running now
+      {% if totals.running %}<span class="dot dot-pulse text-success" aria-hidden="true"></span>{% endif %}</span>
   </div>
-  <div class="metric">
-    <div class="metric__label">{{ "p.tech_debt" | t(locale=locale) }}</div>
-    <div class="metric__value">{{ totals.td }}</div>
+  <div class="stat-bar__item{{ ' stat-bar__item--zero' if not totals.td }}">
+    <span class="stat-bar__value">{{ totals.td }}</span>
+    <span class="stat-bar__label">{{ "p.tech_debt" | t(locale=locale) }}</span>
   </div>
-  <div class="metric">
-    <div class="metric__label">{{ "p.ideas" | t(locale=locale) }}</div>
-    <div class="metric__value">{{ totals.ideas }}</div>
+  <div class="stat-bar__item{{ ' stat-bar__item--zero' if not totals.ideas }}">
+    <span class="stat-bar__value">{{ totals.ideas }}</span>
+    <span class="stat-bar__label">{{ "p.ideas" | t(locale=locale) }}</span>
   </div>
 </div>
 

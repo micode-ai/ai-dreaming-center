@@ -445,11 +445,13 @@
       <td class="text-xs muted whitespace-nowrap num">{% if r.started_at %}<time data-ts="{{ r.started_at }}">{{ r.started_at[5:16] | replace("T", " ") }}</time>{% endif %}</td>
       <td class="text-xs muted whitespace-nowrap num">{% if r.finished_at %}<time data-ts="{{ r.finished_at }}">{{ r.finished_at[5:16] | replace("T", " ") }}</time>{% else %}—{% endif %}</td>
       <td class="text-xs whitespace-nowrap">
+        <span class="row-actions">
         <a class="btn btn-sm" href="/p/{{ project.slug }}/orchestration/{{ r.id }}/log">log</a>
         <form method="post" action="/p/{{ project.slug }}/orchestration/{{ r.id }}/delete" class="inline ml-1"
               data-confirm="{{ 'orchestration.confirm_delete_row' | t(locale=locale, id=r.id[:8]) }}" data-confirm-variant="danger">
           <button class="btn btn-sm btn-danger">delete</button>
         </form>
+        </span>
       </td>
     </tr>
     {% endfor %}
