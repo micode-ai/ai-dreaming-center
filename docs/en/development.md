@@ -11,6 +11,7 @@ Conventions, checklists for typical tasks, code style, git discipline.
 - [Writing a parser service](#writing-a-parser-service)
 - [DB conventions](#db-conventions)
 - [Testing approach](#testing-approach)
+- [Design system](#design-system)
 - [i18n discipline](#i18n-discipline)
 - [Git conventions](#git-conventions)
 
@@ -237,6 +238,8 @@ Smoke scenarios live in [`scripts/`](../../scripts/):
 | `smoke_seed_one.py` | Seed one project in DB. |
 | `smoke_i18n.py` | Loading messages + plurals. |
 | `check_i18n.py` | RU/EN keys parity. |
+| `check_css_tokens.py` | Design system: no colour in templates, no literals in `components.css`, no undefined classes. |
+| `smoke_templates_render.py` | Compiles every template, then walks every parameter-free GET route. |
 
 Run:
 
@@ -246,6 +249,64 @@ python scripts/check_i18n.py    # exit 0 if parity OK
 ```
 
 If you added a feature — add a smoke (or extend an existing one). See `docs/smoke-tests.md`.
+
+## Design system
+
+Introduced by wave D1/D2 (see [`waves.md`](waves.md)). Before it, colour lived in 464 light-theme Tailwind utilities and 491 inline `style=` attributes across 51 templates, with a block of `!important` overrides layered on top to repaint them dark. Templates now carry no colour at all.
+
+### Three files, in this order
+
+`base.html` loads them exactly like this, and the order matters:
+
+| File | Owns | What never appears in it |
+|---|---|---|
+| `static/tokens.css` | The single source of visual truth: a `:root` block of ~90 custom properties — surfaces, borders, text, brand, statuses, shadows, spacing, radii, typography, table density. | Any selector other than `:root`. |
+| `static/app.css` | The base layer plus the app frame: `body`, resets, focus rings, scrollbars, form-control defaults, and the `.app-sidebar` / `.app-content` shell. | Reusable content components — those belong in `components.css`. |
+| `static/components.css` | Semantic classes: `.card`, `.data-table`, `.stat-bar`, `.badge-*`, `.btn-*`, `.field__*`, `.row-actions` and friends. | **Colour literals.** `var(--…)` only. |
+
+Plus two narrow ones: `table_tools.css` (table sorting and filtering) and `orchestration_swimlane.css`.
+
+### The rule
+
+**Colour in a template is a bug.** Need a new shade — add a token to `tokens.css`; need a new visual element — add a class to `components.css` and reference tokens from it. Tailwind utilities stay for layout (`flex`, `gap-3`, `grid-cols-2`), not for looks.
+
+Why so strict: Tailwind arrives through the Play CDN, which emits its rules inside `@layer`. Unlayered author CSS always beats layered CSS regardless of specificity, so "I'll just patch it with a utility in the template" works about half the time and is miserable to debug.
+
+### The gate
+
+```bash
+python scripts/check_css_tokens.py     # exit 0 == ALL OK
+```
+
+Four checks, all of which must read zero:
+
+1. **Colour literals in `components.css`** — hex, and any `rgb()/rgba()/hsl()` that is not black (black is allowed for shadows and overlays).
+2. **Tailwind utilities carrying a palette colour** — `bg-white`, `text-gray-700`, `border-slate-200`. Every shade is caught, not just the light ones: a dark `bg-slate-900` does not belong in a template either. Size and layout utilities (`text-xs`, `border`) never match — the regex requires a colour name.
+3. **Static inline `style=` in templates.** An attribute containing `{{ … }}` is a computed value (a progress bar's width) and is allowed. An attribute built only from `{% %}` is not: picking between two static colours belongs in a modifier class.
+4. **A class referenced in a template but defined nowhere** — catches typos like `text-warnn`. It knows about `<style>` blocks inside templates and about classes attached by JS.
+
+### Adding a visual element
+
+1. Check whether `components.css` already has the class — the wave caught four duplicates (`.dim` against `.muted`, `.progress-*` against `.meter-*`, two identical modal selectors, three byte-for-byte identical tokens).
+2. If a shade or size is missing, add a token to `tokens.css`, in its own group.
+3. Add the class to `components.css`, through `var(--…)` only.
+4. Run `python scripts/check_css_tokens.py` and `python scripts/smoke_templates_render.py`.
+
+On contrast: when you put a text colour over a translucent tint, compute contrast against the nearest **opaque** ancestor, not against the tint's own token. The wave found about twenty colours that looked fine in the source and composited to between 2.4:1 and 4:1 in the browser.
+
+### Dates in tables
+
+A timestamp cell is written like this — the server renders a fallback, `static/timeago.js` swaps in something human:
+
+```jinja
+<time data-ts="{{ s.started_at }}">{{ s.started_at[5:16] | replace("T", " ") }}</time>
+```
+
+The script shows relative time up to a week ("5 minutes ago") and a short absolute date beyond that, repaints once a minute, and honours the locale. If `data-ts` will not parse, the server's text is left alone.
+
+### Static asset caching
+
+`dreaming/main.py` exposes `asset_v` as a Jinja global — the newest mtime across the local assets — and `base.html` appends it as `?v={{ asset_v }}`. Without it CSS edits are invisible until a hard refresh: browsers hold `/static/*.css` firmly, and restarting the server does not help. When you add a new local css/js to `base.html`, add its filename to the list inside `_asset_version()`.
 
 ## i18n discipline
 
@@ -298,3 +359,4 @@ See also [`troubleshooting.md`](troubleshooting.md) (mojibake).
 - Parsers (examples) — [`services.md`](services.md).
 - i18n — [`features/i18n.md`](features/i18n.md).
 - Wave history — [`waves.md`](waves.md).
+- Design system (spec) — [`superpowers/specs/2026-08-16-design-system-foundation-design.md`](../superpowers/specs/2026-08-16-design-system-foundation-design.md).
