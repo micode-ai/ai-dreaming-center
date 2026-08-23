@@ -113,8 +113,14 @@ def main() -> int:
     if ru != en:
         fail("guides differ between locales -- "
              f"ru-only: {sorted(ru - en) or '-'}, en-only: {sorted(en - ru) or '-'}")
-    else:
-        print(f"ok: {len(ru)}/{len(keys)} sections have a guide, both locales")
+    # Every section is covered as of the wave that wrote these, so a missing
+    # guide is now a regression rather than work not yet done. A new section
+    # added to the registry has to arrive with its guide.
+    missing = sorted(keys - ru)
+    if missing:
+        fail(f"section(s) with no guide: {', '.join(missing)}")
+    elif ru == en:
+        print(f"ok: all {len(keys)} sections have a guide, both locales")
 
     print("FAIL" if failures else "PASS")
     return 1 if failures else 0
