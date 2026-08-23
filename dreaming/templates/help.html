@@ -27,17 +27,11 @@
 
 <h2 class="section-title">{{ "help.global.title" | t(locale=locale) }}</h2>
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
-  {# (help-key, title-key) -- global sections do not share the p.* title prefix
-     the project ones use, so each names its own. #}
-  {% for key, title in [
-    ('projects', 'projects.title'), ('ai_usage', 'p.ai_usage'),
-    ('ai_radar', 'radar.title'), ('articles', 'article.queue.title'),
-    ('settings', 'settings.title'),
-  ] %}
-  <div class="card">
-    <div class="text-sm font-semibold mb-1 strong">{{ title | t(locale=locale) }}</div>
-    <div class="text-xs muted">{{ ('help.section.' ~ key) | t(locale=locale) }}</div>
-  </div>
+  {% for s in global_sections %}
+  <a class="card card-link" href="{{ s.path }}">
+    <div class="text-sm font-semibold mb-1 strong">{{ s.title_key | t(locale=locale) }}</div>
+    <div class="text-xs muted">{{ ('help.section.' ~ s.key) | t(locale=locale) }}</div>
+  </a>
   {% endfor %}
 </div>
 
@@ -46,18 +40,13 @@
 <p class="text-xs faint mb-3">{{ "help.pick_project_hint" | t(locale=locale) }}</p>
 {% endif %}
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-  {% set sections = [
-    'dashboard', 'orchestration', 'questions', 'live', 'rotation', 'topics',
-    'kanban', 'notes', 'findings', 'tech_debt', 'ideas', 'wiki', 'wiki_health',
-    'ai_usage', 'articles', 'creatives', 'evolutions', 'review', 'loops',
-    'loops_templates', 'plans', 'cascade_costs', 'contracts',
-    'sidecar_findings', 'settings',
-  ] %}
-  {% for key in sections %}
-  <div class="card">
-    <div class="text-sm font-semibold mb-1 strong">{{ ('creative.title' if key == 'creatives' else 'article.title' if key == 'articles' else 'p.' ~ key) | t(locale=locale) }}</div>
-    <div class="text-xs muted">{{ ('help.section.' ~ key) | t(locale=locale) }}</div>
-  </div>
+  {% for s in project_sections %}
+  {# No project selected means no URL to give, so the card stays a card. #}
+  <{{ 'a' if project_base else 'div' }} class="card{% if project_base %} card-link{% endif %}"
+     {%- if project_base %} href="{{ project_base }}{{ s.path }}"{% endif %}>
+    <div class="text-sm font-semibold mb-1 strong">{{ s.title_key | t(locale=locale) }}</div>
+    <div class="text-xs muted">{{ ('help.section.' ~ s.key) | t(locale=locale) }}</div>
+  </{{ 'a' if project_base else 'div' }}>
   {% endfor %}
 </div>
 {% endblock %}

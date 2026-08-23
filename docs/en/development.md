@@ -240,6 +240,7 @@ Smoke scenarios live in [`scripts/`](../../scripts/):
 | `check_i18n.py` | RU/EN keys parity. |
 | `check_css_tokens.py` | Design system: no colour in templates, no literals in `components.css`, no undefined classes. |
 | `smoke_templates_render.py` | Compiles every template, then walks every parameter-free GET route. |
+| `smoke_help_sections.py` | The help page and the sidebar list the same sections, each with help text and a real route. |
 
 Run:
 

@@ -89,6 +89,24 @@
   border-radius: var(--radius); padding: var(--space-4);
 }
 .card--flush { padding: 0; overflow: hidden; }
+/* A card that is itself a link (help page section grid). Needs the affordance
+   spelled out: <a> inherits colour from Preflight, so without this a card of
+   text gives no sign it can be clicked. */
+.card-link {
+  display: block;
+  text-decoration: none;
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+.card-link:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-muted);
+  transform: translateY(-1px);
+}
+.card-link:hover .strong { color: var(--brand-fg-dim); }
+.card-link:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
 /* Dashboard bento tiles (partials/dashboard/_tile_*.html): the only thing
    .card doesn't already cover for this shape is the fixed floor height that
    keeps three tiles of uneven content even in a grid row. Grepped for an
