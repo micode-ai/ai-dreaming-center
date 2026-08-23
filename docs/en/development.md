@@ -66,7 +66,10 @@ Full example — adding the `/p/{slug}/heartbeat` page.
    "p.heartbeat": "Heartbeat"
    ```
 7. **Run `scripts/check_i18n.py`** — verifies that keys are matched in RU/EN.
-8. **Smoke**: `curl http://localhost:8086/p/<slug>/heartbeat` — expect 200.
+8. **Add the section to the registry**: `dreaming/services/nav_sections.py` — key, title key, path. The registry is shared: the help page is built from it, and `_sidebar.html` is checked against it.
+9. **Write the section's guide**: `dreaming/help/ru/heartbeat.md` and `dreaming/help/en/heartbeat.md` — what the section is for, what is on screen, what you can do, what to check when it looks empty. Plus a one-line `help.section.heartbeat` in both `messages_*.json` for the collapsed card.
+10. **Run `scripts/smoke_help_sections.py`** — fails if the section is missing from the registry, has no guide, has no caption, exists in one locale only, or has a path that is not a registered route.
+11. **Smoke**: `curl http://localhost:8086/p/<slug>/heartbeat` — expect 200.
 
 ## Adding a settings key
 

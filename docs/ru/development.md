@@ -66,7 +66,10 @@
    "p.heartbeat": "Heartbeat"
    ```
 7. **Запусти `scripts/check_i18n.py`** — проверит что ключи сматчены в RU/EN.
-8. **Smoke**: `curl http://localhost:8086/p/<slug>/heartbeat` — ожидаешь 200.
+8. **Занеси раздел в реестр**: `dreaming/services/nav_sections.py` — ключ, ключ заголовка, путь. Реестр общий: из него строится справка, а `_sidebar.html` сверяется с ним.
+9. **Напиши справку по разделу**: `dreaming/help/ru/heartbeat.md` и `dreaming/help/en/heartbeat.md` — зачем раздел, что на экране, что можно сделать, что смотреть если пусто. Плюс одну строку `help.section.heartbeat` в обоих `messages_*.json` для свёрнутой карточки.
+10. **Запусти `scripts/smoke_help_sections.py`** — упадёт, если раздел не в реестре, без справки, без текста, в одной локали или с путём, которого нет среди маршрутов.
+11. **Smoke**: `curl http://localhost:8086/p/<slug>/heartbeat` — ожидаешь 200.
 
 ## Adding a settings key
 
