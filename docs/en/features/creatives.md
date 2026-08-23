@@ -191,10 +191,20 @@ no longer `making`, `{error_message}` → `failed`, success
 moves it to `drafted`, `verify_label` computed against the venue (not the
 subject — the same "read from the pinned target" trick articles use).
 
-The maker has no question channel: `make-creative.md` mentions neither
-`POST /api/questions/create` nor a poll loop. Inventing an unverifiable fact is
-explicitly forbidden ("Never invent a number, a customer, a testimonial...")
-but the command offers no alternative beyond an honest failure report.
+The maker has a question channel, added because it previously did not.
+`make-creative.md` forbids inventing an unverifiable fact ("Never invent a
+number, a customer, a testimonial...") and, until step 4a existed, offered no
+alternative beyond an honest failure report — a campaign could die over one
+figure a human would have supplied in seconds.
+
+Step 4a mirrors `write-article.md`'s: `POST /api/questions/create` against the
+**subject**'s slug with `run_id` set to the proposal id, then a poll loop kept
+inside a single Bash call so the wait costs one turn rather than one per
+`curl`. The `run_id` is what lets the campaign's own card show the waiting
+line — `project_creatives.py` matches a pending question's `run_id` against
+the row id, so a question from another campaign, or one with no `run_id`,
+lights up nothing. On `dismissed` or no answer, the rule is unchanged: fail
+and name the question, never ship around it.
 
 ## Preview and the media route
 

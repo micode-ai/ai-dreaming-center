@@ -623,6 +623,81 @@ async def main() -> int:  # noqa: C901
             else:
                 os.environ["DC_DB_PATH"] = prior
 
+        # ---- the waiting indicator is per campaign, not per project -----
+        # A question lights up the card whose id it names, and no other. The
+        # bug this guards against is a project-wide "is anything pending"
+        # check: orchestrator_questions is shared by every session on a
+        # project, so that version lights up every 'making' card, including
+        # ones that never asked.
+        prior2 = os.environ.get("DC_DB_PATH")
+        page_db2 = Path(tempfile.mkdtemp(prefix="dc_smoke_cr_q_"))
+        repo2 = Path(tempfile.mkdtemp(prefix="dc_smoke_cr_qrepo_"))
+        (repo2 / "docs" / "marketing" / "creatives").mkdir(parents=True)
+        os.environ["DC_DB_PATH"] = str(page_db2 / "t.db")
+        try:
+            from starlette.testclient import TestClient as TC2
+            with TC2(app) as client:
+                svc = ProjectsService(app.state.db)
+                proj = await svc.create(
+                    slug="cr-q", label="CR q", working_dir=str(repo2))
+                await svc.set_setting(
+                    proj.id, "creative_dir", "docs/marketing/creatives")
+                asker = await app.state.db.add_creative_proposal(
+                    proj.id, source="manual", source_ref="", evidence="checked",
+                    title="Asks", angle="", slug_hint="asks")
+                quiet = await app.state.db.add_creative_proposal(
+                    proj.id, source="manual", source_ref="", evidence="checked",
+                    title="Quiet", angle="", slug_hint="quiet")
+                for cid_ in (asker, quiet):
+                    await app.state.db.start_creative_attempt(
+                        cid_, session_id=f"sess-{cid_}")
+
+                marker = app.state.i18n.t("creative.waiting_answer", locale="ru")
+                body = client.get("/p/cr-q/creatives").text
+                if marker in body:
+                    fail("the waiting line showed with no pending question")
+                    return 1
+
+                client.post("/api/questions/create", json={
+                    "project_slug": "cr-q", "run_id": str(asker),
+                    "tool_use_id": "smoke-cr-q1",
+                    "question": "real figure?", "options": []})
+                body = client.get("/p/cr-q/creatives").text
+                if body.count(marker) != 1:
+                    fail(f"one campaign asked, {body.count(marker)} cards show "
+                         f"the waiting line -- it must be matched by run_id, "
+                         f"not by 'does this project have any pending question'")
+                    return 1
+
+                # A question with an unrelated run_id belongs to no card.
+                client.post("/api/questions/create", json={
+                    "project_slug": "cr-q", "run_id": "not-a-campaign",
+                    "tool_use_id": "smoke-cr-q2",
+                    "question": "stray", "options": []})
+                body = client.get("/p/cr-q/creatives").text
+                if body.count(marker) != 1:
+                    fail(f"an unrelated run_id changed the count to "
+                         f"{body.count(marker)}; it must light up nothing")
+                    return 1
+                print("ok: the waiting line marks the campaign that asked, and "
+                      "only it")
+        finally:
+            if prior2 is None:
+                os.environ.pop("DC_DB_PATH", None)
+            else:
+                os.environ["DC_DB_PATH"] = prior2
+
+        # ---- the maker can ask at all ------------------------------------
+        cmd = (ROOT / "templates" / "starter-kit" / "commands"
+               / "make-creative.md").read_text(encoding="utf-8")
+        for needle in ("/api/questions/create", "poll", "tool_use_id", "run_id"):
+            if needle not in cmd:
+                fail(f"make-creative.md lost {needle!r} -- without the ask "
+                     f"channel the maker's only answer to an unverifiable "
+                     f"claim is to fail the campaign")
+                return 1
+        print("ok: make-creative.md carries the question channel")
+
         print("PASS")
         return 0
     finally:

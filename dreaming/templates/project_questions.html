@@ -6,7 +6,7 @@
 <div class="empty-state">
   <p class="mb-2">{{ "questions.empty.title" | t(locale=locale) }}</p>
   <p class="text-xs">
-    {{ "questions.empty.desc" | t(locale=locale, ask='AskUserQuestion', cmd='/write-article', post='POST /api/questions/create', get='GET /api/questions/{id}/poll') }}
+    {{ "questions.empty.desc" | t(locale=locale, ask='AskUserQuestion', cmd='/write-article, /make-creative', post='POST /api/questions/create', get='GET /api/questions/{id}/poll') }}
   </p>
 </div>
 {% endif %}

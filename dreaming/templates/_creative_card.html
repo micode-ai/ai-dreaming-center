@@ -127,6 +127,13 @@
       <form method="post" action="/p/{{ project.slug }}/creatives/{{ c.id }}/cancel" class="inline">
         <button class="btn btn-sm">{{ "creative.btn.cancel" | t(locale=locale) }}</button>
       </form>
+      {#- The maker asked something it could not establish and is blocked on
+          the answer. Matched by run_id, so this is THIS campaign's question. -#}
+      {% if c.has_pending_question %}
+        <a href="/p/{{ project.slug }}/questions" class="text-xs faint">
+          {{ "creative.waiting_answer" | t(locale=locale) }}
+        </a>
+      {% endif %}
     {% elif c.status == 'drafted' %}
       {% if c.can_publish %}
         <form method="post" action="/p/{{ project.slug }}/creatives/{{ c.id }}/publish" class="inline"

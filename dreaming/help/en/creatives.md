@@ -86,6 +86,19 @@ it succeeded.
 Everything the maker named is committed, renders and copy together, plus any
 extra paths configured. The app asks for confirmation before committing.
 
+## When the maker asks
+
+The maker is forbidden from inventing a number, a customer or a testimonial. If
+the copy needs one and it cannot be established, the maker asks and waits — a
+campaign card in Making shows a link to the Questions section. Answer and it
+carries on; dismiss the question, or never answer, and it fails the campaign
+honestly, naming the question, rather than shipping an advert built on an
+invented fact.
+
+The wait is not open-ended: the watchdog will not kill the session for silence
+while a question is pending, but the session's own turn and time ceilings still
+apply.
+
 ## Related sections
 
 - **Articles** — the same pipeline for text, with four topic sources and a

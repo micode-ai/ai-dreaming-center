@@ -93,6 +93,90 @@ Renders without copy are half a campaign. Write the text that ships with them,
 in every locale, where the venue keeps its copy — the neighbouring campaigns
 show you where. Same rule as the visuals: no claim the evidence does not carry.
 
+## 4a. Ask when you can't verify something
+
+The Rules below forbid inventing a number, a customer or a testimonial. Until
+now the only way to obey that rule was to fail the campaign. This is the other
+way: ask, and keep going once answered.
+
+Use it when the copy needs a fact that neither the campaign directory nor the
+venue can establish. Post the question against the **subject**'s slug —
+`$DREAMING_PROJECT_SLUG` — even though your cwd is the venue's creative root:
+that project's page is what the user is looking at. Pass `run_id` set to this
+run's `<proposal-id>`, so the center can show the "waiting for your answer"
+line on this campaign's own card; a project can have more than one campaign
+`making` at once, and an id-less question would light up none of them.
+
+```bash
+curl -s -X POST "$DREAMING_API_URL/api/questions/create"   -H "Content-Type: application/json"   -d '{
+    "project_slug": "'"$DREAMING_PROJECT_SLUG"'",
+    "run_id": "<proposal-id>",
+    "tool_use_id": "make-creative-<proposal-id>-<run-tag>-q1",
+    "question": "Do we have a real figure for this claim, or should it be cut?",
+    "options": []
+  }'
+```
+
+**JSON escaping (critical):** the body is single-quoted for the shell. A
+literal apostrophe inside `question` ends the quoted string early and breaks
+the command; rewrite the value to avoid it, or close and re-open the quote
+around it (`'It'''s broken'`). `$DREAMING_PROJECT_SLUG` is spliced in with
+its own `'"..."'` segment exactly as shown — pasting the variable straight
+inside the single-quoted JSON will not expand it; it will POST the literal
+text `$DREAMING_PROJECT_SLUG`.
+
+**`tool_use_id` must be unique per *asking*, not per campaign.**
+`db.create_question` treats a repeated `tool_use_id` as the same question and
+returns the existing row — with whatever answer it already carries — rather
+than creating a new one. That is deliberate, so a resumed session does not
+duplicate its own ask. But retrying a `failed` campaign re-dispatches
+`/make-creative <proposal-id>` with the *same* id, so an id built only from
+the proposal id computes to the same key the first attempt used: the retry
+would silently receive the previous attempt's answer to a different question,
+or be denied any chance to ask at all.
+
+Generate a run tag once, the first time you need to ask in this run:
+
+```bash
+date +%s
+```
+
+Reuse the number it prints for every question in *this* run (`-q1`, `-q2`,
+...). Each `curl` is a separate Bash tool call and shell variables do not
+survive between them, so remember the literal number and paste it in.
+
+The response is `{"id": "...", "status": "pending"}`. Poll it from a
+**single** Bash call that loops internally. Each `curl` is its own turn, and
+this session shares one turn budget across reading the brief, producing the
+renders, writing the copy and this wait — a one-`curl`-per-turn poll can burn
+the budget on waiting alone and die before it produces anything:
+
+```bash
+for i in $(seq 90); do
+  resp=$(curl -s "$DREAMING_API_URL/api/questions/<id>/poll")
+  case "$resp" in
+    *'"status":"pending"'*) sleep 20 ;;
+    *) echo "$resp"; break ;;
+  esac
+done
+```
+
+That loop is bounded (90 tries x 20s, about 30 minutes). While a question is
+pending the center's watchdog does not count this session's silence against
+it — but that stops only the watchdog, not the session's own turn and time
+ceilings. **Waiting is not unconditionally safe**: if the loop ends still
+`"pending"`, or the session is nearing its ceiling either way, stop waiting
+and report at step 6, naming the unanswered question.
+
+- On `"answered"`, use `answer_text` as the fact and carry on.
+- On `"dismissed"`, or if the session ends before an answer arrives, **do not
+  invent the fact and do not ship the campaign without it.** Report the
+  failure at step 6 through `error_message`, naming the question that went
+  unanswered. A campaign that ships around the fact it asked about is exactly
+  the fabricated ad the Rules exist to prevent.
+
+Ask sparingly — one or two questions in a run, not an interrogation.
+
 ## 5. Verify
 
 If `$DC_CREATIVE_VERIFY_CMD` is set, run it and capture the output verbatim.
@@ -138,6 +222,7 @@ curl -s -X POST "$DREAMING_API_URL/api/creatives/<proposal-id>/made" \
 - Never delete a human's attachment, even after using it.
 - Never invent a number, a customer, a testimonial or a screenshot of something
   that does not exist. A fabricated ad is the worst thing this pipeline could
-  produce.
+  produce. When the copy needs one and you cannot establish it, ask — see
+  step 4a — and fail honestly if no answer comes.
 - Do not commit or push. Publishing is a human's button.
 - Do not amend or rewrite existing commits.

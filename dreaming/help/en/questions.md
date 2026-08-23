@@ -10,11 +10,12 @@ hours.
 
 ## Why it is usually empty
 
-The question channel is wired into **one command out of fourteen** —
-`/write-article`. The others cannot ask: their instructions carry no such
-block. The orchestrator is forbidden from asking by a rule of its own and
-writes its questions to a file instead. Creatives were deliberately left
-without the channel.
+The question channel is wired into **two commands out of fourteen** —
+`/write-article` and `/make-creative`. The others cannot ask: their
+instructions carry no such block, deliberately. Scanners produce proposals you
+review anyway, and a stalled nightly scan is worse than a low-confidence
+finding. The orchestrator is forbidden from asking by a rule of its own and
+writes its questions to `docs/plans/<run_id>-questions.md`.
 
 The built-in `AskUserQuestion` tool does **not** arrive here: intercepting
 calls to it was never implemented — `claude_session_tail.py` records it as

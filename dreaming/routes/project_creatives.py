@@ -208,6 +208,15 @@ async def creatives_page(request: Request, slug: str):
         default_venue.working_dir, creative_dir)
     rows = await db.list_creative_proposals(project_id=project.id)
     projects = await request.app.state.projects.list_all(only_enabled=True)
+    # A campaign's own pending question, matched the way the articles page
+    # matches an article's: orchestrator_questions is shared by every kind of
+    # session on this project, and two campaigns can be 'making' at once, so a
+    # project-wide "is anything pending" boolean would light up the wrong card.
+    # make-creative.md passes the proposal id as run_id when it asks; a
+    # question with an empty or unrelated run_id must light up nothing.
+    # Fetched once here rather than per row.
+    pending_qs = await db.list_questions(project.id, status="pending", limit=50)
+    pending_run_ids = {q["run_id"] for q in pending_qs if (q["run_id"] or "")}
     enriched = []
     for r in rows:
         row_dict = dict(r)
@@ -219,6 +228,7 @@ async def creatives_page(request: Request, slug: str):
                 row_venue, "creative_publish_mode", "off"),
         )
         d["venue_slug"] = row_venue.slug
+        d["has_pending_question"] = str(row_dict["id"]) in pending_run_ids
         # What a human already attached, so the card can say so. A campaign
         # whose footage is sitting on disk and whose card says nothing about it
         # reads as a campaign with nothing to work from. One directory listing
@@ -241,12 +251,36 @@ async def creatives_page(request: Request, slug: str):
     if other:
         groups.append(("other", other))
     total = await db.count_creative_proposals(project_ids=[project.id])
+    # Same drift banner the articles page carries. Without it a project keeps
+    # running an installed make-creative.md that predates the question channel
+    # and simply fails campaigns it could have asked about, with nothing on
+    # this page saying why. The scan runs in the subject's own working_dir,
+    # the maker in the repository that owns the creatives.
+    stale_commands = []
+    for command_name, cmd_root in (
+        ("creative-ideas-scan", project.working_dir),
+        ("make-creative", str(root)),
+    ):
+        if not starter_kit.command_stale(cmd_root, command_name):
+            continue
+        stale_commands.append({
+            "command": command_name,
+            "root": str(cmd_root),
+            # The install route writes into the project's own working_dir, so
+            # its button cannot reach a venue nested in a second repository.
+            # Resolved-path comparison, not string: on Windows the same
+            # directory arrives spelled several ways.
+            "fixable_here": (
+                Path(cmd_root).resolve() == Path(project.working_dir).resolve()
+            ),
+        })
     pm = request.app.state.process_manager
     locale = request.cookies.get(
         "dc_locale", request.app.state.settings.default_locale)
     return request.app.state.templates.TemplateResponse(
         request, "project_creatives.html",
         {"project": project,
+         "stale_commands": stale_commands,
          "groups": [(st, items) for st, items in groups if items],
          "total": total, "shown": len(enriched),
          "capped": len(enriched) < total,
