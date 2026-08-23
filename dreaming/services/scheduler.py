@@ -49,6 +49,7 @@ async def _reconcile_job(app_state):
       - orchestrator_runs (Roman runs whose claude process is gone)
       - article_proposals stuck in 'writing' whose session has finished
         without a write-back
+      - creative_proposals stuck in 'making', same rule
     """
     pm = app_state.process_manager
     pairs: list[tuple[int, str]] = []
@@ -87,6 +88,16 @@ async def _reconcile_job(app_state):
         ) or 0
     except Exception as e:
         log.warning("reconcile_job article error: %s", e)
+    try:
+        # Creatives run through the same cmd: session machinery as articles
+        # (start_command -> `cmd:{slug}:make-creative`), so the same live set
+        # answers the same question. Kept as its own try/except: one pipeline
+        # raising must not stop the other from being swept.
+        closed += await app_state.db.reconcile_stranded_creative_proposals(
+            cmd_session_ids,
+        ) or 0
+    except Exception as e:
+        log.warning("reconcile_job creative error: %s", e)
     return closed
 
 
