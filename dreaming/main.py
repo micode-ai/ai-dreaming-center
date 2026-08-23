@@ -44,6 +44,23 @@ async def lifespan(app: FastAPI):
         return app.state.i18n.t(key, locale=locale, **fmt)
 
     app.state.templates.env.filters["t"] = _t
+
+    # Cache-buster for the stylesheets and scripts base.html links. Browsers
+    # cache /static/*.css hard, so a design change could sit on disk and not
+    # reach the page until a manual hard refresh -- which is exactly how a
+    # visual change goes unnoticed. Derived from the newest mtime among the
+    # linked assets, so it changes when they do and stays stable otherwise.
+    def _asset_version() -> str:
+        static = Path("dreaming/static")
+        newest = 0.0
+        for name in ("tokens.css", "app.css", "components.css",
+                     "table_tools.css", "table_tools.js", "timeago.js"):
+            f = static / name
+            if f.exists():
+                newest = max(newest, f.stat().st_mtime)
+        return str(int(newest))
+
+    app.state.templates.env.globals["asset_v"] = _asset_version()
     app.state.process_manager = ProcessManager(
         app.state.settings, app.state.db, app.state.projects)
     app.state.orchestration_hub = OrchestrationHub(app.state.db, app.state.projects)
