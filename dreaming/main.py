@@ -50,6 +50,11 @@ async def lifespan(app: FastAPI):
     # reach the page until a manual hard refresh -- which is exactly how a
     # visual change goes unnoticed. Derived from the newest mtime among the
     # linked assets, so it changes when they do and stays stable otherwise.
+    # Exposed as a callable, not a value: computed once at startup it would
+    # itself go stale, and uvicorn --reload does not restart on a .css edit --
+    # so a CSS change would sit on disk behind an unchanged query string and
+    # the cached file it was meant to bust. Six stat() calls per render is
+    # nothing for a local dashboard, and it means a refresh is enough.
     def _asset_version() -> str:
         static = Path("dreaming/static")
         newest = 0.0
@@ -60,7 +65,7 @@ async def lifespan(app: FastAPI):
                 newest = max(newest, f.stat().st_mtime)
         return str(int(newest))
 
-    app.state.templates.env.globals["asset_v"] = _asset_version()
+    app.state.templates.env.globals["asset_v"] = _asset_version
     app.state.process_manager = ProcessManager(
         app.state.settings, app.state.db, app.state.projects)
     app.state.orchestration_hub = OrchestrationHub(app.state.db, app.state.projects)

@@ -136,8 +136,14 @@
 .help-card__titles > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .help-card__open { flex: 0 0 auto; }
 /* .markdown-body brings its own padding; the guide only needs a ceiling on
-   line length so it stays readable on a wide screen. */
-.help-card__body { max-width: 62rem; }
+   line length so it stays readable on a wide screen.
+
+   Two classes sit on this element and _markdown_partial.html's own rule is
+   `.markdown-body { max-width: 100% }` -- equal specificity, and its <style>
+   block is emitted inside the content block, so it comes later in the
+   document and wins. Measured in the browser: the guide ran to 1624px on a
+   1920 viewport. Hence the extra class in the selector. */
+.help-card .help-card__body { max-width: 62rem; }
 /* Dashboard bento tiles (partials/dashboard/_tile_*.html): the only thing
    .card doesn't already cover for this shape is the fixed floor height that
    keeps three tiles of uneven content even in a grid row. Grepped for an

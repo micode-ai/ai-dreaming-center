@@ -15,10 +15,10 @@
       darkMode: 'class'
     }
   </script>
-  <link rel="stylesheet" href="/static/tokens.css?v={{ asset_v }}">
-  <link rel="stylesheet" href="/static/app.css?v={{ asset_v }}">
-  <link rel="stylesheet" href="/static/components.css?v={{ asset_v }}">
-  <link rel="stylesheet" href="/static/table_tools.css?v={{ asset_v }}">
+  <link rel="stylesheet" href="/static/tokens.css?v={{ asset_v() }}">
+  <link rel="stylesheet" href="/static/app.css?v={{ asset_v() }}">
+  <link rel="stylesheet" href="/static/components.css?v={{ asset_v() }}">
+  <link rel="stylesheet" href="/static/table_tools.css?v={{ asset_v() }}">
   <script src="https://unpkg.com/htmx.org@2"></script>
   <style>
     #nav-progress {
@@ -41,8 +41,8 @@
       100% { transform: translateX(350%); }
     }
   </style>
-  <script defer src="/static/table_tools.js?v={{ asset_v }}"></script>
-  <script defer src="/static/timeago.js?v={{ asset_v }}"></script>
+  <script defer src="/static/table_tools.js?v={{ asset_v() }}"></script>
+  <script defer src="/static/timeago.js?v={{ asset_v() }}"></script>
   {% block head %}{% endblock %}
 </head>
 <body class="min-h-screen">
