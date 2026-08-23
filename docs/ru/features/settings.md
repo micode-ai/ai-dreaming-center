@@ -22,7 +22,7 @@ resolver = ConfigResolver(projects, global_settings)
 value = await resolver.get(project, "tech_debt_dir", default="")
 ```
 
-Алгоритм ([`config_resolver.py:23`](../../dreaming/services/config_resolver.py)):
+Алгоритм ([`config_resolver.py:23`](../../../dreaming/services/config_resolver.py)):
 
 1. Если `project` is not None:
    - Загружает `project_settings` для проекта (cache'ит per-resolver).
@@ -45,7 +45,7 @@ resolver = request.app.state.resolver_factory(request)
 
 ## SETTINGS_GROUPS
 
-[`dreaming/config.py:140`](../../dreaming/config.py) — список из 13 групп:
+[`dreaming/config.py:140`](../../../dreaming/config.py) — список из 13 групп:
 
 ```python
 SETTINGS_GROUPS: list[tuple[str, list[str]]] = [
@@ -69,7 +69,7 @@ SETTINGS_GROUPS: list[tuple[str, list[str]]] = [
 
 ## Global UI
 
-`GET /settings` ([`settings.py:46`](../../dreaming/routes/settings.py)) рендерит форму, group by `SETTINGS_GROUPS`.
+`GET /settings` ([`settings.py:46`](../../../dreaming/routes/settings.py)) рендерит форму, group by `SETTINGS_GROUPS`.
 
 Каждое поле:
 - bool → checkbox.
@@ -77,7 +77,7 @@ SETTINGS_GROUPS: list[tuple[str, list[str]]] = [
 - float → `<input type=number step=any>`.
 - str → `<input type=text>` (или `type=password` если имя содержит token/api_key).
 
-`POST /settings` ([`settings.py:57`](../../dreaming/routes/settings.py)):
+`POST /settings` ([`settings.py:57`](../../../dreaming/routes/settings.py)):
 1. Iterate over `settings.model_fields` (Pydantic поля).
 2. Если поле есть в form → `_coerce(value, current_default)` → save.
 3. Если поле — bool и НЕТ в form → save False (HTML idiom для unchecked).
@@ -86,7 +86,7 @@ SETTINGS_GROUPS: list[tuple[str, list[str]]] = [
 
 ## Per-project UI
 
-`GET /p/{slug}/settings` ([`project_settings.py:28`](../../dreaming/routes/project_settings.py)) — для каждого ключа группы рендерит:
+`GET /p/{slug}/settings` ([`project_settings.py:28`](../../../dreaming/routes/project_settings.py)) — для каждого ключа группы рендерит:
 
 ```
 +---------------------------------+
@@ -105,7 +105,7 @@ action_tech_debt_dir = "inherit" | "override"
 value_tech_debt_dir = "<some path>"
 ```
 
-`POST /p/{slug}/settings` ([`project_settings.py:58`](../../dreaming/routes/project_settings.py)):
+`POST /p/{slug}/settings` ([`project_settings.py:58`](../../../dreaming/routes/project_settings.py)):
 
 ```python
 for group_name, keys in SETTINGS_GROUPS:
@@ -145,7 +145,7 @@ HTML checkbox при unchecked состоянии **не отправляетс�
 
 ### Global form
 
-[`settings.py:62–70`](../../dreaming/routes/settings.py):
+[`settings.py:62–70`](../../../dreaming/routes/settings.py):
 
 ```python
 for k in settings.model_fields:
@@ -169,7 +169,7 @@ for k in settings.model_fields:
 
 При отправке если checkbox unchecked — отправится только hidden с "false". Если checked — оба, а browser отправляет последний (т.е. "true").
 
-Логика в [`project_settings.py:73`](../../dreaming/routes/project_settings.py): `raw.lower() in ("true", "on", "1", "yes")`.
+Логика в [`project_settings.py:73`](../../../dreaming/routes/project_settings.py): `raw.lower() in ("true", "on", "1", "yes")`.
 
 Это standard HTML pattern и работает в браузерах надёжно.
 
@@ -186,7 +186,7 @@ for k in settings.model_fields:
 
 ## ConfigResolver caching
 
-[`ConfigResolver._cache: dict[int, dict]`](../../dreaming/services/config_resolver.py:16) — per-project ID мап на словарь `key → value` из `project_settings`.
+[`ConfigResolver._cache: dict[int, dict]`](../../../dreaming/services/config_resolver.py:16) — per-project ID мап на словарь `key → value` из `project_settings`.
 
 Загружается лениво при первом `get(project, ...)`:
 
@@ -210,7 +210,7 @@ async def _project_settings(self, project: Project) -> dict:
 
 ## save_yaml flow
 
-`_save_yaml(values)` ([`settings.py:21`](../../dreaming/routes/settings.py), [`setup.py:14`](../../dreaming/routes/setup.py)):
+`_save_yaml(values)` ([`settings.py:21`](../../../dreaming/routes/settings.py), [`setup.py:14`](../../../dreaming/routes/setup.py)):
 
 ```python
 def _save_yaml(values: dict) -> None:
@@ -233,7 +233,7 @@ Reload:
 request.app.state.settings = type(settings).load()
 ```
 
-`type(settings)` — это `AppSettings`, а `.load()` — classmethod ([`config.py:131`](../../dreaming/config.py)).
+`type(settings)` — это `AppSettings`, а `.load()` — classmethod ([`config.py:131`](../../../dreaming/config.py)).
 
 ## Cross-references
 

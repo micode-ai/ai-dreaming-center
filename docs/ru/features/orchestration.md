@@ -31,7 +31,7 @@ Lifecycle:
                  +--------+      +--------+
 ```
 
-В коде эти статусы пишутся в столбец `status`, [`orchestration_hub.create_run`](../../dreaming/services/orchestration_hub.py:26) ставит `'running'`.
+В коде эти статусы пишутся в столбец `status`, [`orchestration_hub.create_run`](../../../dreaming/services/orchestration_hub.py:26) ставит `'running'`.
 
 Каждый run имеет:
 - `id` — DC-internal UUID.
@@ -39,7 +39,7 @@ Lifecycle:
 - `goal` — текстовая цель.
 - `started_at`, `finished_at`.
 
-При создании auto-вставляется root-нода ([`api.py:108`](../../dreaming/routes/api.py)):
+При создании auto-вставляется root-нода ([`api.py:108`](../../../dreaming/routes/api.py)):
 
 ```python
 node_id = await hub.create_node(
@@ -50,13 +50,13 @@ node_id = await hub.create_node(
 
 ## One-Roman-per-project lock
 
-`OrchestrationHub.has_running_run(project_id)` ([`orchestration_hub.py:47`](../../dreaming/services/orchestration_hub.py)) возвращает `run_id` существующего running-run'а или None.
+`OrchestrationHub.has_running_run(project_id)` ([`orchestration_hub.py:47`](../../../dreaming/services/orchestration_hub.py)) возвращает `run_id` существующего running-run'а или None.
 
 В JSON API endpoint'е `/api/orchestration/start`:
 - Если `enforce_single=true` (default) — 409 с `{"detail": {"error": "...", "run_id": <existing>}}`.
 
 В form-based endpoint'е `POST /p/{slug}/orchestration/start`:
-- 303 редирект на `/p/{slug}/orchestration/{existing}` ([`project_orchestration.py:64`](../../dreaming/routes/project_orchestration.py)).
+- 303 редирект на `/p/{slug}/orchestration/{existing}` ([`project_orchestration.py:64`](../../../dreaming/routes/project_orchestration.py)).
 
 Это защита от случайного двойного клика «Start» в UI.
 
@@ -64,7 +64,7 @@ node_id = await hub.create_node(
 
 UI: на `/p/{slug}/orchestration` есть форма с одним полем `goal`. Жмёшь Start → POST `/p/{slug}/orchestration/start`.
 
-Action в коде ([`project_orchestration.py:50`](../../dreaming/routes/project_orchestration.py)):
+Action в коде ([`project_orchestration.py:50`](../../../dreaming/routes/project_orchestration.py)):
 
 1. Проверка `goal.strip()` — иначе 400.
 2. `has_running_run` → если есть, 303 на existing.
@@ -79,11 +79,11 @@ Action в коде ([`project_orchestration.py:50`](../../dreaming/routes/projec
    - Если jsonl уже есть — стартуем `ClaudeSessionTail(run_id, jsonl_path, hub, db)` через `asyncio.create_task`. Сохраняем в `app.state.orchestration_tails[run_id]`.
    - Стартуем `SubagentWatcher(run_id, root_node_id, hub, db, claude_projects_dir=...)`. Сохраняем в `app.state.orchestration_watchers[run_id]`.
 
-Если jsonl ещё не появился — лог `INFO orchestration_start_form: jsonl not yet visible for session ...; backfill will recover` ([`project_orchestration.py:124`](../../dreaming/routes/project_orchestration.py)) — позже backfill догонит, либо при перезапуске.
+Если jsonl ещё не появился — лог `INFO orchestration_start_form: jsonl not yet visible for session ...; backfill will recover` ([`project_orchestration.py:124`](../../../dreaming/routes/project_orchestration.py)) — позже backfill догонит, либо при перезапуске.
 
 ## Detail page (live polling)
 
-`GET /p/{slug}/orchestration/{run_id}` ([`project_orchestration.py:30`](../../dreaming/routes/project_orchestration.py)) рендерит `project_orchestration_detail.html` с:
+`GET /p/{slug}/orchestration/{run_id}` ([`project_orchestration.py:30`](../../../dreaming/routes/project_orchestration.py)) рендерит `project_orchestration_detail.html` с:
 - run record (goal, status, started_at, finished_at).
 - nodes (с agent_name, role, status, started_at).
 - messages (все сообщения всего run'а в chronological order).
@@ -101,13 +101,13 @@ Action в коде ([`project_orchestration.py:50`](../../dreaming/routes/projec
 }
 ```
 
-Возвращает только последние 100 messages (срез `[-100:]`, [`project_orchestration.py:182`](../../dreaming/routes/project_orchestration.py)).
+Возвращает только последние 100 messages (срез `[-100:]`, [`project_orchestration.py:182`](../../../dreaming/routes/project_orchestration.py)).
 
 POST на `/p/{slug}/orchestration/{run_id}/finish` — финиш run'а кнопкой (`status=completed`).
 
 ## ClaudeSessionTail mechanics
 
-[`dreaming/services/claude_session_tail.py`](../../dreaming/services/claude_session_tail.py).
+[`dreaming/services/claude_session_tail.py`](../../../dreaming/services/claude_session_tail.py).
 
 Объект-обёртка:
 
@@ -155,7 +155,7 @@ await hub.append_event(run_id, "message_added", payload)
 
 ## SubagentWatcher mechanics
 
-[`dreaming/services/subagent_watcher.py`](../../dreaming/services/subagent_watcher.py).
+[`dreaming/services/subagent_watcher.py`](../../../dreaming/services/subagent_watcher.py).
 
 Когда Roman делегирует задачу через `Task` tool, Claude CLI спавнит дочерний процесс, и его jsonl лежит под:
 
@@ -189,7 +189,7 @@ await hub.append_event(run_id, "message_added", payload)
 
 ## Resume
 
-`POST /p/{slug}/orchestration/{run_id}/resume` form `prompt=` ([`project_orchestration.py:187`](../../dreaming/routes/project_orchestration.py)):
+`POST /p/{slug}/orchestration/{run_id}/resume` form `prompt=` ([`project_orchestration.py:187`](../../../dreaming/routes/project_orchestration.py)):
 
 1. Run должен иметь `external_id` (Claude session UUID). Иначе 400.
 2. Reactivate run: `UPDATE orchestrator_runs SET status='running', finished_at=NULL, error_message=NULL WHERE id=?`.
@@ -200,11 +200,11 @@ await hub.append_event(run_id, "message_added", payload)
    - `interactive_stdin = True` — claude ждёт stdin, мы шлём prompt через stream-json user-message.
 5. На RuntimeError — `finish_run(failed)`, 409.
 
-`pm.start_command(interactive_stdin=True)` нюанс ([`process_manager.py:260`](../../dreaming/services/process_manager.py)): нельзя одновременно передавать `-p <prompt>` и `--input-format stream-json` — claude зависнет. Поэтому при `interactive_stdin=True` мы передаём только `--print` (без позиционного prompt'а), запускаем процесс, и потом `await session.send_user_message(prompt)` через stdin.
+`pm.start_command(interactive_stdin=True)` нюанс ([`process_manager.py:260`](../../../dreaming/services/process_manager.py)): нельзя одновременно передавать `-p <prompt>` и `--input-format stream-json` — claude зависнет. Поэтому при `interactive_stdin=True` мы передаём только `--print` (без позиционного prompt'а), запускаем процесс, и потом `await session.send_user_message(prompt)` через stdin.
 
 ## Backfill
 
-[`dreaming/services/subagent_backfill.py`](../../dreaming/services/subagent_backfill.py) — `backfill_run(run_id, db, hub, claude_projects_dir=None) -> int`.
+[`dreaming/services/subagent_backfill.py`](../../../dreaming/services/subagent_backfill.py) — `backfill_run(run_id, db, hub, claude_projects_dir=None) -> int`.
 
 Используется когда:
 - Run был создан, но watcher offline'ился — orchestration tables пустые.

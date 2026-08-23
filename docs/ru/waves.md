@@ -502,7 +502,7 @@
 На дату `wave-3-full` (последний коммит `b49aafd`) этот список deferred:
 
 - **Реальный TTS backfill** (`tts_backfill.backfill_tts` — stub возвращает 0).
-- **AskUserQuestion полная обвязка** — таблица `orchestrator_questions` уже существует, но API endpoints для создания / ответов ещё не добавлены. ProcessManager watchdog уже умеет учитывать pending question ([`process_manager.py:561`](../dreaming/services/process_manager.py)).
+- **AskUserQuestion полная обвязка** — таблица `orchestrator_questions` уже существует, но API endpoints для создания / ответов ещё не добавлены. ProcessManager watchdog уже умеет учитывать pending question ([`process_manager.py:561`](../../dreaming/services/process_manager.py)).
 - **codex / continue runners** — `orchestration_local_runner` config есть, но в коде только claude путь.
 - **work_routing_mode** — settings есть, в коде не используется.
 - **Реальная harness-интеграция через UI** — сервис `HarnessClient` готов, но `/p/{slug}/orchestration/start` его не дёргает (использует local claude). Подключить можно через изменение `start_command` и проверку `await harness_clients.get_for_project(...)`.

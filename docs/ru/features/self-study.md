@@ -32,7 +32,7 @@ Per-проектная таблица [`agent_learning_rotation`](../schema.md#a
 - `enabled` — 0/1.
 - `last_studied_at` — обновляется в [`finish_session`](../services.md#dbpy--sqlitedb).
 
-При заходе на `/p/{slug}/rotation` ([`project_rotation.py:12`](../../dreaming/routes/project_rotation.py)):
+При заходе на `/p/{slug}/rotation` ([`project_rotation.py:12`](../../../dreaming/routes/project_rotation.py)):
 1. `list_agent_names(working_dir)` сканит `.claude/agents/`.
 2. Для каждого имени, которого нет в DB, делает `upsert_agent_rotation(project_id, name, tier=2)` — добавляет с tier=2 enabled=1.
 3. Рендерит таблицу с inline-edit'ами (POST `/tier`, POST `/toggle`).
@@ -50,11 +50,11 @@ ORDER BY last_studied_at IS NOT NULL,    -- NULL first (новые агенты)
 LIMIT ?
 ```
 
-См. [`db.py:489`](../../dreaming/services/db.py).
+См. [`db.py:489`](../../../dreaming/services/db.py).
 
 ## Cron schedule
 
-Per-project job `nightly_learning_{slug}` регистрируется через [`scheduler.py:_PER_PROJECT_JOBS`](../../dreaming/services/scheduler.py):
+Per-project job `nightly_learning_{slug}` регистрируется через [`scheduler.py:_PER_PROJECT_JOBS`](../../../dreaming/services/scheduler.py):
 
 ```python
 ("nightly_learning", "cron_expression", "cron_enabled",
@@ -63,7 +63,7 @@ Per-project job `nightly_learning_{slug}` регистрируется чере�
  _nightly_learning),
 ```
 
-Job-функция [`_nightly_learning`](../../dreaming/services/scheduler.py:56):
+Job-функция [`_nightly_learning`](../../../dreaming/services/scheduler.py:56):
 1. Загружает project через `get_by_id`. Если проект отсутствует или `enabled=0` — skip.
 2. `n = resolver.get(proj, "agents_per_night", 5)`.
 3. `pause = resolver.get(proj, "wait_between_sec", 5)`.
@@ -81,7 +81,7 @@ Configurable per-project через `/p/{slug}/settings`:
 
 ## Manual start (UI)
 
-`POST /p/{slug}/rotation/start/{agent}` ([`project_rotation.py:57`](../../dreaming/routes/project_rotation.py)):
+`POST /p/{slug}/rotation/start/{agent}` ([`project_rotation.py:57`](../../../dreaming/routes/project_rotation.py)):
 1. `pm.start_session(project, agent_name=agent, ...)` с теми же параметрами что nightly.
 2. На успех — 303 на `/p/{slug}/live`.
 3. На `RuntimeError` — 409 с detail.
@@ -145,7 +145,7 @@ Env vars передаются:
 
 Если slash-команда не вызвала finish (упала, timed out) — `_cleanup` уже её закрыл через `reconcile_stale_sessions` со статусом `cancelled` или `timeout`.
 
-Также есть watchdog ([`process_manager.py:544`](../../dreaming/services/process_manager.py)): если `time.time() - last_stdout_at >= timeout_minutes*60`, kill process. Pending question (`orchestrator_questions.status='pending'`) сбрасывает счётчик — это валидное состояние ожидания пользователя.
+Также есть watchdog ([`process_manager.py:544`](../../../dreaming/services/process_manager.py)): если `time.time() - last_stdout_at >= timeout_minutes*60`, kill process. Pending question (`orchestrator_questions.status='pending'`) сбрасывает счётчик — это валидное состояние ожидания пользователя.
 
 ## Sessions API
 
@@ -195,9 +195,9 @@ UPDATE sessions + UPDATE rotation.last_studied_at.
 | `LEARNING_PROJECT_SLUG` | auto | Тот же slug. |
 | `LEARNING_PROJECT_ID` | auto | Тот же ID. |
 
-См. [`process_manager.py:171–173`](../../dreaming/services/process_manager.py) для авто-инжекта `LEARNING_*`.
+См. [`process_manager.py:171–173`](../../../dreaming/services/process_manager.py) для авто-инжекта `LEARNING_*`.
 
-В nightly cron job дополнительно: `DREAMING_API_URL` через `env_overrides` ([`scheduler.py:81–83`](../../dreaming/services/scheduler.py)).
+В nightly cron job дополнительно: `DREAMING_API_URL` через `env_overrides` ([`scheduler.py:81–83`](../../../dreaming/services/scheduler.py)).
 
 ## Cross-references
 

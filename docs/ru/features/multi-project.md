@@ -35,9 +35,9 @@ CREATE TABLE projects (
 
 `working_dir` — абсолютный путь к корню проекта. Там должен быть `.claude/agents/` если хочешь self-study.
 
-`is_default` — единственный default-проект для slash-команды без `project_slug` (см. [`api.py:36`](../../dreaming/routes/api.py)).
+`is_default` — единственный default-проект для slash-команды без `project_slug` (см. [`api.py:36`](../../../dreaming/routes/api.py)).
 
-[`ProjectsService`](../../dreaming/services/projects.py) — CRUD:
+[`ProjectsService`](../../../dreaming/services/projects.py) — CRUD:
 
 ```python
 await projects.list_all(only_enabled=False)
@@ -57,7 +57,7 @@ await projects.all_settings(project_id) -> dict
 
 ## URL resolver middleware
 
-[`dreaming/middleware/project_resolver.py`](../../dreaming/middleware/project_resolver.py):
+[`dreaming/middleware/project_resolver.py`](../../../dreaming/middleware/project_resolver.py):
 
 ```python
 async def project_resolver_middleware(request, call_next):
@@ -107,7 +107,7 @@ UI: одна страница с двумя phase'ами.
 Кнопки:
 - **Scan** — POST `action=scan`. Сервер делает `ProjectsService.scan_projects_root(root)`, возвращает то же page плюс таблицу найденных подпапок.
 
-`scan_projects_root` ([`projects.py:135`](../../dreaming/services/projects.py)):
+`scan_projects_root` ([`projects.py:135`](../../../dreaming/services/projects.py)):
 
 ```python
 @staticmethod
@@ -145,7 +145,7 @@ Submit POST'ом без `action=scan`:
 5. Для каждого нового проекта — `await register_project_jobs(scheduler, app_state, proj)`.
 6. 303 на `/`.
 
-`import_from_scan` ([`projects.py:156`](../../dreaming/services/projects.py)) **идемпотентен**:
+`import_from_scan` ([`projects.py:156`](../../../dreaming/services/projects.py)) **идемпотентен**:
 - Skip items по `working_dir` или `slug` уже в БД.
 - Если slug коллизит — добавляет суффикс `-2`, `-3`.
 
@@ -153,7 +153,7 @@ Submit POST'ом без `action=scan`:
 
 ### Toggle (enable/disable)
 
-`POST /projects/{project_id}/toggle` ([`projects.py:23`](../../dreaming/routes/projects.py)):
+`POST /projects/{project_id}/toggle` ([`projects.py:23`](../../../dreaming/routes/projects.py)):
 
 ```python
 new_enabled = not p.enabled
@@ -171,7 +171,7 @@ else:
 
 ### Delete
 
-`POST /projects/{project_id}/delete` ([`projects.py:40`](../../dreaming/routes/projects.py)):
+`POST /projects/{project_id}/delete` ([`projects.py:40`](../../../dreaming/routes/projects.py)):
 
 ```python
 p = await projects.get_by_id(project_id)
@@ -184,7 +184,7 @@ await projects.delete(project_id)
 
 ### Import (re-scan)
 
-`POST /projects/import` form `root=` ([`projects.py:50`](../../dreaming/routes/projects.py)) — массовый scan + import.
+`POST /projects/import` form `root=` ([`projects.py:50`](../../../dreaming/routes/projects.py)) — массовый scan + import.
 
 Идемпотентность та же. После создания — register jobs для каждого нового.
 
@@ -194,7 +194,7 @@ await projects.delete(project_id)
 
 ## Concurrency: composite keys
 
-`ProcessManager.running` ([`process_manager.py:91`](../../dreaming/services/process_manager.py)) — `dict[str, RunningSession]` с composite-key:
+`ProcessManager.running` ([`process_manager.py:91`](../../../dreaming/services/process_manager.py)) — `dict[str, RunningSession]` с composite-key:
 
 | Тип spawn'а | Composite key |
 |---|---|
@@ -207,7 +207,7 @@ await projects.delete(project_id)
 - Команды (например `wiki-bootstrap`) — тоже per-project, не глобальные.
 - При reconcile / kill можно фильтровать по `pfx = f"{slug}:"` / `f"cmd:{slug}:"` чтобы взять только один проект.
 
-`max_concurrent` (default 2) — это **глобальный** лимит ([`process_manager.py:92`](../../dreaming/services/process_manager.py)). Не per-project. Если хочешь per-project лимиты — будут pull request'ы.
+`max_concurrent` (default 2) — это **глобальный** лимит ([`process_manager.py:92`](../../../dreaming/services/process_manager.py)). Не per-project. Если хочешь per-project лимиты — будут pull request'ы.
 
 Active runs aside на главном `/` строится перебором `pm.list_running()`:
 
@@ -223,11 +223,11 @@ for k in pm.list_running().keys():
         pfx_runs.append({"slug": slug, "agent": agent})
 ```
 
-См. [`root.py:81–89`](../../dreaming/routes/root.py).
+См. [`root.py:81–89`](../../../dreaming/routes/root.py).
 
 ## Reconcile: project_id-aware
 
-`pm.reconcile_stale_sessions(active_pairs: list[tuple[int, str]])` ([`process_manager.py:699`](../../dreaming/services/process_manager.py)):
+`pm.reconcile_stale_sessions(active_pairs: list[tuple[int, str]])` ([`process_manager.py:699`](../../../dreaming/services/process_manager.py)):
 
 ```python
 async def reconcile_stale_sessions(self, active_pairs):
@@ -246,13 +246,13 @@ async def reconcile_stale_sessions(self, active_pairs):
 
 Принимает кортежи `(project_id, agent_name)` — не slug. ProjectsService резолвит slug.
 
-Глобальный cron job `_reconcile_job` ([`scheduler.py:37`](../../dreaming/services/scheduler.py)) собирает active_pairs из in-memory `pm.running` (не из БД!) и передаёт обратно. Это защита от orphan-keys в `running`.
+Глобальный cron job `_reconcile_job` ([`scheduler.py:37`](../../../dreaming/services/scheduler.py)) собирает active_pairs из in-memory `pm.running` (не из БД!) и передаёт обратно. Это защита от orphan-keys в `running`.
 
-Reconcile NOT trigger'ит DB-обновления — это делает `pm._cleanup` после каждого spawn'а через `db.reconcile_stale_sessions(...)` (метод реализуется лениво — в текущем коде это вызов на db с грейс-минутами 2, см. [`process_manager.py:627`](../../dreaming/services/process_manager.py)).
+Reconcile NOT trigger'ит DB-обновления — это делает `pm._cleanup` после каждого spawn'а через `db.reconcile_stale_sessions(...)` (метод реализуется лениво — в текущем коде это вызов на db с грейс-минутами 2, см. [`process_manager.py:627`](../../../dreaming/services/process_manager.py)).
 
 ## Aggregated dashboard
 
-`GET /` ([`root.py:17`](../../dreaming/routes/root.py)) показывает:
+`GET /` ([`root.py:17`](../../../dreaming/routes/root.py)) показывает:
 
 ### Per-project cards
 

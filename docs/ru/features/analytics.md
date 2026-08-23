@@ -14,7 +14,7 @@ Read-only dashboards: AI Usage, Cascade Costs, Evolutions, Loops, Plans.
 
 **Что это**: per-project + global token usage, на основе Claude session JSONL'ов из `~/.claude/projects/`.
 
-**Source**: [`ai_usage_parser.py`](../../dreaming/services/ai_usage_parser.py), [`ai_usage_stats.py`](../../dreaming/services/ai_usage_stats.py), [`project_ai_usage.py`](../../dreaming/routes/project_ai_usage.py), [`root.py:109`](../../dreaming/routes/root.py).
+**Source**: [`ai_usage_parser.py`](../../../dreaming/services/ai_usage_parser.py), [`ai_usage_stats.py`](../../../dreaming/services/ai_usage_stats.py), [`project_ai_usage.py`](../../../dreaming/routes/project_ai_usage.py), [`root.py:109`](../../../dreaming/routes/root.py).
 
 ### Layout
 
@@ -54,7 +54,7 @@ JSONL содержит per-line:
 
 ### Ingest cron
 
-Job `ai_usage_ingest` registers globally в [`scheduler.py:227`](../../dreaming/services/scheduler.py):
+Job `ai_usage_ingest` registers globally в [`scheduler.py:227`](../../../dreaming/services/scheduler.py):
 
 ```python
 sched.add_job(_ai_usage_ingest_job, "interval", minutes=5, args=[app_state],
@@ -75,11 +75,11 @@ sched.add_job(_ai_usage_ingest_job, "interval", minutes=5, args=[app_state],
 
 Возвращает `{files, events_inserted, events_skipped, errors, duration_ms}` (логируется как INFO).
 
-`max_files=1000`, `batch_size=500` — лимиты ([`ai_usage_parser.py:255`](../../dreaming/services/ai_usage_parser.py)).
+`max_files=1000`, `batch_size=500` — лимиты ([`ai_usage_parser.py:255`](../../../dreaming/services/ai_usage_parser.py)).
 
 ### Per-project dashboard
 
-`GET /p/{slug}/ai-usage` ([`project_ai_usage.py:10`](../../dreaming/routes/project_ai_usage.py)):
+`GET /p/{slug}/ai-usage` ([`project_ai_usage.py:10`](../../../dreaming/routes/project_ai_usage.py)):
 
 ```python
 summary = await project_summary(db, project.id)
@@ -94,7 +94,7 @@ summary = await project_summary(db, project.id)
 
 ### Global dashboard
 
-`GET /ai-usage` ([`root.py:109`](../../dreaming/routes/root.py)):
+`GET /ai-usage` ([`root.py:109`](../../../dreaming/routes/root.py)):
 
 ```python
 summary = await global_summary(db)
@@ -122,11 +122,11 @@ summary = await global_summary(db)
 
 **Что это**: per-run сумма cost_usd из orchestrator_events.
 
-**Source**: [`cascade_costs.py`](../../dreaming/services/cascade_costs.py), [`project_cascade_costs.py`](../../dreaming/routes/project_cascade_costs.py).
+**Source**: [`cascade_costs.py`](../../../dreaming/services/cascade_costs.py), [`project_cascade_costs.py`](../../../dreaming/routes/project_cascade_costs.py).
 
 ### Алгоритм
 
-[`list_cascade_costs(db, project_id, limit=50)`](../../dreaming/services/cascade_costs.py:21):
+[`list_cascade_costs(db, project_id, limit=50)`](../../../dreaming/services/cascade_costs.py:21):
 
 ```sql
 SELECT id, project_id, goal, status, started_at, finished_at
@@ -161,7 +161,7 @@ class CascadeRunCost:
 
 ### Page
 
-`GET /p/{slug}/cascade-costs` ([`project_cascade_costs.py:9`](../../dreaming/routes/project_cascade_costs.py)).
+`GET /p/{slug}/cascade-costs` ([`project_cascade_costs.py:9`](../../../dreaming/routes/project_cascade_costs.py)).
 
 В UI показывается:
 - Таблица runs с goal, status, started_at, total_cost_usd.
@@ -175,7 +175,7 @@ class CascadeRunCost:
 
 **Что это**: list агентских overrides (frontmatter в `_context/` директории).
 
-**Source**: [`evolutions.py`](../../dreaming/services/evolutions.py), [`project_evolutions.py`](../../dreaming/routes/project_evolutions.py).
+**Source**: [`evolutions.py`](../../../dreaming/services/evolutions.py), [`project_evolutions.py`](../../../dreaming/routes/project_evolutions.py).
 
 **Setting**: `evolutions_dir` или `context_overrides_dir`. Default: `{working_dir}/.claude/agents/_context`.
 
@@ -206,7 +206,7 @@ Wave 4 lite — простая таблица. Conflict-resolution / reapply UX 
 
 **Что это**: reflex loops (markdown с frontmatter).
 
-**Source**: [`loops.py`](../../dreaming/services/loops.py), [`project_loops.py`](../../dreaming/routes/project_loops.py).
+**Source**: [`loops.py`](../../../dreaming/services/loops.py), [`project_loops.py`](../../../dreaming/routes/project_loops.py).
 
 **Setting**: `loops_dir`. Default: `{obsidian_vault}/03-Team/loops`.
 
@@ -231,7 +231,7 @@ iterations: 12
 
 **Что это**: planning документы, с прогрессом по чекбоксам.
 
-**Source**: [`plans.py`](../../dreaming/services/plans.py), [`project_plans.py`](../../dreaming/routes/project_plans.py).
+**Source**: [`plans.py`](../../../dreaming/services/plans.py), [`project_plans.py`](../../../dreaming/routes/project_plans.py).
 
 **Setting**: `plans_dir`. Default: `{obsidian_vault}/03-Team/plans`.
 
@@ -262,4 +262,4 @@ Markdown body содержит:
 - Schema ai_usage_*: [`schema.md`](../schema.md#ai_usage_events).
 - Schema orchestrator_events (cost source): [`schema.md`](../schema.md#orchestrator_events).
 - Service внутренности: [`services.md`](../services.md#cross-cutting).
-- Cron jobs ingestion: [`features/multi-project.md`](multi-project.md) + [`scheduler.py`](../../dreaming/services/scheduler.py).
+- Cron jobs ingestion: [`features/multi-project.md`](multi-project.md) + [`scheduler.py`](../../../dreaming/services/scheduler.py).

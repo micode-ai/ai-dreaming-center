@@ -1,6 +1,6 @@
 # SQLite Schema Reference
 
-Все 16 таблиц БД `data/dreaming.db` (SQLite в WAL mode). Источник истины: строка `_SCHEMA` в [`dreaming/services/db.py`](../dreaming/services/db.py) (строки 23–259) + блок `_migrate_orchestration` (строки 282–348).
+Все 16 таблиц БД `data/dreaming.db` (SQLite в WAL mode). Источник истины: строка `_SCHEMA` в [`dreaming/services/db.py`](../../dreaming/services/db.py) (строки 23–259) + блок `_migrate_orchestration` (строки 282–348).
 
 ## Содержание
 
@@ -26,7 +26,7 @@
 
 ## Общее
 
-Все timestamps хранятся как ISO-строки UTC (формат: `2026-05-09T14:33:21+00:00`). См. `_now()` в [`projects.py:11`](../dreaming/services/projects.py) и [`orchestration_hub.py:15`](../dreaming/services/orchestration_hub.py).
+Все timestamps хранятся как ISO-строки UTC (формат: `2026-05-09T14:33:21+00:00`). См. `_now()` в [`projects.py:11`](../../dreaming/services/projects.py) и [`orchestration_hub.py:15`](../../dreaming/services/orchestration_hub.py).
 
 PRAGMA на старте (db.py:275–276):
 
@@ -80,7 +80,7 @@ CREATE INDEX IF NOT EXISTS idx_projects_enabled ON projects(enabled, sort_order)
 **Индексы**: `idx_projects_enabled (enabled, sort_order)` — для быстрой выборки enabled-проектов в порядке.
 
 **Кто читает/пишет**:
-- `ProjectsService` ([`dreaming/services/projects.py`](../dreaming/services/projects.py)) — все CRUD + `import_from_scan`.
+- `ProjectsService` ([`dreaming/services/projects.py`](../../dreaming/services/projects.py)) — все CRUD + `import_from_scan`.
 - `setup_gate_middleware` — проверяет наличие хотя бы одной строки.
 - `project_resolver_middleware` — `get_by_slug` на каждом `/p/{slug}/*` запросе.
 
@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS project_settings (
 - ON DELETE CASCADE — если удаляем проект, все его overrides уходят.
 - `value` — JSON. Для `True`/`False` хранится `"true"`/`"false"`, для строк — `"\"text\""`, для int — `"42"` и т.д.
 
-**Кто использует**: [`ConfigResolver`](../dreaming/services/config_resolver.py) при resolve override → fallback. Перечитывается per-request, кэшируется в `_cache: dict[int, dict]` (config_resolver.py:18).
+**Кто использует**: [`ConfigResolver`](../../dreaming/services/config_resolver.py) при resolve override → fallback. Перечитывается per-request, кэшируется в `_cache: dict[int, dict]` (config_resolver.py:18).
 
 См. также [`features/settings.md`](features/settings.md).
 
@@ -318,7 +318,7 @@ CREATE INDEX IF NOT EXISTS idx_or_msg_project_node_ts
 | Колонка | Описание |
 |---|---|
 | `author` | `agent` / `user` / `system`. |
-| `kind` | `text` / `tool_use` / `tool_result` / `chat` / `reasoning`. См. `_ingest_line` в [`claude_session_tail.py:276`](../dreaming/services/claude_session_tail.py). |
+| `kind` | `text` / `tool_use` / `tool_result` / `chat` / `reasoning`. См. `_ingest_line` в [`claude_session_tail.py:276`](../../dreaming/services/claude_session_tail.py). |
 | `delivery_status` | `delivered` (после INSERT). Зарезервирован для retry-логики. |
 | `client_message_id` | для idempotency на стороне внешнего клиента. |
 
@@ -473,7 +473,7 @@ CREATE INDEX IF NOT EXISTS idx_or_tts_project_ts
 
 TTS (text-to-speech) сообщения для голосового канала. `dedup_hash` UNIQUE — повторно не вставится. `cleared=1` — TTS-агент уже произнёс.
 
-В Wave 3.9 [`tts_backfill.py`](../dreaming/services/tts_backfill.py) — stub возвращает 0 (полная реализация отложена).
+Wave 3.9 планировала сервис `tts_backfill.py`, но он так и не появился. На сегодня таблицу создаёт и чистит каскадом только [`db.py`](../../dreaming/services/db.py) — ни одного INSERT или SELECT по ней в коде нет.
 
 ## `ai_usage_events`
 
@@ -512,7 +512,7 @@ CREATE INDEX IF NOT EXISTS idx_aue_dreaming_project_ts
 
 `is_sidechain` — sub-agent message (true) vs main session (false).
 
-`project_id` — резолвится через `cwd → project_id` мап (см. [`ai_usage_parser.py:91`](../dreaming/services/ai_usage_parser.py)). Если `cwd` не матчится с никаким `working_dir`, событие пропускается (`events_skipped++`).
+`project_id` — резолвится через `cwd → project_id` мап (см. [`ai_usage_parser.py:91`](../../dreaming/services/ai_usage_parser.py)). Если `cwd` не матчится с никаким `working_dir`, событие пропускается (`events_skipped++`).
 
 **Кто пишет**: `ai_usage_parser._insert_events` (ai_usage_parser.py:196) — batch INSERT OR IGNORE. Запускается по cron'у `ai_usage_ingest` на 5-минутном interval'е (scheduler.py:227).
 
@@ -549,7 +549,7 @@ PK составной `(project_id, path)` — переделан под мул�
 
 ## Идемпотентные миграции
 
-`_migrate_orchestration` ([`db.py:282`](../dreaming/services/db.py)) — ровно эти три действия:
+`_migrate_orchestration` ([`db.py:282`](../../dreaming/services/db.py)) — ровно эти три действия:
 
 1. `ALTER TABLE orchestrator_nodes ADD COLUMN stage_id TEXT` если нет.
 2. `ALTER TABLE orchestrator_artifacts ADD COLUMN dedup_hash TEXT` если нет, плюс `CREATE UNIQUE INDEX ... idx_or_artifacts_dedup`.
@@ -585,7 +585,7 @@ DELETE FROM orchestrator_artifacts WHERE run_id NOT IN (SELECT id FROM orchestra
 
 ## Cross-references
 
-- Исходник схемы: [`dreaming/services/db.py`](../dreaming/services/db.py).
+- Исходник схемы: [`dreaming/services/db.py`](../../dreaming/services/db.py).
 - Доменные методы DB: см. [`services.md`](services.md) раздел Storage.
 - Какой endpoint бьёт какую таблицу — [`api.md`](api.md).
 - Backup тактика: [`deployment.md`](deployment.md).

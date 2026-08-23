@@ -22,7 +22,7 @@
 
 **Причины**:
 1. `projects_root` пустой или указан несуществующий путь.
-2. Все подпапки начинаются с `.` (тогда `scan_projects_root` их игнорирует, см. [`projects.py:144`](../dreaming/services/projects.py)).
+2. Все подпапки начинаются с `.` (тогда `scan_projects_root` их игнорирует, см. [`projects.py:144`](../../dreaming/services/projects.py)).
 3. `projects_root` указывает на файл, не директорию.
 
 **Диагностика** (PowerShell):
@@ -64,7 +64,7 @@ which claude
 shutil.which("claude")  # python
 ```
 
-В коде: `_resolve_claude_path` ([`process_manager.py:31`](../dreaming/services/process_manager.py)) делает `shutil.which(claude_path)` — если возвращает None, то fallback на исходную строку и spawn провалится с `FileNotFoundError`.
+В коде: `_resolve_claude_path` ([`process_manager.py:31`](../../dreaming/services/process_manager.py)) делает `shutil.which(claude_path)` — если возвращает None, то fallback на исходную строку и spawn провалится с `FileNotFoundError`.
 
 **Лечение**:
 - Открой Settings → "Claude path" → впиши абсолютный путь к `claude.cmd` (Windows).
@@ -140,7 +140,7 @@ sqlite3 data/dreaming.db "PRAGMA wal_checkpoint(TRUNCATE);"
 
 **Симптомы**: страница говорит «Project not found» или «Project disabled».
 
-**Причины** (см. [`project_resolver.py:18`](../dreaming/middleware/project_resolver.py)):
+**Причины** (см. [`project_resolver.py:18`](../../dreaming/middleware/project_resolver.py)):
 1. Проект с таким slug удалён.
 2. `enabled=0`.
 
@@ -162,7 +162,7 @@ sqlite3 data/dreaming.db "SELECT slug, enabled FROM projects"
 
 **Причины**:
 1. `cron_enabled=false` (per-project через resolver).
-2. Cron expression невалидный (тогда `register_project_jobs` молча пропустит, см. [`scheduler.py:198`](../dreaming/services/scheduler.py)).
+2. Cron expression невалидный (тогда `register_project_jobs` молча пропустит, см. [`scheduler.py:198`](../../dreaming/services/scheduler.py)).
 3. Scheduler не стартовал.
 4. Все агенты `enabled=0` или `next_agents_for_nightly` вернул пустой список.
 
@@ -234,7 +234,7 @@ sqlite3 data/dreaming.db "SELECT slug, working_dir FROM projects"
 
 **Симптомы**: жмёшь «Create Jira Task» в `/p/{slug}/ideas/...`, получаешь 400 с сообщением «Настройте Jira (email + API token) в /settings» или подобным.
 
-**Причины** (см. [`jira.py:62`](../dreaming/services/jira.py)):
+**Причины** (см. [`jira.py:62`](../../dreaming/services/jira.py)):
 - `jira_email` или `jira_api_token` не задан.
 - `jira_user_account_id` не задан.
 - `jira_url` не задан.

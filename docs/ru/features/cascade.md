@@ -14,7 +14,7 @@ Cascade — отдельный паттерн оркестрации повер�
 
 ## 5 стадий
 
-Default набор стадий ([`api.py:217–222`](../../dreaming/routes/api.py)):
+Default набор стадий ([`api.py:217–222`](../../../dreaming/routes/api.py)):
 
 | index | key | label | Что делает |
 |---|---|---|---|
@@ -46,7 +46,7 @@ started_at TEXT, finished_at TEXT
 
 Между стадиями (или после стадии) Roman может записать verdict:
 
-`POST /api/cascade/{run_id}/gate` ([`api.py:260`](../../dreaming/routes/api.py)):
+`POST /api/cascade/{run_id}/gate` ([`api.py:260`](../../../dreaming/routes/api.py)):
 
 ```json
 {
@@ -84,7 +84,7 @@ INSERT в `orchestrator_gate_verdicts` (см. [`schema.md`](../schema.md#orchest
 }
 ```
 
-Если `dedup_hash` коллизит на `(run_id, dedup_hash)` (UNIQUE INDEX `idx_or_artifacts_dedup`, добавляется в [`db.py:307`](../../dreaming/services/db.py)) — INSERT падает, endpoint возвращает `{"id": null, "deduped": true}` (api.py:289).
+Если `dedup_hash` коллизит на `(run_id, dedup_hash)` (UNIQUE INDEX `idx_or_artifacts_dedup`, добавляется в [`db.py:307`](../../../dreaming/services/db.py)) — INSERT падает, endpoint возвращает `{"id": null, "deduped": true}` (api.py:289).
 
 Иначе `{"id": "<uuid>", "deduped": false}`.
 
@@ -149,7 +149,7 @@ curl -X POST http://localhost:8086/api/cascade/R/finish
 
 ## Stage detection heuristic
 
-[`dreaming/services/cascade_stage_detect.py`](../../dreaming/services/cascade_stage_detect.py).
+[`dreaming/services/cascade_stage_detect.py`](../../../dreaming/services/cascade_stage_detect.py).
 
 ```python
 def detect_stage(agent_name: str, description: str = "") -> str | None
@@ -170,7 +170,7 @@ def detect_stage(agent_name: str, description: str = "") -> str | None
 
 ## HarnessClient
 
-[`dreaming/services/harness_client.py`](../../dreaming/services/harness_client.py) — адаптер к внешнему harness API. Используется когда Roman работает не локально через claude CLI, а на удалённом сервисе.
+[`dreaming/services/harness_client.py`](../../../dreaming/services/harness_client.py) — адаптер к внешнему harness API. Используется когда Roman работает не локально через claude CLI, а на удалённом сервисе.
 
 ```python
 client = HarnessClient(settings)

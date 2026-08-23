@@ -216,7 +216,7 @@ pip install -e .
 nssm restart AIDreamingCenter   # или: systemctl restart dc-dashboard
 ```
 
-Schema migrations идемпотентны (`_migrate_orchestration` в [`db.py:282`](../dreaming/services/db.py)) — повторный запуск на already-migrated БД no-op'ит. Но если ты хакаешь БД руками или делаешь нестандартную миграцию — **бэкапь сначала**.
+Schema migrations идемпотентны (`_migrate_orchestration` в [`db.py:282`](../../dreaming/services/db.py)) — повторный запуск на already-migrated БД no-op'ит. Но если ты хакаешь БД руками или делаешь нестандартную миграцию — **бэкапь сначала**.
 
 ## Monitoring
 

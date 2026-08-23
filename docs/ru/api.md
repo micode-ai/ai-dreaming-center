@@ -18,7 +18,7 @@
 
 Назначение: callback из `/self-study` slash-команды (живущей в стартовом kit'е external-проекта). Multi-tenant routing идёт через body `project_slug`.
 
-Источник: [`dreaming/routes/api.py`](../dreaming/routes/api.py) строки 13–66.
+Источник: [`dreaming/routes/api.py`](../../dreaming/routes/api.py) строки 13–66.
 
 ### POST `/api/session/start`
 
@@ -113,7 +113,7 @@ curl -X POST http://localhost:8086/api/session/finish \
 
 ## Orchestration API
 
-Назначение: запуск Roman runs из внешних harness'ов и контроль их жизни. Source: [`dreaming/routes/api.py`](../dreaming/routes/api.py) строки 68–155.
+Назначение: запуск Roman runs из внешних harness'ов и контроль их жизни. Source: [`dreaming/routes/api.py`](../../dreaming/routes/api.py) строки 68–155.
 
 ### POST `/api/orchestration/start`
 
@@ -244,7 +244,7 @@ curl -X POST http://localhost:8086/api/orchestration/abc/nodes/node-uuid/message
 
 ## Cascade API
 
-Источник: [`dreaming/routes/api.py`](../dreaming/routes/api.py) строки 158–321.
+Источник: [`dreaming/routes/api.py`](../../dreaming/routes/api.py) строки 158–321.
 
 5 стандартных стадий: `contract` → `design` → `implementation` → `review` → `qa`.
 
@@ -381,68 +381,68 @@ curl -X POST http://localhost:8086/api/cascade/init \
 
 ### Setup wizard
 
-- `GET /setup` ([`dreaming/routes/setup.py:24`](../dreaming/routes/setup.py)) — render формы с defaults и (опц.) результатом сканирования.
-- `POST /setup` ([`setup.py:46`](../dreaming/routes/setup.py)):
+- `GET /setup` ([`dreaming/routes/setup.py:24`](../../dreaming/routes/setup.py)) — render формы с defaults и (опц.) результатом сканирования.
+- `POST /setup` ([`setup.py:46`](../../dreaming/routes/setup.py)):
   - `action=scan` — сканирует `projects_root`, рендерит ту же страницу с найденными подпапками.
   - `action=` (или отсутствует) — сохраняет global config, импортирует выбранные проекты, регистрирует cron jobs, редиректит на `/`.
 
 ### Projects CRUD
 
-- `GET /projects` ([`projects.py:12`](../dreaming/routes/projects.py)) — список.
-- `POST /projects/{project_id}/toggle` ([`projects.py:23`](../dreaming/routes/projects.py)) — переключает enabled, (un)register'ит per-project crons.
-- `POST /projects/{project_id}/delete` ([`projects.py:40`](../dreaming/routes/projects.py)) — удаляет (CASCADE удалит все project_id-зависимые rows).
-- `POST /projects/import` body `root=...` ([`projects.py:50`](../dreaming/routes/projects.py)) — повторный массовый scan + import.
+- `GET /projects` ([`projects.py:12`](../../dreaming/routes/projects.py)) — список.
+- `POST /projects/{project_id}/toggle` ([`projects.py:23`](../../dreaming/routes/projects.py)) — переключает enabled, (un)register'ит per-project crons.
+- `POST /projects/{project_id}/delete` ([`projects.py:40`](../../dreaming/routes/projects.py)) — удаляет (CASCADE удалит все project_id-зависимые rows).
+- `POST /projects/import` body `root=...` ([`projects.py:50`](../../dreaming/routes/projects.py)) — повторный массовый scan + import.
 
 ### Settings
 
-- `GET /settings` ([`settings.py:46`](../dreaming/routes/settings.py)).
-- `POST /settings` ([`settings.py:57`](../dreaming/routes/settings.py)) — сохраняет в `config.yaml`, перезагружает `app.state.settings`.
+- `GET /settings` ([`settings.py:46`](../../dreaming/routes/settings.py)).
+- `POST /settings` ([`settings.py:57`](../../dreaming/routes/settings.py)) — сохраняет в `config.yaml`, перезагружает `app.state.settings`.
 
 ### Locale
 
-- `POST /locale` body `locale=ru&next=/` ([`root.py:126`](../dreaming/routes/root.py)) — ставит cookie `dc_locale`, max-age=год, редиректит обратно.
+- `POST /locale` body `locale=ru&next=/` ([`root.py:126`](../../dreaming/routes/root.py)) — ставит cookie `dc_locale`, max-age=год, редиректит обратно.
 
 ### Per-project endpoints (за `/p/{slug}/`)
 
 | Method+Path | Описание | Source |
 |---|---|---|
-| GET `/p/{slug}/` | Dashboard. | [`project_dashboard.py:9`](../dreaming/routes/project_dashboard.py) |
-| GET `/p/{slug}/live` | Live-логи + список активных. | [`project_live.py:11`](../dreaming/routes/project_live.py) |
-| GET `/p/{slug}/live/stream/{agent}` | SSE-стрим stdout (`event: log` / `event: end`). | [`project_live.py:26`](../dreaming/routes/project_live.py) |
-| POST `/p/{slug}/live/kill/{agent}` | Убить процесс. | [`project_live.py:47`](../dreaming/routes/project_live.py) |
-| GET `/p/{slug}/rotation` | Rotation-таблица; авто-добавляет агентов из ФС если их нет в DB. | [`project_rotation.py:12`](../dreaming/routes/project_rotation.py) |
-| POST `/p/{slug}/rotation/tier` form `agent_name=&tier=` | Set tier 1\|2\|3. | [`project_rotation.py:36`](../dreaming/routes/project_rotation.py) |
-| POST `/p/{slug}/rotation/toggle` form `agent_name=` | Toggle enabled. | [`project_rotation.py:45`](../dreaming/routes/project_rotation.py) |
-| POST `/p/{slug}/rotation/start/{agent}` | Start self-study session. | [`project_rotation.py:57`](../dreaming/routes/project_rotation.py) |
-| GET/POST `/p/{slug}/settings` | Per-project overrides. | [`project_settings.py`](../dreaming/routes/project_settings.py) |
-| GET `/p/{slug}/topics` | Weekly checklist. | [`project_topics.py:10`](../dreaming/routes/project_topics.py) |
-| GET `/p/{slug}/kanban` | Custom topics. | [`project_kanban.py:10`](../dreaming/routes/project_kanban.py) |
-| POST `/p/{slug}/kanban/add` form fields | Add topic. | [`project_kanban.py:24`](../dreaming/routes/project_kanban.py) |
-| POST `/p/{slug}/kanban/{id}/delete` | Delete topic. | [`project_kanban.py:41`](../dreaming/routes/project_kanban.py) |
-| GET `/p/{slug}/notes` | Notes browser. | [`project_notes.py:17`](../dreaming/routes/project_notes.py) |
-| GET `/p/{slug}/notes/raw?path=` | Raw текст; path-traversal-safe. | [`project_notes.py:33`](../dreaming/routes/project_notes.py) |
-| GET `/p/{slug}/findings` | TD list. | [`project_findings.py:16`](../dreaming/routes/project_findings.py) |
-| GET `/p/{slug}/findings/{id}` | TD detail. | [`project_findings.py:49`](../dreaming/routes/project_findings.py) |
-| POST `/p/{slug}/findings/{id}/close` | Close (rewrite frontmatter). | [`project_findings.py:84`](../dreaming/routes/project_findings.py) |
-| POST `/p/{slug}/findings/{id}/delete` | Delete .md file. | [`project_findings.py:95`](../dreaming/routes/project_findings.py) |
-| GET `/p/{slug}/tech-debt` | TD aggregate. | [`project_tech_debt.py:11`](../dreaming/routes/project_tech_debt.py) |
-| GET `/p/{slug}/ideas?status=` | Ideas board. | [`project_ideas.py:16`](../dreaming/routes/project_ideas.py) |
-| POST `/p/{slug}/ideas/{id}/jira` | Создать Jira Task; запоминает key в frontmatter. | [`project_ideas.py:54`](../dreaming/routes/project_ideas.py) |
-| GET `/p/{slug}/wiki` | Wiki status. | [`project_wiki.py:14`](../dreaming/routes/project_wiki.py) |
-| POST `/p/{slug}/wiki/bootstrap` | Запустить `/wiki-bootstrap` через claude. | [`project_wiki.py:33`](../dreaming/routes/project_wiki.py) |
-| GET `/p/{slug}/ai-usage` | AI usage analytics. | [`project_ai_usage.py:10`](../dreaming/routes/project_ai_usage.py) |
-| GET `/p/{slug}/orchestration` | Список runs. | [`project_orchestration.py:16`](../dreaming/routes/project_orchestration.py) |
-| GET `/p/{slug}/orchestration/{run_id}` | Run detail (live polling). | [`project_orchestration.py:30`](../dreaming/routes/project_orchestration.py) |
-| POST `/p/{slug}/orchestration/start` form `goal=` | Запустить run + спавнит claude + tail/watcher. 409→редирект на existing. | [`project_orchestration.py:50`](../dreaming/routes/project_orchestration.py) |
-| POST `/p/{slug}/orchestration/{run_id}/finish` | Завершить. | [`project_orchestration.py:147`](../dreaming/routes/project_orchestration.py) |
-| GET `/p/{slug}/orchestration/{run_id}/refresh` | JSON polling endpoint. | [`project_orchestration.py:159`](../dreaming/routes/project_orchestration.py) |
-| POST `/p/{slug}/orchestration/{run_id}/resume` form `prompt=` | claude --resume. | [`project_orchestration.py:187`](../dreaming/routes/project_orchestration.py) |
-| GET `/p/{slug}/contracts` | Contracts list. | [`project_contracts.py:10`](../dreaming/routes/project_contracts.py) |
-| GET `/p/{slug}/sidecar-findings?severity=` | Sidecar JSON findings. | [`project_sidecar_findings.py:10`](../dreaming/routes/project_sidecar_findings.py) |
-| GET `/p/{slug}/evolutions` | Evolutions list. | [`project_evolutions.py:10`](../dreaming/routes/project_evolutions.py) |
-| GET `/p/{slug}/loops` | Loops list. | [`project_loops.py:10`](../dreaming/routes/project_loops.py) |
-| GET `/p/{slug}/plans` | Plans list. | [`project_plans.py:10`](../dreaming/routes/project_plans.py) |
-| GET `/p/{slug}/cascade-costs` | Cascade-costs roll-up. | [`project_cascade_costs.py:9`](../dreaming/routes/project_cascade_costs.py) |
+| GET `/p/{slug}/` | Dashboard. | [`project_dashboard.py:9`](../../dreaming/routes/project_dashboard.py) |
+| GET `/p/{slug}/live` | Live-логи + список активных. | [`project_live.py:11`](../../dreaming/routes/project_live.py) |
+| GET `/p/{slug}/live/stream/{agent}` | SSE-стрим stdout (`event: log` / `event: end`). | [`project_live.py:26`](../../dreaming/routes/project_live.py) |
+| POST `/p/{slug}/live/kill/{agent}` | Убить процесс. | [`project_live.py:47`](../../dreaming/routes/project_live.py) |
+| GET `/p/{slug}/rotation` | Rotation-таблица; авто-добавляет агентов из ФС если их нет в DB. | [`project_rotation.py:12`](../../dreaming/routes/project_rotation.py) |
+| POST `/p/{slug}/rotation/tier` form `agent_name=&tier=` | Set tier 1\|2\|3. | [`project_rotation.py:36`](../../dreaming/routes/project_rotation.py) |
+| POST `/p/{slug}/rotation/toggle` form `agent_name=` | Toggle enabled. | [`project_rotation.py:45`](../../dreaming/routes/project_rotation.py) |
+| POST `/p/{slug}/rotation/start/{agent}` | Start self-study session. | [`project_rotation.py:57`](../../dreaming/routes/project_rotation.py) |
+| GET/POST `/p/{slug}/settings` | Per-project overrides. | [`project_settings.py`](../../dreaming/routes/project_settings.py) |
+| GET `/p/{slug}/topics` | Weekly checklist. | [`project_topics.py:10`](../../dreaming/routes/project_topics.py) |
+| GET `/p/{slug}/kanban` | Custom topics. | [`project_kanban.py:10`](../../dreaming/routes/project_kanban.py) |
+| POST `/p/{slug}/kanban/add` form fields | Add topic. | [`project_kanban.py:24`](../../dreaming/routes/project_kanban.py) |
+| POST `/p/{slug}/kanban/{id}/delete` | Delete topic. | [`project_kanban.py:41`](../../dreaming/routes/project_kanban.py) |
+| GET `/p/{slug}/notes` | Notes browser. | [`project_notes.py:17`](../../dreaming/routes/project_notes.py) |
+| GET `/p/{slug}/notes/raw?path=` | Raw текст; path-traversal-safe. | [`project_notes.py:33`](../../dreaming/routes/project_notes.py) |
+| GET `/p/{slug}/findings` | TD list. | [`project_findings.py:16`](../../dreaming/routes/project_findings.py) |
+| GET `/p/{slug}/findings/{id}` | TD detail. | [`project_findings.py:49`](../../dreaming/routes/project_findings.py) |
+| POST `/p/{slug}/findings/{id}/close` | Close (rewrite frontmatter). | [`project_findings.py:84`](../../dreaming/routes/project_findings.py) |
+| POST `/p/{slug}/findings/{id}/delete` | Delete .md file. | [`project_findings.py:95`](../../dreaming/routes/project_findings.py) |
+| GET `/p/{slug}/tech-debt` | TD aggregate. | [`project_tech_debt.py:11`](../../dreaming/routes/project_tech_debt.py) |
+| GET `/p/{slug}/ideas?status=` | Ideas board. | [`project_ideas.py:16`](../../dreaming/routes/project_ideas.py) |
+| POST `/p/{slug}/ideas/{id}/jira` | Создать Jira Task; запоминает key в frontmatter. | [`project_ideas.py:54`](../../dreaming/routes/project_ideas.py) |
+| GET `/p/{slug}/wiki` | Wiki status. | [`project_wiki.py:14`](../../dreaming/routes/project_wiki.py) |
+| POST `/p/{slug}/wiki/bootstrap` | Запустить `/wiki-bootstrap` через claude. | [`project_wiki.py:33`](../../dreaming/routes/project_wiki.py) |
+| GET `/p/{slug}/ai-usage` | AI usage analytics. | [`project_ai_usage.py:10`](../../dreaming/routes/project_ai_usage.py) |
+| GET `/p/{slug}/orchestration` | Список runs. | [`project_orchestration.py:16`](../../dreaming/routes/project_orchestration.py) |
+| GET `/p/{slug}/orchestration/{run_id}` | Run detail (live polling). | [`project_orchestration.py:30`](../../dreaming/routes/project_orchestration.py) |
+| POST `/p/{slug}/orchestration/start` form `goal=` | Запустить run + спавнит claude + tail/watcher. 409→редирект на existing. | [`project_orchestration.py:50`](../../dreaming/routes/project_orchestration.py) |
+| POST `/p/{slug}/orchestration/{run_id}/finish` | Завершить. | [`project_orchestration.py:147`](../../dreaming/routes/project_orchestration.py) |
+| GET `/p/{slug}/orchestration/{run_id}/refresh` | JSON polling endpoint. | [`project_orchestration.py:159`](../../dreaming/routes/project_orchestration.py) |
+| POST `/p/{slug}/orchestration/{run_id}/resume` form `prompt=` | claude --resume. | [`project_orchestration.py:187`](../../dreaming/routes/project_orchestration.py) |
+| GET `/p/{slug}/contracts` | Contracts list. | [`project_contracts.py:10`](../../dreaming/routes/project_contracts.py) |
+| GET `/p/{slug}/sidecar-findings?severity=` | Sidecar JSON findings. | [`project_sidecar_findings.py:10`](../../dreaming/routes/project_sidecar_findings.py) |
+| GET `/p/{slug}/evolutions` | Evolutions list. | [`project_evolutions.py:10`](../../dreaming/routes/project_evolutions.py) |
+| GET `/p/{slug}/loops` | Loops list. | [`project_loops.py:10`](../../dreaming/routes/project_loops.py) |
+| GET `/p/{slug}/plans` | Plans list. | [`project_plans.py:10`](../../dreaming/routes/project_plans.py) |
+| GET `/p/{slug}/cascade-costs` | Cascade-costs roll-up. | [`project_cascade_costs.py:9`](../../dreaming/routes/project_cascade_costs.py) |
 
 Подробный разбор каждого роута — в [`routes.md`](routes.md).
 
@@ -466,11 +466,11 @@ curl http://localhost:8086/health
 
 ### GET `/`
 
-Root index — agg dashboard. Если БД пустая, `setup_gate_middleware` редиректит в `/setup`. Render: [`templates/index_dashboard.html`](../dreaming/templates/index_dashboard.html).
+Root index — agg dashboard. Если БД пустая, `setup_gate_middleware` редиректит в `/setup`. Render: [`templates/index_dashboard.html`](../../dreaming/templates/index_dashboard.html).
 
 ### GET `/ai-usage`
 
-Глобальный AI Usage dashboard. Source: [`root.py:109`](../dreaming/routes/root.py).
+Глобальный AI Usage dashboard. Source: [`root.py:109`](../../dreaming/routes/root.py).
 
 ### GET `/static/{path}`
 

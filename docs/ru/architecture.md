@@ -58,12 +58,12 @@
 
 ## Процесс-модель
 
-Один процесс `python -m uvicorn dreaming.main:app --port 8086` (см. [`pyproject.toml`](../pyproject.toml) — зависимости, и [`README.md`](../README.md) — quickstart). Внутри него:
+Один процесс `python -m uvicorn dreaming.main:app --port 8086` (см. [`pyproject.toml`](../../pyproject.toml) — зависимости, и [`README.md`](../README.md) — quickstart). Внутри него:
 
 - **asyncio loop** — единственный, всё IO (HTTP, SQLite, subprocess, scheduler) сидит на нём.
-- **Один persistent SQLite connection** в WAL режиме (см. [`dreaming/services/db.py`](../dreaming/services/db.py) строки 269–280: `PRAGMA journal_mode=WAL` и `PRAGMA foreign_keys=ON` ставятся ДО `executescript(_SCHEMA)`).
+- **Один persistent SQLite connection** в WAL режиме (см. [`dreaming/services/db.py`](../../dreaming/services/db.py) строки 269–280: `PRAGMA journal_mode=WAL` и `PRAGMA foreign_keys=ON` ставятся ДО `executescript(_SCHEMA)`).
 - **Subprocess'ы** Claude CLI, спавнятся через `asyncio.create_subprocess_exec` — лимит `STDOUT_BUFFER_LIMIT = 16 MB` (process_manager.py:28), потому что stream-json от Claude может присылать очень крупные assistant-блоки.
-- **APScheduler** в режиме `AsyncIOScheduler` — крутится на том же loop'е, не создаёт отдельный thread/процесс (см. [`dreaming/services/scheduler.py`](../dreaming/services/scheduler.py) `build_scheduler`, строка 219).
+- **APScheduler** в режиме `AsyncIOScheduler` — крутится на том же loop'е, не создаёт отдельный thread/процесс (см. [`dreaming/services/scheduler.py`](../../dreaming/services/scheduler.py) `build_scheduler`, строка 219).
 
 Параллелизм ограничен:
 - `max_concurrent` (default 2) — сколько параллельных Claude-сессий держит ProcessManager (process_manager.py:92).
@@ -73,9 +73,9 @@ Single-process design выбран сознательно: Roman — корне�
 
 ## Lifespan
 
-[`dreaming/main.py`](../dreaming/main.py) определяет `@asynccontextmanager async def lifespan(app)` — порядок строго:
+[`dreaming/main.py`](../../dreaming/main.py) определяет `@asynccontextmanager async def lifespan(app)` — порядок строго:
 
-1. `app.state.settings = load_settings()` — Pydantic `AppSettings.load()` читает [`config.yaml`](../config.example.yaml) + env vars `DC_*`.
+1. `app.state.settings = load_settings()` — Pydantic `AppSettings.load()` читает [`config.yaml`](../../config.example.yaml) + env vars `DC_*`.
 2. `app.state.db = SqliteDB(settings.db_path)` + `await db.connect()` — создаёт каталог, открывает connection, ставит PRAGMA, запускает `_SCHEMA + _migrate_orchestration`.
 3. `app.state.projects = ProjectsService(db)` — registry-сервис.
 4. `app.state.templates = Jinja2Templates("dreaming/templates")` — Jinja2.
@@ -94,7 +94,7 @@ Lifespan важен потому что **в роутах нельзя инст�
 
 ## Middleware
 
-Зарегистрированы в [`main.py`](../dreaming/main.py) строки 65–66:
+Зарегистрированы в [`main.py`](../../dreaming/main.py) строки 65–66:
 
 ```python
 app.middleware("http")(project_resolver_middleware)   # внутренний
@@ -109,9 +109,9 @@ Request --> setup_gate (OUTER) --> project_resolver (INNER) --> route
 
 Логика:
 
-1. **`setup_gate`** ([`dreaming/middleware/setup_gate.py`](../dreaming/middleware/setup_gate.py)) — если `projects` таблица пустая И путь не в `_BYPASS_PREFIXES = ("/setup", "/static", "/health", "/api", "/docs", "/redoc", "/openapi")`, делает `RedirectResponse("/setup", 303)`. Это — first-run wizard gate.
+1. **`setup_gate`** ([`dreaming/middleware/setup_gate.py`](../../dreaming/middleware/setup_gate.py)) — если `projects` таблица пустая И путь не в `_BYPASS_PREFIXES = ("/setup", "/static", "/health", "/api", "/docs", "/redoc", "/openapi")`, делает `RedirectResponse("/setup", 303)`. Это — first-run wizard gate.
 
-2. **`project_resolver`** ([`dreaming/middleware/project_resolver.py`](../dreaming/middleware/project_resolver.py)) — если путь начинается с `/p/<slug>/`, парсит `<slug>`, ищет проект через `projects.get_by_slug(slug)`. Если проект не найден ИЛИ `enabled=False` — возвращает 404 с шаблоном `project_not_found.html`. Если найден — пишет в `request.state.project = project`, и роуты дальше читают именно оттуда (вместо повторного DB-lookup'а).
+2. **`project_resolver`** ([`dreaming/middleware/project_resolver.py`](../../dreaming/middleware/project_resolver.py)) — если путь начинается с `/p/<slug>/`, парсит `<slug>`, ищет проект через `projects.get_by_slug(slug)`. Если проект не найден ИЛИ `enabled=False` — возвращает 404 с шаблоном `project_not_found.html`. Если найден — пишет в `request.state.project = project`, и роуты дальше читают именно оттуда (вместо повторного DB-lookup'а).
 
 Порядок важен: setup_gate раньше, чтобы /p/* запросы при пустой БД сразу редиректились в /setup, а не пытались резолвить slug по пустой таблице.
 
@@ -129,8 +129,8 @@ Request --> setup_gate (OUTER) --> project_resolver (INNER) --> route
 | `harness_clients` | `HarnessClientCache` | main.py:44 |
 | `scheduler` | `AsyncIOScheduler` | main.py:45 |
 | `resolver_factory` | `Callable[[Request], ConfigResolver]` | main.py:50 |
-| `orchestration_tails` | `dict[run_id, Task]` | создаётся ленивo в [`project_orchestration.py:118`](../dreaming/routes/project_orchestration.py) |
-| `orchestration_watchers` | `dict[run_id, Task]` | создаётся ленивo в [`project_orchestration.py:136`](../dreaming/routes/project_orchestration.py) |
+| `orchestration_tails` | `dict[run_id, Task]` | создаётся ленивo в [`project_orchestration.py:118`](../../dreaming/routes/project_orchestration.py) |
+| `orchestration_watchers` | `dict[run_id, Task]` | создаётся ленивo в [`project_orchestration.py:136`](../../dreaming/routes/project_orchestration.py) |
 
 Помни: `ConfigResolver` НЕ синглтон, он создаётся на каждый request через `resolver_factory(request)`. Это сделано чтобы кэш `_cache: dict[int, dict]` per-request не накапливался.
 
@@ -152,7 +152,7 @@ Request --> setup_gate (OUTER) --> project_resolver (INNER) --> route
 
 Внутри `project_router`:
 
-- См. [`dreaming/routes/project_router.py`](../dreaming/routes/project_router.py) — он только агрегирует 19 sub-роутеров через `include_router`.
+- См. [`dreaming/routes/project_router.py`](../../dreaming/routes/project_router.py) — он только агрегирует 19 sub-роутеров через `include_router`.
 - Подробный реестр маршрутов — в [`routes.md`](routes.md).
 
 ## Concurrency model
@@ -176,7 +176,7 @@ ProcessManager держит словарь `running: dict[str, RunningSession]` 
 
 Reconcile job на 5-минутном interval'е (scheduler.py:223) собирает `(project_id, agent_name)` пары из in-memory `pm.running`, передаёт в `pm.reconcile_stale_sessions(active_pairs)`. Сервер ничего не знает о том, что Claude умер сам — `_cleanup` это и закроет.
 
-Дополнительно: при `start_session` через [`project_orchestration.py:84`](../dreaming/routes/project_orchestration.py) спавнятся:
+Дополнительно: при `start_session` через [`project_orchestration.py:84`](../../dreaming/routes/project_orchestration.py) спавнятся:
 - `ClaudeSessionTail` — таск который читает Claude jsonl-файл и переливает его в `orchestrator_messages`.
 - `SubagentWatcher` — таск который смотрит за `subagents/agent-*.meta.json` и спавнит child tail на каждый sub-агент.
 

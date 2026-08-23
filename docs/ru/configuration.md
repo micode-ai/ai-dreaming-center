@@ -1,6 +1,6 @@
 # Configuration Reference
 
-Все настройки приложения. Источник истины — класс `AppSettings` в [`dreaming/config.py`](../dreaming/config.py) (92 поля, 13 групп).
+Все настройки приложения. Источник истины — класс `AppSettings` в [`dreaming/config.py`](../../dreaming/config.py) (92 поля, 13 групп).
 
 ## Содержание
 
@@ -24,7 +24,7 @@
 
 ## Где живёт config
 
-`config.yaml` в корне проекта (рядом с `pyproject.toml`). Создаётся setup wizard'ом или вручную из [`config.example.yaml`](../config.example.yaml).
+`config.yaml` в корне проекта (рядом с `pyproject.toml`). Создаётся setup wizard'ом или вручную из [`config.example.yaml`](../../config.example.yaml).
 
 Внимание: путь относительный (`Path("config.yaml")` в config.py:8). Если стартуешь из другого CWD — wizard и save_yaml промахнутся. Запускай uvicorn из корня репозитория, либо переопредели через env var `DC_DB_PATH=/abs/path/dreaming.db` и т.д.
 
@@ -40,7 +40,7 @@ Pydantic-settings читает env vars **поверх** YAML (config.py:19 `env
 
 ## Per-project overrides
 
-Большая часть ключей может быть override'нута per-project через таблицу `project_settings (project_id, key, value)`. Доступ — через `ConfigResolver.get(project, key, default)` ([`config_resolver.py:23`](../dreaming/services/config_resolver.py)).
+Большая часть ключей может быть override'нута per-project через таблицу `project_settings (project_id, key, value)`. Доступ — через `ConfigResolver.get(project, key, default)` ([`config_resolver.py:23`](../../dreaming/services/config_resolver.py)).
 
 Override scope:
 - **Global only** — обычно serve-level (db_path, host, port, default_locale).
@@ -58,7 +58,7 @@ Override scope:
 |---|---|---|---|---|
 | `db_path` | str | `"data/dreaming.db"` | GLB | SQLite файл (относительный или абсолютный путь). Кагда стартуем с другого CWD — задавай абсолютный. **Example use**: `db_path: "/var/lib/dc/dreaming.db"`. |
 
-Used by: [`SqliteDB.__init__`](../dreaming/services/db.py) — `Path(self._path).parent.mkdir(parents=True, exist_ok=True)` если каталога нет.
+Used by: [`SqliteDB.__init__`](../../dreaming/services/db.py) — `Path(self._path).parent.mkdir(parents=True, exist_ok=True)` если каталога нет.
 
 ## Group: Projects
 
@@ -92,7 +92,7 @@ Used by: [`SqliteDB.__init__`](../dreaming/services/db.py) — `Path(self._path)
 | `codex_command_template` | str | `'codex -p "{prompt}" --model {model}'` | per-proj | Шаблон команды codex. |
 | `continue_command_template` | str | `'continue -p "{prompt}"'` | per-proj | Шаблон команды continue. |
 
-Used by: [`ProcessManager._resolve_claude_path`](../dreaming/services/process_manager.py:31) и cron jobs в `scheduler.py`. **secret** — поля рендерятся как `type=password` в settings UI.
+Used by: [`ProcessManager._resolve_claude_path`](../../dreaming/services/process_manager.py:31) и cron jobs в `scheduler.py`. **secret** — поля рендерятся как `type=password` в settings UI.
 
 ## Group: Self-study
 
@@ -140,7 +140,7 @@ Used by: [`ProcessManager._resolve_claude_path`](../dreaming/services/process_ma
 | `monthly_deep_audit_cron` | str | `"0 5 1 * *"` | per-proj | 1-го числа в 5:00. |
 | `monthly_deep_audit_enabled` | bool | `false` | per-proj | (резерв). |
 
-«Резерв» = ключ объявлен в `AppSettings`, но в `_PER_PROJECT_JOBS` ([`scheduler.py:173`](../dreaming/services/scheduler.py)) не зарегистрирован → фактически no-op. См. в [`development.md`](development.md), как добавить новую job.
+«Резерв» = ключ объявлен в `AppSettings`, но в `_PER_PROJECT_JOBS` ([`scheduler.py:173`](../../dreaming/services/scheduler.py)) не зарегистрирован → фактически no-op. См. в [`development.md`](development.md), как добавить новую job.
 
 ## Group: Watchdogs
 
@@ -187,10 +187,10 @@ Default fallback'ы зашиты в роутах (например, project_evol
 | `jira_url` | str | `""` | per-proj | Полный URL базы. **Example**: `https://acme.atlassian.net`. |
 | `jira_email` | str (secret) | `""` | per-proj | Email пользователя для Basic Auth. |
 | `jira_api_token` | str (secret) | `""` | per-proj | API token (создаётся в Atlassian profile). |
-| `jira_project_key` | str | `""` | per-proj | Project key (RGS, ENG и т.д.). Per-проектный override применяется в [`project_ideas.py:74`](../dreaming/routes/project_ideas.py). |
+| `jira_project_key` | str | `""` | per-proj | Project key (RGS, ENG и т.д.). Per-проектный override применяется в [`project_ideas.py:74`](../../dreaming/routes/project_ideas.py). |
 | `jira_user_account_id` | str | `""` | per-proj | Account ID для reporter+assignee. **Example**: `5b10a2844c20165700ede21g`. |
 
-Used by: [`jira.create_task`](../dreaming/services/jira.py) — POST на `/rest/api/3/issue`.
+Used by: [`jira.create_task`](../../dreaming/services/jira.py) — POST на `/rest/api/3/issue`.
 
 ## Group: Harness (orchestration)
 

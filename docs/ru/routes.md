@@ -22,7 +22,7 @@
 
 ## Корневые
 
-Source: [`dreaming/routes/root.py`](../dreaming/routes/root.py).
+Source: [`dreaming/routes/root.py`](../../dreaming/routes/root.py).
 
 | Method | Path | Описание | Template | Source |
 |---|---|---|---|---|
@@ -41,7 +41,7 @@ Source: [`dreaming/routes/root.py`](../dreaming/routes/root.py).
 
 ## `/setup`
 
-Source: [`dreaming/routes/setup.py`](../dreaming/routes/setup.py).
+Source: [`dreaming/routes/setup.py`](../../dreaming/routes/setup.py).
 
 | Method | Path | Описание | Source |
 |---|---|---|---|
@@ -61,7 +61,7 @@ Form-поля при импорте:
 
 ## `/projects`
 
-Source: [`dreaming/routes/projects.py`](../dreaming/routes/projects.py).
+Source: [`dreaming/routes/projects.py`](../../dreaming/routes/projects.py).
 
 | Method | Path | Описание | Source |
 |---|---|---|---|
@@ -78,7 +78,7 @@ Toggle (projects.py:32–36):
 
 ## `/settings`
 
-Source: [`dreaming/routes/settings.py`](../dreaming/routes/settings.py).
+Source: [`dreaming/routes/settings.py`](../../dreaming/routes/settings.py).
 
 | Method | Path | Описание | Source |
 |---|---|---|---|
@@ -93,7 +93,7 @@ Token/api_key поля рендерятся как `type=password` (логика
 
 ## `/api/`
 
-Source: [`dreaming/routes/api.py`](../dreaming/routes/api.py).
+Source: [`dreaming/routes/api.py`](../../dreaming/routes/api.py).
 
 | Method | Path | Описание | Source |
 |---|---|---|---|
@@ -141,11 +141,11 @@ Source: [`dreaming/routes/articles.py`](../../dreaming/routes/articles.py). См
 
 ## `/p/{slug}/`
 
-`project_resolver_middleware` ставит `request.state.project` для всех. Под '/p/' агрегатор-роутер собирает 19 sub-роутеров через `include_router`, см. [`dreaming/routes/project_router.py`](../dreaming/routes/project_router.py).
+`project_resolver_middleware` ставит `request.state.project` для всех. Под '/p/' агрегатор-роутер собирает 19 sub-роутеров через `include_router`, см. [`dreaming/routes/project_router.py`](../../dreaming/routes/project_router.py).
 
 ### Dashboard
 
-Source: [`project_dashboard.py`](../dreaming/routes/project_dashboard.py).
+Source: [`project_dashboard.py`](../../dreaming/routes/project_dashboard.py).
 
 | Method | Path | Описание | Template |
 |---|---|---|---|
@@ -153,7 +153,7 @@ Source: [`project_dashboard.py`](../dreaming/routes/project_dashboard.py).
 
 ### Live + SSE
 
-Source: [`project_live.py`](../dreaming/routes/project_live.py).
+Source: [`project_live.py`](../../dreaming/routes/project_live.py).
 
 | Method | Path | Описание |
 |---|---|---|
@@ -165,7 +165,7 @@ SSE отправляется через `EventSourceResponse(gen())` (project_li
 
 ### Rotation
 
-Source: [`project_rotation.py`](../dreaming/routes/project_rotation.py).
+Source: [`project_rotation.py`](../../dreaming/routes/project_rotation.py).
 
 | Method | Path | Описание |
 |---|---|---|
@@ -178,7 +178,7 @@ Source: [`project_rotation.py`](../dreaming/routes/project_rotation.py).
 
 ### Starter-kit
 
-Source: [`project_rotation.py`](../dreaming/routes/project_rotation.py) (эндпоинт инсталлера живёт там по историческим причинам — путь нейтральный).
+Source: [`project_rotation.py`](../../dreaming/routes/project_rotation.py) (эндпоинт инсталлера живёт там по историческим причинам — путь нейтральный).
 
 | Method | Path | Описание |
 |---|---|---|
@@ -190,7 +190,7 @@ Source: [`project_rotation.py`](../dreaming/routes/project_rotation.py) (энд�
 
 ### Dashboard actions
 
-Source: [`project_dashboard.py`](../dreaming/routes/project_dashboard.py).
+Source: [`project_dashboard.py`](../../dreaming/routes/project_dashboard.py).
 
 | Method | Path | Описание |
 |---|---|---|
@@ -204,7 +204,7 @@ Source: [`project_dashboard.py`](../dreaming/routes/project_dashboard.py).
 
 ### Settings (per-project)
 
-Source: [`project_settings.py`](../dreaming/routes/project_settings.py).
+Source: [`project_settings.py`](../../dreaming/routes/project_settings.py).
 
 | Method | Path | Описание |
 |---|---|---|
@@ -227,7 +227,7 @@ Source: [`project_settings.py`](../dreaming/routes/project_settings.py).
 
 ### Findings (Tech-Debt)
 
-Source: [`project_findings.py`](../dreaming/routes/project_findings.py), [`project_tech_debt.py`](../dreaming/routes/project_tech_debt.py).
+Source: [`project_findings.py`](../../dreaming/routes/project_findings.py), [`project_tech_debt.py`](../../dreaming/routes/project_tech_debt.py).
 
 | Method | Path | Описание |
 |---|---|---|
@@ -239,7 +239,7 @@ Source: [`project_findings.py`](../dreaming/routes/project_findings.py), [`proje
 
 ### Ideas
 
-Source: [`project_ideas.py`](../dreaming/routes/project_ideas.py).
+Source: [`project_ideas.py`](../../dreaming/routes/project_ideas.py).
 
 | Method | Path | Описание |
 |---|---|---|
@@ -293,7 +293,7 @@ Source: [`project_creatives.py`](../../dreaming/routes/project_creatives.py). О
 
 ### Wiki
 
-Source: [`project_wiki.py`](../dreaming/routes/project_wiki.py).
+Source: [`project_wiki.py`](../../dreaming/routes/project_wiki.py).
 
 | Method | Path | Описание |
 |---|---|---|
@@ -302,7 +302,7 @@ Source: [`project_wiki.py`](../dreaming/routes/project_wiki.py).
 
 ### Orchestration
 
-Source: [`project_orchestration.py`](../dreaming/routes/project_orchestration.py).
+Source: [`project_orchestration.py`](../../dreaming/routes/project_orchestration.py).
 
 | Method | Path | Описание |
 |---|---|---|
@@ -346,7 +346,7 @@ FastAPI auto-mount'ит:
 - `/redoc` — ReDoc.
 - `/openapi.json` — OpenAPI schema.
 
-**НЕ создавайте** свои роуты на этих путях — они тихо переопределятся. setup_gate их пропускает (см. [`middleware/setup_gate.py:8`](../dreaming/middleware/setup_gate.py)).
+**НЕ создавайте** свои роуты на этих путях — они тихо переопределятся. setup_gate их пропускает (см. [`middleware/setup_gate.py:8`](../../dreaming/middleware/setup_gate.py)).
 
 ## Cross-references
 

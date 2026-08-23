@@ -1,6 +1,6 @@
 # Service Layer Reference
 
-Все модули под [`dreaming/services/`](../dreaming/services/) сгруппированы по назначению. Для каждого приведено: краткое назначение, публичный API (классы / функции с сигнатурой), пара ключевых заметок про поведение.
+Все модули под [`dreaming/services/`](../../dreaming/services/) сгруппированы по назначению. Для каждого приведено: краткое назначение, публичный API (классы / функции с сигнатурой), пара ключевых заметок про поведение.
 
 ## Содержание
 
@@ -216,10 +216,10 @@ _PER_PROJECT_JOBS = [
 3. `scheduler.add_job(fn, CronTrigger.from_crontab(cron_expr), args=[app_state, project.id], id=f"{kind}_{slug}", replace_existing=True)`.
 
 Hooks вызова:
-- При создании проектов в setup wizard'е ([`setup.py:108`](../dreaming/routes/setup.py)).
-- При `POST /projects/{id}/toggle` ([`projects.py:32`](../dreaming/routes/projects.py)).
-- При `POST /projects/{id}/delete` ([`projects.py:43`](../dreaming/routes/projects.py)).
-- При `POST /projects/import` ([`projects.py:62`](../dreaming/routes/projects.py)).
+- При создании проектов в setup wizard'е ([`setup.py:108`](../../dreaming/routes/setup.py)).
+- При `POST /projects/{id}/toggle` ([`projects.py:32`](../../dreaming/routes/projects.py)).
+- При `POST /projects/{id}/delete` ([`projects.py:43`](../../dreaming/routes/projects.py)).
+- При `POST /projects/import` ([`projects.py:62`](../../dreaming/routes/projects.py)).
 
 ## Orchestration
 

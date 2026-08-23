@@ -473,7 +473,7 @@ CREATE INDEX IF NOT EXISTS idx_or_tts_project_ts
 
 TTS (text-to-speech) messages for the voice channel. `dedup_hash` UNIQUE — won't insert again. `cleared=1` — the TTS agent has already spoken it.
 
-In Wave 3.9 [`tts_backfill.py`](../../dreaming/services/tts_backfill.py) is a stub returning 0 (full implementation deferred).
+Wave 3.9 planned a `tts_backfill.py` service; it never landed. Today the table is only created and cascade-cleaned by [`db.py`](../../dreaming/services/db.py) — nothing in the code inserts into it or reads from it.
 
 ## `ai_usage_events`
 

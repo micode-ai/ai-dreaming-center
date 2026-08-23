@@ -19,7 +19,7 @@
 
 - **Python ≥ 3.10**, `from __future__ import annotations` всюду — pep604 union'ы и т.д.
 - **Async везде** где есть IO. `aiosqlite`, `asyncio.subprocess`, `httpx.AsyncClient`.
-- **User-facing text** в шаблонах и `HTTPException(detail=...)` — **по-русски** (например `"Настройте Jira (email + API token) в /settings"` в [`jira.py:67`](../dreaming/services/jira.py)).
+- **User-facing text** в шаблонах и `HTTPException(detail=...)` — **по-русски** (например `"Настройте Jira (email + API token) в /settings"` в [`jira.py:67`](../../dreaming/services/jira.py)).
 - **Code identifiers / log messages / docstrings** — английский. Это позволяет грепать.
 - **Modern Starlette TemplateResponse signature**: `templates.TemplateResponse(request, "name.html", {ctx})` — request первым позиционным аргументом, не в context. Старый стиль `TemplateResponse("name.html", {"request": request, ...})` deprecated и выдаёт warning.
 - **Type hints**: пишем для public API сервисов. Для private/local — opt-in.
@@ -72,7 +72,7 @@
 
 ### Чек-лист
 
-1. **Объяви в `AppSettings`** ([`dreaming/config.py`](../dreaming/config.py)):
+1. **Объяви в `AppSettings`** ([`dreaming/config.py`](../../dreaming/config.py)):
    ```python
    heartbeat_dir: str = ""
    heartbeat_interval_minutes: int = 30
@@ -129,7 +129,7 @@
 
 ### Глобальный job (не per-project)
 
-В `build_scheduler` ([`scheduler.py:219`](../dreaming/services/scheduler.py)):
+В `build_scheduler` ([`scheduler.py:219`](../../dreaming/services/scheduler.py)):
 
 ```python
 def build_scheduler(app_state) -> AsyncIOScheduler:
@@ -207,7 +207,7 @@ def list_x(x_dir: str) -> list[XItem]:
 
 - **Все таблицы с `project_id`** объявляют его как `INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE`. См. примеры в `_SCHEMA`.
 - **Денормализация vs JOIN**: денормализуем `project_id` в hot-path таблицы (`agent_learning_sessions`, `orchestrator_runs`, `orchestrator_nodes`, `orchestrator_messages`, `ai_usage_events`, `ai_usage_files`). Не денормализуем в child-таблицы где project достаётся через JOIN с run'ом (`orchestrator_events`, `orchestrator_stages`, `orchestrator_gate_verdicts`, `orchestrator_artifacts`).
-- **Idempotent migrations**: ВСЕГДА `IF NOT EXISTS` / try/except. Никогда не делай `ALTER TABLE ADD COLUMN ... NOT NULL` без default'а — SQLite этого не любит. См. `_migrate_orchestration` ([`db.py:282`](../dreaming/services/db.py)).
+- **Idempotent migrations**: ВСЕГДА `IF NOT EXISTS` / try/except. Никогда не делай `ALTER TABLE ADD COLUMN ... NOT NULL` без default'а — SQLite этого не любит. См. `_migrate_orchestration` ([`db.py:282`](../../dreaming/services/db.py)).
 - **PK rebuild discipline**: SQLite не умеет `ALTER PRIMARY KEY`. Если нужно поменять PK (как мы сделали для `agent_learning_rotation`):
   1. Создай новую таблицу с правильным PK.
   2. INSERT INTO ... SELECT FROM старая.
@@ -224,7 +224,7 @@ def list_x(x_dir: str) -> list[XItem]:
 - Schema migrations идемпотентны — повторный run на расколотом БД ловится сразу.
 - Routes есть curl-тестируемые — внешний контракт легко проверить.
 
-Smoke-сценарии живут в [`scripts/`](../scripts/):
+Smoke-сценарии живут в [`scripts/`](../../scripts/):
 
 | Скрипт | Что проверяет |
 |---|---|
