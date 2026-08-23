@@ -125,7 +125,7 @@
           {% endif %}
         </div>
         <div class="text-xs leading-tight line-clamp-2">{{ (r.goal or '')[:120] }}</div>
-        <div class="text-[11px] mt-1 num faint">{{ (r.started_at or '')[:19] }}</div>
+        <div class="text-[11px] mt-1 num faint">{% if r.started_at %}<time data-ts="{{ r.started_at }}">{{ r.started_at[5:16] | replace("T", " ") }}</time>{% endif %}</div>
       </a>
       {% else %}
       <div class="px-3 py-6 text-center text-sm faint">{{ "orchestration.no_dialogs" | t(locale=locale) }}</div>
@@ -167,8 +167,8 @@
           <div class="text-xs flex items-center gap-2 flex-wrap faint">
             <span class="num">{{ selected_run.id[:8] }}…</span>
             <span id="run-status" class="status-pill status-{{ selected_run.status }}">{{ selected_run.status }}</span>
-            <span>started {{ (selected_run.started_at or '')[:19] }}</span>
-            {% if selected_run.finished_at %}<span>· finished {{ (selected_run.finished_at or '')[:19] }}</span>{% endif %}
+            <span>started {% if selected_run.started_at %}<time data-ts="{{ selected_run.started_at }}">{{ selected_run.started_at[5:16] | replace("T", " ") }}</time>{% endif %}</span>
+            {% if selected_run.finished_at %}<span>· finished <time data-ts="{{ selected_run.finished_at }}">{{ selected_run.finished_at[5:16] | replace("T", " ") }}</time></span>{% endif %}
           </div>
           <details class="mt-2">
             <summary class="text-xs cursor-pointer muted">{{ "orchestration.goal_label" | t(locale=locale) }} ({{ (selected_run.goal or '')|length }} ch)</summary>
@@ -281,7 +281,7 @@
           <td class="font-mono text-xs">{{ n.agent_name }}</td>
           <td class="text-xs">{{ n.role }}</td>
           <td class="text-xs"><span class="status-pill status-{{ n.status }}">{{ n.status }}</span></td>
-          <td class="text-xs muted num">{{ (n.started_at or '')[:19] }}</td>
+          <td class="text-xs muted num">{% if n.started_at %}<time data-ts="{{ n.started_at }}">{{ n.started_at[5:16] | replace("T", " ") }}</time>{% endif %}</td>
         </tr>
         {% endfor %}
         </tbody>
@@ -442,8 +442,8 @@
       <td><a class="text-xs underline text-brand-hover num" href="/p/{{ project.slug }}/orchestration?run_id={{ r.id }}">{{ r.id[:8] }}…</a></td>
       <td class="text-xs">{{ (r.goal or '')[:80] }}</td>
       <td><span class="badge badge-{{ {'running':'running','completed':'success','failed':'failed','cancelled':'neutral'}.get(r.status, 'neutral') }}">{{ r.status }}</span></td>
-      <td class="text-xs muted whitespace-nowrap num">{{ (r.started_at or '')[:19] }}</td>
-      <td class="text-xs muted whitespace-nowrap num">{{ (r.finished_at or '—')[:19] }}</td>
+      <td class="text-xs muted whitespace-nowrap num">{% if r.started_at %}<time data-ts="{{ r.started_at }}">{{ r.started_at[5:16] | replace("T", " ") }}</time>{% endif %}</td>
+      <td class="text-xs muted whitespace-nowrap num">{% if r.finished_at %}<time data-ts="{{ r.finished_at }}">{{ r.finished_at[5:16] | replace("T", " ") }}</time>{% else %}—{% endif %}</td>
       <td class="text-xs whitespace-nowrap">
         <a class="btn btn-sm" href="/p/{{ project.slug }}/orchestration/{{ r.id }}/log">log</a>
         <form method="post" action="/p/{{ project.slug }}/orchestration/{{ r.id }}/delete" class="inline ml-1"

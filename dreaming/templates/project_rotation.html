@@ -104,7 +104,7 @@
           <button class="btn btn-sm">{{ "✓" if r.enabled else "—" }}</button>
         </form>
       </td>
-      <td class="num text-xs muted">{{ r.last_studied_at or '—' }}</td>
+      <td class="num text-xs muted">{% if r.last_studied_at %}<time data-ts="{{ r.last_studied_at }}">{{ r.last_studied_at[:10] }}</time>{% else %}—{% endif %}</td>
       <td>
         {% set running_key = project.slug ~ ":" ~ r.agent_name %}
         {% if running_key in running_keys %}

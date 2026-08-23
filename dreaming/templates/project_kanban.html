@@ -36,7 +36,7 @@
         <div class="flex items-center justify-between text-[11px] faint">
           <span>{{ "kanban.sessions" | t(locale=locale, n=a.total_sessions) }}</span>
           {% if a.last_studied_at %}
-          <span class="font-mono">{{ a.last_studied_at[:10] }}</span>
+          <time class="font-mono" data-ts="{{ a.last_studied_at }}">{{ a.last_studied_at[:10] }}</time>
           {% else %}
           <span class="text-warn">{{ "kanban.new" | t(locale=locale) }}</span>
           {% endif %}

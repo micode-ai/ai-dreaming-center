@@ -55,7 +55,7 @@
         </select>
       </form>
     </td>
-    <td class="text-xs muted">{{ it.last_review_at or '—' }}</td>
+    <td class="text-xs muted">{% if it.last_review_at %}<time data-ts="{{ it.last_review_at }}">{{ it.last_review_at[:10] }}</time>{% else %}—{% endif %}</td>
     <td class="text-xs font-mono">
       {% if it.github_issue %}<a class="text-brand-hover underline" target="_blank" href="{{ it.github_issue }}">GH</a>{% endif %}
       {% if it.orchestration_run %}<a class="text-cache underline ml-1" href="/p/{{ project.slug }}/orchestration/{{ it.orchestration_run }}">run</a>{% endif %}

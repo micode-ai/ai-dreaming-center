@@ -161,7 +161,7 @@
     <td class="text-xs muted">{{ it.complexity or '' }}</td>
     <td class="text-xs muted">{{ it.autonomy or '' }}</td>
     <td class="text-xs muted">{{ it.confidence or '' }}</td>
-    <td class="num muted">{{ (it.created or '')[:10] }}</td>
+    <td class="num muted">{% if it.created %}<time data-ts="{{ it.created }}">{{ it.created[:10] }}</time>{% endif %}</td>
     <td class="text-xs font-mono">
       {% if it.github_issue %}<a class="underline" target="_blank" href="{{ it.github_issue }}">GH</a>{% endif %}
       {% if it.orchestration_run %}<a class="underline ml-1" href="/p/{{ project.slug }}/orchestration?run_id={{ it.orchestration_run }}">run</a>{% endif %}

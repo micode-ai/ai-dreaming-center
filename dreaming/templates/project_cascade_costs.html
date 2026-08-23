@@ -123,7 +123,7 @@
           {{ r.status or '—' }}
         </span>
       </td>
-      <td class="text-xs muted whitespace-nowrap font-mono">{{ (r.started_at or '')[:19] }}</td>
+      <td class="text-xs muted whitespace-nowrap font-mono">{% if r.started_at %}<time data-ts="{{ r.started_at }}">{{ r.started_at[5:16] | replace("T", " ") }}</time>{% endif %}</td>
       <td class="text-right text-xs">{{ r.event_count }}</td>
       <td class="text-right text-xs">{{ "{:,}".format(r.total_tokens) }}</td>
       <td class="text-right num">${{ "%.4f" | format(r.total_cost_usd) }}</td>
