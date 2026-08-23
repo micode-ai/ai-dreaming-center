@@ -21,6 +21,8 @@
 - [`features/notes.md`](features/notes.md) — браузер конспектов агентов.
 - [`features/tech-debt.md`](features/tech-debt.md) — findings list, detail, close/delete + tech-debt aggregate.
 - [`features/ideas.md`](features/ideas.md) — board продуктовых идей и кнопка `→ Jira`.
+- [`features/articles.md`](features/articles.md) — очередь статей: предложить, согласовать, написать, опубликовать коммитом.
+- [`features/creatives.md`](features/creatives.md) — очередь промо-креативов: тема, вложения, сборка, публикация.
 - [`features/wiki.md`](features/wiki.md) — статус wiki проекта и `Run /wiki-bootstrap`.
 - [`features/ai-usage.md`](features/ai-usage.md) — аналитика токенов и стоимости (per-project + global).
 - [`features/orchestration.md`](features/orchestration.md) — запуск Романа, наблюдение live, resume, **Bulk queue** для массового запуска findings/ideas/evolutions.

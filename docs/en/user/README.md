@@ -21,6 +21,8 @@ Each menu item in the project header = a separate file here:
 - [`features/notes.md`](features/notes.md) — browser for agent notes.
 - [`features/tech-debt.md`](features/tech-debt.md) — findings list, detail, close/delete + tech-debt aggregate.
 - [`features/ideas.md`](features/ideas.md) — product ideas board and the `→ Jira` button.
+- [`features/articles.md`](features/articles.md) — the article queue: propose, approve, write, publish by commit.
+- [`features/creatives.md`](features/creatives.md) — the promotional creatives queue: topic, attachments, build, publish.
 - [`features/wiki.md`](features/wiki.md) — project wiki status and `Run /wiki-bootstrap`.
 - [`features/ai-usage.md`](features/ai-usage.md) — token and cost analytics (per-project + global).
 - [`features/orchestration.md`](features/orchestration.md) — running Roman, watching live, resume, **Bulk queue** for mass-dispatching findings/ideas/evolutions.

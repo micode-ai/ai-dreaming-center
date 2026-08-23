@@ -20,6 +20,8 @@ For developers who want to understand the internals or modify the code.
 ### Deep dive
 
 - [features/orchestration.md](features/orchestration.md) — orchestration
+- [features/articles.md](features/articles.md) — article pipeline: propose → approve → write → publish
+- [features/creatives.md](features/creatives.md) — promotional creatives: the same loop, for ads
 - [features/cascade.md](features/cascade.md) — cascade pipelines
 - [features/self-study.md](features/self-study.md) — self-study sessions
 - [features/pipelines.md](features/pipelines.md) — tech-debt / ideas / wiki

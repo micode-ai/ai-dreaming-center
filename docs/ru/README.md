@@ -20,6 +20,8 @@
 ### Глубокое погружение
 
 - [features/orchestration.md](features/orchestration.md) — оркестрация
+- [features/articles.md](features/articles.md) — article pipeline: предложение → согласование → написание → публикация
+- [features/creatives.md](features/creatives.md) — промо-креативы: тот же цикл, для рекламы
 - [features/cascade.md](features/cascade.md) — каскадные пайплайны
 - [features/self-study.md](features/self-study.md) — self-study сессии
 - [features/pipelines.md](features/pipelines.md) — tech-debt / ideas / wiki
