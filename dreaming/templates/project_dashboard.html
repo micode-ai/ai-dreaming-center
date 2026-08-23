@@ -34,26 +34,26 @@
 {% endif %}
 
 {% set week_total = (stats.success or 0) + (stats.no_gap or 0) + (stats.failed or 0) + (stats.timeout or 0) + (stats.running or 0) %}
-<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
-  <div class="metric metric-info">
-    <div class="metric__label">{{ "p.metrics.week_total" | t(locale=locale) }}</div>
-    <div class="metric__value">{{ week_total }}</div>
+<div class="stat-bar">
+  <div class="stat-bar__item stat-bar__item--lead">
+    <span class="stat-bar__value">{{ week_total }}</span>
+    <span class="stat-bar__label">{{ "p.metrics.week_total" | t(locale=locale) }}</span>
   </div>
-  <div class="metric metric-success">
-    <div class="metric__label">{{ "p.metrics.success" | t(locale=locale) }}</div>
-    <div class="metric__value">{{ stats.success or 0 }}</div>
+  <div class="stat-bar__item stat-bar__item--success{{ ' stat-bar__item--zero' if not stats.success }}">
+    <span class="stat-bar__value">{{ stats.success or 0 }}</span>
+    <span class="stat-bar__label">{{ "p.metrics.success" | t(locale=locale) }}</span>
   </div>
-  <div class="metric metric-running">
-    <div class="metric__label">{{ "p.metrics.no_gap" | t(locale=locale) }}</div>
-    <div class="metric__value">{{ stats.no_gap or 0 }}</div>
+  <div class="stat-bar__item stat-bar__item--running{{ ' stat-bar__item--zero' if not stats.no_gap }}">
+    <span class="stat-bar__value">{{ stats.no_gap or 0 }}</span>
+    <span class="stat-bar__label">{{ "p.metrics.no_gap" | t(locale=locale) }}</span>
   </div>
-  <div class="metric metric-failed">
-    <div class="metric__label">{{ "p.metrics.failed" | t(locale=locale) }}</div>
-    <div class="metric__value">{{ stats.failed or 0 }}</div>
+  <div class="stat-bar__item stat-bar__item--failed{{ ' stat-bar__item--zero' if not stats.failed }}">
+    <span class="stat-bar__value">{{ stats.failed or 0 }}</span>
+    <span class="stat-bar__label">{{ "p.metrics.failed" | t(locale=locale) }}</span>
   </div>
-  <div class="metric metric-timeout">
-    <div class="metric__label">{{ "p.metrics.timeout" | t(locale=locale) }}</div>
-    <div class="metric__value">{{ stats.timeout or 0 }}</div>
+  <div class="stat-bar__item stat-bar__item--timeout{{ ' stat-bar__item--zero' if not stats.timeout }}">
+    <span class="stat-bar__value">{{ stats.timeout or 0 }}</span>
+    <span class="stat-bar__label">{{ "p.metrics.timeout" | t(locale=locale) }}</span>
   </div>
 </div>
 
@@ -141,6 +141,7 @@
       <td class="text-xs">{{ s.topic or '' }}</td>
       <td class="num muted whitespace-nowrap">{{ s.started_at }}</td>
       <td class="text-right whitespace-nowrap">
+        <span class="row-actions">
         <a class="btn btn-sm mr-1" href="/p/{{ project.slug }}/sessions/{{ s.id }}/log">log</a>
         {% if is_running_row %}
           <form method="post" action="/p/{{ project.slug }}/sessions/{{ s.id }}/stop" class="inline"
@@ -156,6 +157,7 @@
             Delete
           </button>
         </form>
+        </span>
       </td>
     </tr>
     {% else %}

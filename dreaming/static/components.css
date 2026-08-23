@@ -197,6 +197,45 @@
 .metric.metric-running.metric-neutral .metric__value,
 .metric.metric-timeout.metric-neutral .metric__value { color: var(--text-strong); }
 
+/* ---------- Stat bar ----------
+   A single horizontal strip replacing a grid of one-number cards. Five
+   full-width tiles spent a whole row on five integers; this spends one line
+   and gives the headline figure real presence next to its breakdown. */
+.stat-bar {
+  display: flex; align-items: stretch; flex-wrap: wrap;
+  background: var(--bg-card); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius); overflow: hidden;
+  margin-bottom: var(--space-5);
+}
+.stat-bar__item {
+  display: flex; align-items: baseline; gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-right: 1px solid var(--border-subtle);
+}
+.stat-bar__item:last-child { border-right: 0; }
+.stat-bar__item--lead { background: var(--bg-elevated); }
+.stat-bar__value {
+  font-size: 1.375rem; font-weight: 600; line-height: 1;
+  letter-spacing: -0.02em; color: var(--text-strong);
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+}
+.stat-bar__item--lead .stat-bar__value { font-size: 1.75rem; }
+.stat-bar__label { font-size: var(--text-sm); color: var(--text-muted); }
+.stat-bar__item--success .stat-bar__value { color: var(--status-success); }
+.stat-bar__item--running .stat-bar__value { color: var(--status-running); }
+.stat-bar__item--failed  .stat-bar__value { color: var(--status-failed); }
+.stat-bar__item--timeout .stat-bar__value { color: var(--status-timeout); }
+.stat-bar__item--zero .stat-bar__value { color: var(--text-faint); }
+
+/* ---------- Row actions ----------
+   Per-row buttons repeated down a long table are visual noise. Quiet until
+   the row is hovered or focused, so the data reads first. Opacity rather
+   than display keeps the column width stable and the buttons reachable by
+   keyboard -- :focus-within brings them up before they can be activated. */
+.row-actions { display: inline-flex; gap: var(--space-1); align-items: center; opacity: 0.28; transition: opacity 120ms ease; }
+tr:hover .row-actions,
+tr:focus-within .row-actions { opacity: 1; }
+
 /* ---------- Tables ---------- */
 .data-table {
   width: 100%; background: var(--bg-card);

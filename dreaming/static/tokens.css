@@ -7,30 +7,30 @@
 
 :root {
   /* ---------- Surfaces (retuned: direction A) ---------- */
-  --bg-app: #0a0e17;
-  --bg-card: #10151f;
-  --bg-sidebar: #080b12;
-  --bg-elevated: #141a26;
-  --bg-hover: #161c28;
+  --bg-app: #0b0e16;
+  --bg-card: #151a26;
+  --bg-sidebar: #0d1119;
+  --bg-elevated: #1c2233;
+  --bg-hover: #212840;
 
   /* ---------- Borders (quieter than before) ---------- */
-  --border-subtle: #1d2534;
-  --border-muted: #2a3444;
+  --border-subtle: #232b3d;
+  --border-muted: #36405a;
 
   /* ---------- Text ---------- */
-  --text-strong: #f1f5f9;
-  --text-body: #dbe3ec;
-  --text-muted: #8b9bb0;
-  --text-faint: #5f6e83;
+  --text-strong: #f7f9fc;
+  --text-body: #d6deea;
+  --text-muted: #8f9cb3;
+  --text-faint: #64718a;
 
   /* ---------- Brand ---------- */
-  --brand: #6366f1;
-  --brand-hover: #818cf8;
-  --brand-soft: rgba(99, 102, 241, 0.14);
+  --brand: #7c6cf5;
+  --brand-hover: #9b8dff;
+  --brand-soft: rgba(124, 108, 245, 0.16);
   --brand-soft-border: rgba(99, 102, 241, 0.30);   /* kanban tier-1 badge border */
   --brand-strong: #4f46e5;
-  --brand-fg: #c7d2fe;   /* text/icon on --brand-soft */
-  --brand-fg-dim: #a5b4fc;   /* active icon: one step down from --brand-fg */
+  --brand-fg: #d3ccff;   /* text/icon on --brand-soft */
+  --brand-fg-dim: #b3a7ff;   /* active icon: one step down from --brand-fg */
   --brand-on: #ffffff;   /* text on solid --brand */
 
   /* ---------- Status: text / soft background / border ---------- */
@@ -64,8 +64,8 @@
   --overlay-modal: rgba(15, 23, 42, 0.5);  /* app-modal backdrop: Tailwind slate-900 @ 50%, ported exactly from the pre-migration inline <style> */
 
   /* ---------- Shadows ---------- */
-  --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.35), 0 1px 3px 0 rgba(0, 0, 0, 0.25);
-  --shadow-card-hover: 0 6px 18px -8px rgba(0, 0, 0, 0.55), 0 2px 4px rgba(0, 0, 0, 0.35);
+  --shadow-card: 0 1px 2px rgba(0,0,0,0.5), 0 10px 28px -14px rgba(0,0,0,0.75);
+  --shadow-card-hover: 0 2px 6px rgba(0,0,0,0.5), 0 18px 44px -18px rgba(0,0,0,0.85);
   --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
   --shadow-brand: 0 1px 2px rgba(99, 102, 241, 0.35);
   --ring: 0 0 0 2px var(--brand-soft), 0 0 0 4px var(--brand);
@@ -79,9 +79,9 @@
   --space-6: 2rem;
 
   /* ---------- Radii ---------- */
-  --radius-sm: 0.4375rem;
-  --radius: 0.625rem;
-  --radius-lg: 0.875rem;
+  --radius-sm: 0.5rem;
+  --radius: 0.875rem;
+  --radius-lg: 1.125rem;
   --radius-pill: 9999px;
 
   /* ---------- Typography ---------- */
@@ -90,8 +90,8 @@
   --text-xs: 0.6875rem;
   --text-sm: 0.75rem;
   --text-base: 0.8125rem;
-  --text-h2: 1.0625rem;
-  --text-h1: 1.375rem;
+  --text-h2: 1.1875rem;
+  --text-h1: 1.75rem;
 
   /* ---------- Table density (direction B for scanned tables) ---------- */
   --row-pad-y: 0.6rem;
