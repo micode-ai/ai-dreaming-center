@@ -15,6 +15,7 @@ The complete registry of HTTP routes. Grouped by prefix. Each route lists:
 - [`/projects`](#projects)
 - [`/settings`](#settings)
 - [`/api/`](#api)
+- [`/articles`](#articles)
 - [`/p/{slug}/`](#pslug)
 - [`/static/`](#static)
 - [Reserved paths](#reserved-paths)
@@ -109,8 +110,33 @@ Source: [`dreaming/routes/api.py`](../../dreaming/routes/api.py).
 | POST | `/api/cascade/{run_id}/artifact` | Artifact. | api.py:278 |
 | POST | `/api/cascade/{run_id}/message` | Message into the run. | api.py:294 |
 | POST | `/api/cascade/{run_id}/finish` | Cascade run finish. | api.py:314 |
+| POST | `/api/p/{slug}/articles/ingest` | Callback for `/article-ideas-scan`: one article proposal. 400 on blank `evidence`, 422 on a bad `source`. `INSERT OR IGNORE` on `(project_id, slug_hint)` → 200 `duplicate:true`, otherwise 201. | api.py:474 |
+| GET | `/api/p/{slug}/articles/list` | Dedup for the scan: `[{id, slug_hint, title, status}]` for the project. | api.py:634 |
+| GET | `/api/articles/{proposal_id}` | The brief for `/write-article`: the whole `article_proposals` row. | api.py:646 |
+| POST | `/api/articles/{proposal_id}/written` | Callback for `/write-article`. 409 if the status isn't `writing`. Success → `drafted`; `{error_message}` → `failed`. | api.py:655 |
+| POST | `/api/p/{slug}/creatives/ingest` | Same as above for `/creative-ideas-scan`. Same `source` allow-list, same 400 on blank evidence. | api.py:513 |
+| GET | `/api/p/{slug}/creatives/list` | Dedup for the campaign scan. | api.py:552 |
+| GET | `/api/creatives/{proposal_id}` | The brief for `/make-creative`. | api.py:565 |
+| POST | `/api/creatives/{proposal_id}/made` | Callback for `/make-creative`. 409 if the status isn't `making`. Success → `drafted`; `{error_message}` → `failed`. | api.py:574 |
 
-Detailed body schemas and curl examples — in [`api.md`](api.md).
+Detailed body schemas and curl examples — in [`api.md`](api.md) (except the
+eight article/creative rows above — their contract is documented in
+[`features/articles.md`](features/articles.md) and
+[`features/creatives.md`](features/creatives.md); the literal curl calls live
+in the commands themselves, `templates/starter-kit/commands/*.md`).
+
+## `/articles`
+
+Source: [`dreaming/routes/articles.py`](../../dreaming/routes/articles.py). Mounted in `main.py` with no prefix, alongside `ai_radar_router` — not under `/p/{slug}/`.
+
+| Method | Path | Description | Source |
+|---|---|---|---|
+| GET | `/articles` | Cross-project queue: every `article_proposals` row in status `proposed`, across every **enabled** project at once (a disabled/deleted project's rows are hidden, though they stay in the DB). A project badge on each card. | articles.py:17 |
+| POST | `/articles/scan` form `target_project=` | Manually kick off `/article-ideas-scan` for the chosen project right from here, without navigating into that project's own `/p/{slug}/articles`. Shares `dispatch_article_scan` with the per-project scan button. | articles.py:50 |
+
+The only button on a card here is Reject; approving an article requires that
+project's own page. More — [`features/articles.md`](features/articles.md) and
+[`user/features/articles.md`](user/features/articles.md).
 
 ## `/p/{slug}/`
 
@@ -218,6 +244,52 @@ Source: [`project_ideas.py`](../../dreaming/routes/project_ideas.py).
 |---|---|---|
 | GET | `/p/{slug}/ideas?status=` | List, filter by status. |
 | POST | `/p/{slug}/ideas/{id}/jira` | Creates a Jira Task; remembers the key in frontmatter `jira_ticket: RGS-123`. |
+| POST | `/p/{slug}/ideas/{item_id}/propose-article` | Feeds the article pipeline: idea → `article_proposals(source='center')`. The button never disables itself once used — a second click just returns "duplicate". See [`features/articles.md`](features/articles.md). | project_ideas.py:189 |
+
+### Articles
+
+Source: [`project_articles.py`](../../dreaming/routes/project_articles.py). Full lifecycle, venue resolution and publishing detail — in [`features/articles.md`](features/articles.md); this table is inventory only.
+
+| Method | Path | Description | Source |
+|---|---|---|---|
+| GET | `/p/{slug}/articles` | The project's proposals, grouped by status (`proposed/writing/drafted/published/rejected/failed` + `other`). | project_articles.py:87 |
+| POST | `/p/{slug}/articles/add` form `title=&angle=&venue=` | Manual proposal, `source='manual'`. Blank `title` → 400. | project_articles.py:225 |
+| POST | `/p/{slug}/articles/{id}/reject` | `proposed/... → rejected`. | project_articles.py:294 |
+| POST | `/p/{slug}/articles/{id}/restore` | `rejected → proposed`. | project_articles.py:309 |
+| POST | `/p/{slug}/articles/{id}/venue` form `venue=` | Changes the venue override, while the row is still `proposed`. 409 after dispatch — the venue is already pinned. | project_articles.py:322 |
+| POST | `/p/{slug}/articles/scan` | Dispatches `/article-ideas-scan` into the project. Proposes only — never writes, never publishes. | project_articles.py:399 |
+| POST | `/p/{slug}/articles/{id}/approve` | First human gate: resolves the venue + blog root, dispatches `/write-article {id}` with `bypassPermissions`. 409 if the status isn't in `(proposed, approved, failed, drafted)`. | project_articles.py:408 |
+| POST | `/p/{slug}/articles/{id}/cancel` | `writing → failed` by hand. Does not kill the process. | project_articles.py:576 |
+| POST | `/p/{slug}/articles/{id}/revise` form `notes=&finding=` | Writes `revision_notes`, calls the same code as approve. 400 on an empty request. | project_articles.py:615 |
+| GET | `/p/{slug}/articles/{id}/preview?lang=&file=` | Shows `draft_ref`'s working tree, validated by the same validator publish uses. | project_articles.py:660 |
+| POST | `/p/{slug}/articles/{id}/publish` | Second gate: commits only the paths from `draft_ref` (+ `article_publish_extra_paths`). Terminal transition to `published`. | project_articles.py:812 |
+
+A fourth feeder lives outside this file and outside `/p/{slug}` — `POST
+/ai-radar/{finding_id}/propose-article` in
+[`dreaming/routes/ai_radar.py`](../../dreaming/routes/ai_radar.py)
+(`source='radar'`, evidence assembled from the finding itself). AI Radar as a
+section is not otherwise covered by this inventory — see
+[`features/articles.md`](features/articles.md#who-submits-proposals).
+
+### Creatives
+
+Source: [`project_creatives.py`](../../dreaming/routes/project_creatives.py). Differences from articles and the shared machinery — in [`features/creatives.md`](features/creatives.md).
+
+| Method | Path | Description | Source |
+|---|---|---|---|
+| GET | `/p/{slug}/creatives` | The project's campaigns by status (`proposed/making/drafted/published/rejected/failed` + `other`). | project_creatives.py:202 |
+| POST | `/p/{slug}/creatives/scan` | Dispatches `/creative-ideas-scan`. | project_creatives.py:267 |
+| POST | `/p/{slug}/creatives/add` multipart `title=&angle=&venue=&formats=&locales=&files=` | Manual proposal **with attachments in one step** — the one way this form differs from articles'. | project_creatives.py:305 |
+| POST | `/p/{slug}/creatives/{id}/attach` multipart `files=` | Attach material into `<slug>/src/`. 409 while the campaign is `making`. | project_creatives.py:409 |
+| POST | `/p/{slug}/creatives/{id}/approve` | Dispatches `/make-creative {id}` with `bypassPermissions`. | project_creatives.py:450 |
+| POST | `/p/{slug}/creatives/{id}/cancel` | `making → failed` by hand. See [Known gap: reconcile is not wired up](features/creatives.md#known-gap-reconcile-is-not-wired-up) — unlike articles, there's no automatic recovery. | project_creatives.py:526 |
+| POST | `/p/{slug}/creatives/{id}/reject` | `proposed/failed → rejected`. | project_creatives.py:541 |
+| POST | `/p/{slug}/creatives/{id}/restore` | `rejected → proposed`. | project_creatives.py:554 |
+| POST | `/p/{slug}/creatives/{id}/venue` form `venue=` | Changes the venue, while `proposed`/`failed`. | project_creatives.py:565 |
+| GET | `/p/{slug}/creatives/{id}/preview?fmt=&loc=` | Tabs by `(format, locale)`, renders + post copy. | project_creatives.py:587 |
+| GET | `/p/{slug}/creatives/{id}/media?path=` | Serves one render/attachment — only a path the row itself named in `draft_ref` or one of its own attachments, only an extension on the allow-list (no `.svg`). | project_creatives.py:668 |
+| POST | `/p/{slug}/creatives/{id}/revise` form `notes=&finding=` | Same as articles: findings + text → `revision_notes`, calls approve. | project_creatives.py:716 |
+| POST | `/p/{slug}/creatives/{id}/publish` | The same `article_publish.publish` articles use. 409 if `draft_ref` is empty. | project_creatives.py:742 |
 
 ### Wiki
 

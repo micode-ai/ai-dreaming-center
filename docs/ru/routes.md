@@ -15,6 +15,7 @@
 - [`/projects`](#projects)
 - [`/settings`](#settings)
 - [`/api/`](#api)
+- [`/articles`](#articles)
 - [`/p/{slug}/`](#pslug)
 - [`/static/`](#static)
 - [Зарезервированные пути](#зарезервированные-пути)
@@ -109,8 +110,34 @@ Source: [`dreaming/routes/api.py`](../dreaming/routes/api.py).
 | POST | `/api/cascade/{run_id}/artifact` | Артефакт. | api.py:278 |
 | POST | `/api/cascade/{run_id}/message` | Message в run. | api.py:294 |
 | POST | `/api/cascade/{run_id}/finish` | Финиш cascade run'а. | api.py:314 |
+| POST | `/api/p/{slug}/articles/ingest` | Callback `/article-ideas-scan`: одно предложение статьи. 400 при пустом `evidence`, 422 при плохом `source`. `INSERT OR IGNORE` по `(project_id, slug_hint)` → 200 `duplicate:true`, иначе 201. | api.py:474 |
+| GET | `/api/p/{slug}/articles/list` | Дедуп для скана: `[{id, slug_hint, title, status}]` по проекту. | api.py:634 |
+| GET | `/api/articles/{proposal_id}` | Бриф для `/write-article`: вся строка `article_proposals`. | api.py:646 |
+| POST | `/api/articles/{proposal_id}/written` | Callback `/write-article`. 409 если статус не `writing`. Успех → `drafted`; `{error_message}` → `failed`. | api.py:655 |
+| POST | `/api/p/{slug}/creatives/ingest` | То же для `/creative-ideas-scan`. Тот же белый список `source`, тот же 400 на пустой evidence. | api.py:513 |
+| GET | `/api/p/{slug}/creatives/list` | Дедуп для скана кампаний. | api.py:552 |
+| GET | `/api/creatives/{proposal_id}` | Бриф для `/make-creative`. | api.py:565 |
+| POST | `/api/creatives/{proposal_id}/made` | Callback `/make-creative`. 409 если статус не `making`. Успех → `drafted`; `{error_message}` → `failed`. | api.py:574 |
 
-Подробные body-схемы и curl-examples — в [`api.md`](api.md).
+Подробные body-схемы и curl-examples — в [`api.md`](api.md) (кроме восьми
+article/creative-строк выше — их контракт задокументирован в
+[`features/articles.md`](features/articles.md) и
+[`features/creatives.md`](features/creatives.md), а буквальный curl —
+в самих командах `templates/starter-kit/commands/*.md`).
+
+## `/articles`
+
+Source: [`dreaming/routes/articles.py`](../../dreaming/routes/articles.py). Смонтирован в `main.py` без префикса, наравне с `ai_radar_router` — не под `/p/{slug}/`.
+
+| Method | Path | Описание | Source |
+|---|---|---|---|
+| GET | `/articles` | Кросс-проектная очередь: все `article_proposals` в статусе `proposed`, по всем **включённым** проектам сразу (отключённый/удалённый проект — строка не показывается, хотя в БД остаётся). Бейдж проекта на каждой карточке. | articles.py:17 |
+| POST | `/articles/scan` form `target_project=` | Ручной запуск `/article-ideas-scan` для выбранного проекта прямо отсюда, без захода в его собственную `/p/{slug}/articles`. Общая функция `dispatch_article_scan` с per-project кнопкой скана. | articles.py:50 |
+
+Единственная кнопка на карточках здесь — Reject; согласовать статью можно
+только на странице конкретного проекта. Подробнее — в
+[`features/articles.md`](features/articles.md) и
+[`user/features/articles.md`](user/features/articles.md).
 
 ## `/p/{slug}/`
 
@@ -218,6 +245,51 @@ Source: [`project_ideas.py`](../dreaming/routes/project_ideas.py).
 |---|---|---|
 | GET | `/p/{slug}/ideas?status=` | List, filter by status. |
 | POST | `/p/{slug}/ideas/{id}/jira` | Создать Jira Task; запоминает key в frontmatter `jira_ticket: RGS-123`. |
+| POST | `/p/{slug}/ideas/{item_id}/propose-article` | Фидер article pipeline: idea → `article_proposals(source='center')`. Кнопка не гаснет после использования — повторный клик просто вернёт "дубликат". См. [`features/articles.md`](features/articles.md). | project_ideas.py:189 |
+
+### Articles
+
+Source: [`project_articles.py`](../../dreaming/routes/project_articles.py). Полное описание жизненного цикла, venue-резолюции и публикации — в [`features/articles.md`](features/articles.md); эта таблица — только инвентарь.
+
+| Method | Path | Описание | Source |
+|---|---|---|---|
+| GET | `/p/{slug}/articles` | Предложения проекта, сгруппированные по статусу (`proposed/writing/drafted/published/rejected/failed` + `other`). | project_articles.py:87 |
+| POST | `/p/{slug}/articles/add` form `title=&angle=&venue=` | Ручное предложение, `source='manual'`. Пустой `title` → 400. | project_articles.py:225 |
+| POST | `/p/{slug}/articles/{id}/reject` | `proposed/... → rejected`. | project_articles.py:294 |
+| POST | `/p/{slug}/articles/{id}/restore` | `rejected → proposed`. | project_articles.py:309 |
+| POST | `/p/{slug}/articles/{id}/venue` form `venue=` | Меняет venue-override, пока строка ещё `proposed`. 409 после диспетча — venue уже "прибит". | project_articles.py:322 |
+| POST | `/p/{slug}/articles/scan` | Диспетчит `/article-ideas-scan` в проект. Только предлагает — никогда не пишет и не публикует. | project_articles.py:399 |
+| POST | `/p/{slug}/articles/{id}/approve` | Первый человеческий гейт: резолвит venue + корень блога, диспетчит `/write-article {id}` с `bypassPermissions`. 409, если статус не в `(proposed, approved, failed, drafted)`. | project_articles.py:408 |
+| POST | `/p/{slug}/articles/{id}/cancel` | `writing → failed` вручную. Не убивает процесс. | project_articles.py:576 |
+| POST | `/p/{slug}/articles/{id}/revise` form `notes=&finding=` | Пишет `revision_notes`, вызывает тот же код, что approve. 400 на пустой запрос. | project_articles.py:615 |
+| GET | `/p/{slug}/articles/{id}/preview?lang=&file=` | Показывает рабочее дерево `draft_ref`, провалидированное тем же валидатором, что и publish. | project_articles.py:660 |
+| POST | `/p/{slug}/articles/{id}/publish` | Второй гейт: коммитит только пути из `draft_ref` (+ `article_publish_extra_paths`). Терминальный переход в `published`. | project_articles.py:812 |
+
+Четвёртый фидер живёт вне этого файла и вне `/p/{slug}` — `POST
+/ai-radar/{finding_id}/propose-article` в
+[`dreaming/routes/ai_radar.py`](../../dreaming/routes/ai_radar.py) (`source='radar'`,
+evidence собирается из самой находки). AI Radar как раздел в этом инвентаре
+отдельно не описан — см. [`features/articles.md`](features/articles.md#кто-подаёт-предложения).
+
+### Creatives
+
+Source: [`project_creatives.py`](../../dreaming/routes/project_creatives.py). Отличия от articles и общая механика — в [`features/creatives.md`](features/creatives.md).
+
+| Method | Path | Описание | Source |
+|---|---|---|---|
+| GET | `/p/{slug}/creatives` | Кампании проекта по статусам (`proposed/making/drafted/published/rejected/failed` + `other`). | project_creatives.py:202 |
+| POST | `/p/{slug}/creatives/scan` | Диспетчит `/creative-ideas-scan`. | project_creatives.py:267 |
+| POST | `/p/{slug}/creatives/add` multipart `title=&angle=&venue=&formats=&locales=&files=` | Ручное предложение **с вложениями одним шагом** — единственное отличие формы от articles. | project_creatives.py:305 |
+| POST | `/p/{slug}/creatives/{id}/attach` multipart `files=` | Прикрепить материал в `<slug>/src/`. 409, пока кампания в `making`. | project_creatives.py:409 |
+| POST | `/p/{slug}/creatives/{id}/approve` | Диспетчит `/make-creative {id}` с `bypassPermissions`. | project_creatives.py:450 |
+| POST | `/p/{slug}/creatives/{id}/cancel` | `making → failed` вручную. См. [Известный пробел: reconcile не подключён](features/creatives.md#известный-пробел-reconcile-не-подключён) — авто-recovery, в отличие от статей, нет. | project_creatives.py:526 |
+| POST | `/p/{slug}/creatives/{id}/reject` | `proposed/failed → rejected`. | project_creatives.py:541 |
+| POST | `/p/{slug}/creatives/{id}/restore` | `rejected → proposed`. | project_creatives.py:554 |
+| POST | `/p/{slug}/creatives/{id}/venue` form `venue=` | Меняет venue, пока `proposed`/`failed`. | project_creatives.py:565 |
+| GET | `/p/{slug}/creatives/{id}/preview?fmt=&loc=` | Вкладки `(формат, локаль)`, рендеры + текст поста. | project_creatives.py:587 |
+| GET | `/p/{slug}/creatives/{id}/media?path=` | Отдаёт один рендер/вложение — только то, что строка сама назвала в `draft_ref` или список своих вложений, только из белого списка расширений (без `.svg`). | project_creatives.py:668 |
+| POST | `/p/{slug}/creatives/{id}/revise` form `notes=&finding=` | То же, что у articles: находки + текст → `revision_notes`, вызов approve. | project_creatives.py:716 |
+| POST | `/p/{slug}/creatives/{id}/publish` | Тот же `article_publish.publish`, что у статей. 409, если `draft_ref` пуст. | project_creatives.py:742 |
 
 ### Wiki
 
