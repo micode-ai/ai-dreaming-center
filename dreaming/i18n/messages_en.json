@@ -709,5 +709,6 @@
   "help.section.ai_radar": "AI Radar: outside news and releases summarised against this project's topics.",
   "help.global.title": "Global sections",
   "help.project.title": "Project sections",
-  "help.pick_project_hint": "Project sections open once a project is picked from the menu above."
+  "help.pick_project_hint": "Project sections open once a project is picked from the menu above.",
+  "help.open_section": "Open section"
 }

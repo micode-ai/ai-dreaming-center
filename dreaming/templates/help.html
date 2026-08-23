@@ -25,28 +25,70 @@
   </div>
 </div>
 
-<h2 class="section-title">{{ "help.global.title" | t(locale=locale) }}</h2>
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
-  {% for s in global_sections %}
-  <a class="card card-link" href="{{ s.path }}">
+{% include "_markdown_partial.html" %}
+
+{#- One section: a <details> whose summary is the title + one-liner, and whose
+    body is the full guide. The markdown is shipped inert inside a
+    <script type="text/markdown"> and rendered on first open, so a page of 31
+    guides does not pay for 31 renders nobody asked for. -#}
+{% macro section_card(s, href) -%}
+  {% set body = bodies.get(s.key) %}
+  {% if body %}
+  <details class="card help-card" data-help="{{ s.key }}">
+    <summary class="help-card__head">
+      <span class="help-card__chevron" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+      </span>
+      <span class="help-card__titles">
+        <span class="text-sm font-semibold strong">{{ s.title_key | t(locale=locale) }}</span>
+        <span class="text-xs muted">{{ ('help.section.' ~ s.key) | t(locale=locale) }}</span>
+      </span>
+      {% if href %}<a class="btn btn-sm btn-ghost help-card__open" href="{{ href }}">{{ "help.open_section" | t(locale=locale) }}</a>{% endif %}
+    </summary>
+    <script type="text/markdown">{{ body }}</script>
+    <div class="markdown-body help-card__body"></div>
+  </details>
+  {% else %}
+  {#- Nothing written for this section yet: the card still names it, and links
+      to it when there is somewhere to go. -#}
+  <{{ 'a' if href else 'div' }} class="card{% if href %} card-link{% endif %}"{% if href %} href="{{ href }}"{% endif %}>
     <div class="text-sm font-semibold mb-1 strong">{{ s.title_key | t(locale=locale) }}</div>
     <div class="text-xs muted">{{ ('help.section.' ~ s.key) | t(locale=locale) }}</div>
-  </a>
-  {% endfor %}
+  </{{ 'a' if href else 'div' }}>
+  {% endif %}
+{%- endmacro %}
+
+<h2 class="section-title">{{ "help.global.title" | t(locale=locale) }}</h2>
+<div class="help-grid mb-5">
+  {% for s in global_sections %}{{ section_card(s, s.path) }}{% endfor %}
 </div>
 
 <h2 class="section-title">{{ "help.project.title" | t(locale=locale) }}</h2>
 {% if not project %}
 <p class="text-xs faint mb-3">{{ "help.pick_project_hint" | t(locale=locale) }}</p>
 {% endif %}
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-  {% for s in project_sections %}
-  {# No project selected means no URL to give, so the card stays a card. #}
-  <{{ 'a' if project_base else 'div' }} class="card{% if project_base %} card-link{% endif %}"
-     {%- if project_base %} href="{{ project_base }}{{ s.path }}"{% endif %}>
-    <div class="text-sm font-semibold mb-1 strong">{{ s.title_key | t(locale=locale) }}</div>
-    <div class="text-xs muted">{{ ('help.section.' ~ s.key) | t(locale=locale) }}</div>
-  </{{ 'a' if project_base else 'div' }}>
-  {% endfor %}
+<div class="help-grid">
+  {% for s in project_sections %}{{ section_card(s, (project_base ~ s.path) if project_base else '') }}{% endfor %}
 </div>
+
+<script>
+  (function () {
+    // Render a guide the first time its card is opened, not on page load.
+    document.querySelectorAll('details.help-card').forEach(function (d) {
+      d.addEventListener('toggle', function () {
+        if (!d.open || d.dataset.rendered) return;
+        d.dataset.rendered = '1';
+        dcRenderMarkdown(
+          d.querySelector('.help-card__body'),
+          d.querySelector('script[type="text/markdown"]').textContent
+        );
+      });
+    });
+    // A link inside <summary> would otherwise toggle the card instead of
+    // following the href.
+    document.querySelectorAll('.help-card__open').forEach(function (a) {
+      a.addEventListener('click', function (e) { e.stopPropagation(); });
+    });
+  })();
+</script>
 {% endblock %}

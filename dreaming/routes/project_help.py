@@ -10,6 +10,7 @@ the per-project nav working.
 from __future__ import annotations
 from fastapi import APIRouter, Request
 
+from dreaming.services import help_content
 from dreaming.services.nav_sections import GLOBAL_SECTIONS, PROJECT_SECTIONS
 
 router = APIRouter()
@@ -26,6 +27,13 @@ async def _render(request: Request, project=None):
             "projects": projects,
             "locale": locale,
             "global_sections": GLOBAL_SECTIONS,
+            # key -> markdown. A section with nothing written yet simply has
+            # no entry, and the template renders it as a plain card.
+            "bodies": {
+                s.key: body
+                for s in (*GLOBAL_SECTIONS, *PROJECT_SECTIONS)
+                if (body := help_content.get(s.key, locale)) is not None
+            },
             # Without a project there is nowhere for these to point, so the
             # template renders them as plain cards next to the pick-a-project
             # hint rather than as dead links.

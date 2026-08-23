@@ -47,6 +47,17 @@
     color: var(--text-body) !important;
     border-radius: 0.625rem;
   }
+  /* Tailwind's Preflight resets `menu, ol, ul { list-style: none }` and
+     github-markdown-css sets no list-style of its own -- it relies on the
+     browser default that Preflight just removed. Result: every rendered
+     bullet and number vanished, here and in plans, ideas, contracts and
+     evolutions. Verified in the browser, not from the source: the computed
+     list-style-type on a rendered <ul> was `none`, and the only matching rule
+     was Preflight's. */
+  .markdown-body ul { list-style: disc; }
+  .markdown-body ul ul { list-style: circle; }
+  .markdown-body ul ul ul { list-style: square; }
+  .markdown-body ol { list-style: decimal; }
   .markdown-body pre { background: #0c1322 !important; }
   .markdown-body code:not(pre code) { background: var(--bg-elevated) !important; }
 </style>

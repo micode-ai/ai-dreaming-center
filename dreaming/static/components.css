@@ -107,6 +107,37 @@
   outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
+
+/* ---------- Help page: one expandable guide per section ----------
+   A single column, not the 3-up grid the cards used to sit in: a guide is a
+   page of prose, and expanding one card inside a grid row drags its
+   neighbours' height along with it. */
+.help-grid { display: grid; gap: var(--space-2); }
+.help-card { padding: 0; }
+.help-card__head {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer; list-style: none; user-select: none;
+}
+.help-card__head::-webkit-details-marker { display: none; }
+.help-card__head:hover { background: var(--bg-hover); }
+.help-card:not([open]) .help-card__head { border-radius: var(--radius); }
+.help-card[open] .help-card__head { border-bottom: 1px solid var(--border-subtle); }
+.help-card__chevron {
+  display: flex; flex: 0 0 auto; color: var(--text-faint);
+  transition: transform 120ms ease, color 120ms ease;
+}
+.help-card__chevron svg { width: 1rem; height: 1rem; }
+.help-card[open] .help-card__chevron { transform: rotate(90deg); color: var(--brand-fg-dim); }
+.help-card__head:hover .help-card__chevron { color: var(--text-body); }
+/* min-width:0 so a long one-liner truncates inside the flex row rather than
+   pushing the action button off the card. */
+.help-card__titles { display: flex; flex-direction: column; gap: 0.1rem; flex: 1 1 auto; min-width: 0; }
+.help-card__titles > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.help-card__open { flex: 0 0 auto; }
+/* .markdown-body brings its own padding; the guide only needs a ceiling on
+   line length so it stays readable on a wide screen. */
+.help-card__body { max-width: 62rem; }
 /* Dashboard bento tiles (partials/dashboard/_tile_*.html): the only thing
    .card doesn't already cover for this shape is the fixed floor height that
    keeps three tiles of uneven content even in a grid row. Grepped for an

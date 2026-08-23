@@ -98,6 +98,24 @@ def main() -> int:
         print(f"ok: all {len(GLOBAL_SECTIONS) + len(PROJECT_SECTIONS)} "
               f"registry paths are registered routes")
 
+    # ----------------------------------------------------------- the guides
+    # A guide file whose name matches no section is invisible in the app --
+    # nothing renders it and nothing reports it missing. And a guide written
+    # in one locale but not the other silently shows Russian to an English
+    # reader, so both must land together.
+    from dreaming.services import help_content
+    keys = {s.key for s in (*GLOBAL_SECTIONS, *PROJECT_SECTIONS)}
+    ru, en = help_content.available("ru"), help_content.available("en")
+    for loc, have in (("ru", ru), ("en", en)):
+        stray = sorted(have - keys)
+        if stray:
+            fail(f"{loc}: guide file(s) matching no section: {', '.join(stray)}")
+    if ru != en:
+        fail("guides differ between locales -- "
+             f"ru-only: {sorted(ru - en) or '-'}, en-only: {sorted(en - ru) or '-'}")
+    else:
+        print(f"ok: {len(ru)}/{len(keys)} sections have a guide, both locales")
+
     print("FAIL" if failures else "PASS")
     return 1 if failures else 0
 
