@@ -8,6 +8,23 @@ While a question sits unanswered, the agent is stopped. So this section is
 worth checking at least once a day: one unanswered question can hold a run for
 hours.
 
+## Why it is usually empty
+
+The question channel is wired into **one command out of fourteen** —
+`/write-article`. The others cannot ask: their instructions carry no such
+block. The orchestrator is forbidden from asking by a rule of its own and
+writes its questions to a file instead. Creatives were deliberately left
+without the channel.
+
+The built-in `AskUserQuestion` tool does **not** arrive here: intercepting
+calls to it was never implemented — `claude_session_tail.py` records it as
+deferred. Only an explicit HTTP call from a command's text works.
+
+And even the one command that has it treats the channel as an emergency exit:
+it asks only when it cannot confirm a fact and refuses to invent one.
+
+So an empty section is the normal state, not a fault.
+
 ## How it works
 
 From inside its session the agent calls the app's API and creates a record
@@ -47,8 +64,12 @@ holding up.
 
 ## Related sections
 
-- **Orchestration** — multi-step runs ask the most questions; a question
-  remembers which run and node it belongs to.
+- **Articles** — the only source of questions today. An article card in the
+  Writing state links here when the writer is waiting.
+- **Orchestration** — does not ask: a rule in its instructions forbids it, and
+  it writes missing information to `docs/plans/<run_id>-questions.md` instead.
+  A question record still carries run and node fields — the articles page uses
+  them to work out which card is waiting.
 - **Live log** — shows that the session is alive and waiting.
 
 ## If something looks wrong
