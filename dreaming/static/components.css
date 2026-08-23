@@ -93,7 +93,7 @@
    .card doesn't already cover for this shape is the fixed floor height that
    keeps three tiles of uneven content even in a grid row. Grepped for an
    existing 9rem/min-height rule first -- none existed. */
-.dash-tile { min-height: 9rem; }
+.dash-tile { min-height: 6.5rem; padding: var(--space-3) var(--space-4); }
 .panel {
   background: var(--bg-elevated); border: 1px solid var(--border-subtle);
   border-radius: var(--radius); padding: var(--space-3) var(--space-4);
