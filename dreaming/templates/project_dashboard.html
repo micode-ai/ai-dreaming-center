@@ -139,7 +139,9 @@
         {% endif %}
       </td>
       <td class="text-xs">{{ s.topic or '' }}</td>
-      <td class="num muted whitespace-nowrap">{{ s.started_at }}</td>
+      <td class="num muted whitespace-nowrap">
+        {%- if s.started_at %}<time data-ts="{{ s.started_at }}">{{ s.started_at[5:16] | replace("T", " ") }}</time>{% endif -%}
+      </td>
       <td class="text-right whitespace-nowrap">
         <span class="row-actions">
         <a class="btn btn-sm mr-1" href="/p/{{ project.slug }}/sessions/{{ s.id }}/log">log</a>

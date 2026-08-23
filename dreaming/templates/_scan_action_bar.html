@@ -30,7 +30,7 @@
     <span class="badge badge-neutral">{{ "scan.last.never" | t(locale=locale) }}</span>
   {% endif %}
   {% if _ts %}
-  <time class="text-xs faint" data-scan-ts="{{ _ts }}" title="{{ _ts[:19] }}">{{ _ts[:16] }}</time>
+  <time class="text-xs faint" data-ts="{{ _ts }}">{{ _ts[5:16] | replace("T", " ") }}</time>
   {% endif %}
   {% endif %}
   {% if hint %}
@@ -44,30 +44,4 @@
     </button>
   </form>
 </div>
-  <script>
-  (function () {
-    if (window.__scanRelInit) return;
-    window.__scanRelInit = true;
-    function rel(iso) {
-      var then = Date.parse(iso); if (isNaN(then)) return null;
-      var s = Math.round((then - Date.now()) / 1000);
-      var loc = document.documentElement.lang || "en";
-      var rtf = new Intl.RelativeTimeFormat(loc, { numeric: "auto" });
-      var abs = Math.abs(s);
-      if (abs < 60) return rtf.format(Math.round(s), "second");
-      if (abs < 3600) return rtf.format(Math.round(s / 60), "minute");
-      if (abs < 86400) return rtf.format(Math.round(s / 3600), "hour");
-      return rtf.format(Math.round(s / 86400), "day");
-    }
-    function paint() {
-      document.querySelectorAll("time[data-scan-ts]").forEach(function (el) {
-        var r = rel(el.getAttribute("data-scan-ts"));
-        if (r) el.textContent = r;
-      });
-    }
-    if (document.readyState === "loading")
-      document.addEventListener("DOMContentLoaded", paint);
-    else paint();
-  })();
-  </script>
 {% endmacro %}
