@@ -74,6 +74,12 @@
     <textarea name="angle" rows="3"
               placeholder="{{ 'creative.add.prompt' | t(locale=locale) }}"
               class="rounded px-2 py-1 bg-elevated text-sm"></textarea>
+    {#- The maker refuses to claim anything this field does not carry, so a
+        blank one is not neutral. Left empty it records "build only from what
+        the repository shows" rather than a note about who asked. -#}
+    <input type="text" name="evidence"
+           placeholder="{{ 'creative.add.evidence' | t(locale=locale) }}"
+           class="rounded px-2 py-1 bg-elevated text-sm">
     <label class="text-xs faint">{{ "creative.add.files" | t(locale=locale) }}
       <input type="file" name="files" multiple
              accept=".png,.jpg,.jpeg,.gif,.webp,.mp4,.mov,.webm"

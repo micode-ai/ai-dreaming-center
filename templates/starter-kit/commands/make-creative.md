@@ -18,6 +18,19 @@ You get `title`, `angle`, `slug_hint`, `evidence`, `formats`, `locales`,
 campaign must be true to — a creative that overstates it is worse than none,
 because it is a claim about the product with the product's name on it.
 
+**A hand-written brief names no external fact, and that is not a refusal
+condition.** When `evidence` says the brief supplies none, your source of
+truth is the venue's repository and the subject's own product: what they
+demonstrably contain is fair to say. Build from that. The prohibition below is
+on *inventing* — a number nobody measured, a customer nobody has, a
+testimonial nobody gave — not on writing about a product that plainly exists.
+If the angle needs a specific fact that neither repository establishes, ask
+for that one fact (step 4a) rather than declining the whole campaign.
+
+Report a failure when the venue itself cannot hold this campaign — its own
+contract rejects it, or its build vocabulary has no format for what was asked
+— and say which, so the operator can fix the thing that is actually wrong.
+
 Environment, all set by the center:
 
 | Variable | What it is |

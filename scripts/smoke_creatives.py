@@ -761,6 +761,62 @@ async def main() -> int:  # noqa: C901
             else:
                 os.environ["DC_DB_PATH"] = prior3
 
+        # ---- a hand-written campaign is buildable at all -----------------
+        # The form used to record evidence as "proposed by the operator", a
+        # note about who asked rather than a claim. make-creative.md reads
+        # evidence as the fact the creative must be true to and refuses to
+        # state anything it does not carry, so every manual campaign was
+        # unbuildable by construction. Observed in production: proposal 20
+        # ("Реклама фирмы") came back failed without a render.
+        prior4 = os.environ.get("DC_DB_PATH")
+        page_db4 = Path(tempfile.mkdtemp(prefix="dc_smoke_cr_ev_"))
+        repo4 = Path(tempfile.mkdtemp(prefix="dc_smoke_cr_evrepo_"))
+        (repo4 / "docs" / "marketing" / "creatives").mkdir(parents=True)
+        os.environ["DC_DB_PATH"] = str(page_db4 / "t.db")
+        try:
+            from starlette.testclient import TestClient as TC4
+            with TC4(app) as client:
+                svc = ProjectsService(app.state.db)
+                proj = await svc.create(
+                    slug="cr-ev", label="CR ev", working_dir=str(repo4))
+                await svc.set_setting(
+                    proj.id, "creative_dir", "docs/marketing/creatives")
+
+                client.post("/p/cr-ev/creatives/add",
+                            data={"title": "Company intro", "angle": "a reel"},
+                            follow_redirects=False)
+                row = await app.state.db.find_creative_proposal_by_slug(
+                    proj.id, "company-intro")
+                ev = (row["evidence"] or "") if row else ""
+                if "proposed by the operator" in ev:
+                    fail("a hand-written campaign still records who asked as "
+                         "its evidence -- the maker reads that as carrying no "
+                         "claim and cannot build anything from it")
+                    return 1
+                if "repository" not in ev:
+                    fail(f"blank evidence should point at checkable material; "
+                         f"got {ev!r}")
+                    return 1
+
+                # An operator who names the fact keeps it verbatim.
+                client.post("/p/cr-ev/creatives/add",
+                            data={"title": "Second", "angle": "x",
+                                  "evidence": "products.json lists 4 shipped tools"},
+                            follow_redirects=False)
+                row2 = await app.state.db.find_creative_proposal_by_slug(
+                    proj.id, "second")
+                if row2["evidence"] != "products.json lists 4 shipped tools":
+                    fail(f"the operator's own evidence was not kept: "
+                         f"{row2['evidence']!r}")
+                    return 1
+                print("ok: a hand-written campaign records what it rests on, "
+                      "not who asked")
+        finally:
+            if prior4 is None:
+                os.environ.pop("DC_DB_PATH", None)
+            else:
+                os.environ["DC_DB_PATH"] = prior4
+
         # ---- the maker can ask at all ------------------------------------
         cmd = (ROOT / "templates" / "starter-kit" / "commands"
                / "make-creative.md").read_text(encoding="utf-8")

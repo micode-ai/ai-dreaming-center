@@ -16,9 +16,15 @@ Two sources rather than the four articles has: AI Radar and idea cards have no
 - **"Propose campaigns"** — runs `/creative-ideas-scan`: the session only reads
   recent commits, product documentation and neighbouring campaigns, then
   proposes three to seven ideas, each resting on a fact.
-- **The "Add your own campaign" form** — topic, prompt, venue, formats and
-  locales (leave them empty to take the venue's settings), and files straight
-  away if you already have the material.
+- **The "Add your own campaign" form** — topic, prompt, **what the campaign
+  rests on**, venue, formats and locales (leave them empty to take the venue's
+  settings), and files straight away if you already have the material.
+
+The "rests on" field is not a formality. The maker is forbidden from stating
+anything that fact does not carry, so it is worth filling in: an article, a
+product, a page, a figure you checked yourself. Left empty, the proposal
+records "build only from what the venue's and the product's repositories
+show", and the maker holds to that.
 
 The form takes several files at once: png, jpg, gif, webp, mp4, mov, webm. If a
 campaign with that slug already exists the files attach to it rather than

@@ -173,6 +173,7 @@
   "contracts.empty.desc": "Contracts are written by the {code} slash-command — claude walks the code, picks out modules and pages, describes their public API, dependencies and invariants as markdown with frontmatter. The orchestrator also writes them during feature decomposition.",
   "contracts.empty.title": "No contract files in {dir}",
   "contracts.parse_error": "Error",
+  "creative.add.evidence": "What the campaign rests on: an article, a product, a page, a fact you checked. Empty — the maker uses only what the repository shows",
   "creative.add.files": "Source material (several is fine)",
   "creative.add.formats": "formats (post-4x5,story,reel)",
   "creative.add.locales": "locales (pl,en)",

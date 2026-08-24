@@ -173,6 +173,7 @@
   "contracts.empty.desc": "Контракты пишутся slash-командой {code} — claude проходится по коду, выделяет модули и страницы, описывает их public API, зависимости, инварианты в виде markdown'ов с frontmatter. Также пишутся оркестратором во время orchestration при декомпозиции фичи.",
   "contracts.empty.title": "В {dir} нет contract-файлов",
   "contracts.parse_error": "Ошибка",
+  "creative.add.evidence": "На чём кампания стоит: статья, продукт, страница сайта, ваш проверенный факт. Пусто — сборщик возьмёт только то, что видно в репозитории",
   "creative.add.files": "Материал для сборки (можно несколько)",
   "creative.add.formats": "форматы (post-4x5,story,reel)",
   "creative.add.locales": "локали (pl,en)",

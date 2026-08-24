@@ -33,6 +33,17 @@ _ORDER = ["proposed", "approved", "making", "drafted", "published",
 # Mirrors SqliteDB._CREATIVE_DISPATCHABLE / _CREATIVE_ATTACHABLE, which are
 # the preconditions that actually enforce these at the write. Checked here too
 # so a stale click is refused before a paid session is dispatched.
+# What a hand-written campaign rests on when the operator names nothing.
+# Not "proposed by the operator": the maker reads evidence as the claim the
+# creative must be true to, and a note about who asked carries no claim, so
+# every manual campaign was unbuildable by construction. This points at
+# material that can actually be checked.
+_MANUAL_EVIDENCE = (
+    "hand-written brief, no external fact supplied: build only from what the "
+    "venue's repository and the subject's own product demonstrably show, and "
+    "ask (step 4a) for anything neither establishes"
+)
+
 _DISPATCHABLE_STATUSES = ("proposed", "approved", "failed", "drafted")
 _ATTACHABLE_STATUSES = ("proposed", "approved", "failed", "drafted")
 
@@ -339,6 +350,7 @@ async def creatives_scan(request: Request, slug: str):
 async def creatives_add(
     request: Request, slug: str,
     title: str = Form(...), angle: str = Form(""), venue: str = Form(""),
+    evidence: str = Form(""),
     formats: str = Form(""), locales: str = Form(""),
 ):
     """An operator's own campaign idea, with its source material in one step.
@@ -348,9 +360,16 @@ async def creatives_add(
     the card afterwards to hand it over is a step that only ever gets skipped.
     The prompt and the files arrive together, which is what the maker needs.
 
-    `evidence` is the operator's own word, and that is honest: they are the one
-    who checked. It is still recorded, because the queue's rule is that every
-    row says what it rests on.
+    `evidence` is what the campaign may claim. The maker treats it as the fact
+    the creative must be true to and refuses to state anything it does not
+    carry, so a placeholder here is not a neutral default -- it is a campaign
+    nobody can build. That is what the old hard-coded "proposed by the
+    operator" produced: a brief the maker read as carrying no claim at all,
+    and correctly declined to invent one for.
+
+    Left blank, the recorded evidence now says where the facts are instead of
+    who asked: the venue's repository and the subject's own product. That is
+    checkable material, which is the whole point of the field.
     """
     project = request.state.project
     db = request.app.state.db
@@ -377,7 +396,7 @@ async def creatives_add(
     slug = creatives.campaign_slug(title)
     new_id = await db.add_creative_proposal(
         project.id, source="manual", source_ref="operator",
-        evidence="proposed by the operator", title=title.strip(),
+        evidence=(evidence.strip() or _MANUAL_EVIDENCE), title=title.strip(),
         angle=angle.strip(), slug_hint=slug,
         formats=formats.strip(), locales=locales.strip(),
         target_project_id=target,
