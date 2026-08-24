@@ -66,12 +66,21 @@ proposed --(approve)--> making --(made, verify_ok или нет)--> drafted --(p
    |                        |_______________(revise / retry)______|
    |
    +--(reject)--> rejected --(restore)--> proposed
+   +--(done)----> done -----(restore)--> proposed
 
 making --(made, error_message)--> failed --(approve/retry)--> making
 making --(cancel, вручную)-------> failed
+failed  --(done)----------------> done
 ```
 
-Побайтово тот же граф, что у статей, с переименованным `writing → making`.
+Тот же граф, что у статей, с переименованным `writing → making`, плюс
+терминальный `done` («уже реализовано»), которого у статей нет. Он отделён от
+`rejected` намеренно: отказ означает, что идея не годится, `done` — что она
+верна, а работа уже сделана вручную. На дедуп это не влияет — уникальный
+индекс `(project_id, slug_hint)` не даёт сканеру предложить слаг заново при
+любом из двух исходов, — но месяц спустя очередь читается честнее. Достижим
+из `proposed` и `failed`, обратим тем же `restore`, что и `rejected`; из
+`making` запрещён (`409`) — там ещё работает сессия.
 `approved` — так же формально объявлен дисптчеруемым
 (`_CREATIVE_DISPATCHABLE`), но так же недостижим на практике: approve сразу
 переводит `proposed → making`.

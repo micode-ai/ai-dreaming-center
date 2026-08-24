@@ -28,12 +28,19 @@ being silently lost — provided it is not mid-assembly.
 
 | Status | What it means | Buttons |
 |---|---|---|
-| **Proposed** | Awaiting a decision. | Make, Reject, venue select |
+| **Proposed** | Awaiting a decision. | Make, Reject, Already made, venue select |
 | **Making** | Being assembled. | Cancel |
 | **Drafted** | Ready for review. | Preview, Publish |
 | **Published** | Published, with the commit. | — |
+| **Already made** | Closed without assembling: the work exists. | Back to the queue |
 | **Rejected** | Turned down. | Back to the queue |
-| **Failed** | Assembly crashed or was cancelled. | Retry, Session log |
+| **Failed** | Assembly crashed or was cancelled. | Retry, Already made, Session log |
+
+**"Already made" is not a rejection.** Rejected says the idea was wrong;
+already made says it was right and the work exists. Coming back to the queue a
+month later you read those two differently, and a scan will not re-propose the
+slug in either case. The decision reverses with the same button rejected
+campaigns use.
 
 **Cancel** moves it to Failed but does not kill the session: a live process
 finishes anyway, the card just stops waiting.

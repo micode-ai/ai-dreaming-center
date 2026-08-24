@@ -68,12 +68,22 @@ proposed --(approve)--> making --(made, verify_ok or not)--> drafted --(publish)
    |                        |_______________(revise / retry)______|
    |
    +--(reject)--> rejected --(restore)--> proposed
+   +--(done)----> done -----(restore)--> proposed
 
 making --(made, error_message)--> failed --(approve/retry)--> making
 making --(cancel, manual)--------> failed
+failed  --(done)----------------> done
 ```
 
-Byte-for-byte the same graph as articles, with `writing` renamed to `making`.
+The same graph as articles, with `writing` renamed to `making`, plus a
+terminal `done` ("already made") that articles do not have. It is kept apart
+from `rejected` deliberately: a rejection says the idea was wrong, `done` says
+it was right and the work was already produced by hand. Dedup is unaffected —
+the unique `(project_id, slug_hint)` index stops a scan re-proposing the slug
+under either outcome — but the queue reads more honestly a month later.
+Reachable from `proposed` and `failed`, reversed by the same `restore` that
+rejected campaigns use, and refused from `making` (`409`), where a session is
+still working.
 `approved` is formally dispatchable here too (`_CREATIVE_DISPATCHABLE`) and
 just as unreachable in practice: approve moves `proposed` straight to
 `making`.

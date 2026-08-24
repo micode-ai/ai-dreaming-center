@@ -113,14 +113,21 @@
       <form method="post" action="/p/{{ project.slug }}/creatives/{{ c.id }}/reject" class="inline">
         <button class="btn btn-sm">{{ "creative.btn.reject" | t(locale=locale) }}</button>
       </form>
+      {#- Not a rejection: the idea was right, the work already exists. -#}
+      <form method="post" action="/p/{{ project.slug }}/creatives/{{ c.id }}/done" class="inline">
+        <button class="btn btn-sm">{{ "creative.btn.done" | t(locale=locale) }}</button>
+      </form>
       {% include "_creative_venue_form.html" %}
-    {% elif c.status == 'rejected' %}
+    {% elif c.status in ('rejected', 'done') %}
       <form method="post" action="/p/{{ project.slug }}/creatives/{{ c.id }}/restore" class="inline">
         <button class="btn btn-sm">{{ "creative.btn.restore" | t(locale=locale) }}</button>
       </form>
     {% elif c.status == 'failed' %}
       <form method="post" action="/p/{{ project.slug }}/creatives/{{ c.id }}/approve" class="inline">
         <button class="btn btn-sm">{{ "creative.btn.retry" | t(locale=locale) }}</button>
+      </form>
+      <form method="post" action="/p/{{ project.slug }}/creatives/{{ c.id }}/done" class="inline">
+        <button class="btn btn-sm">{{ "creative.btn.done" | t(locale=locale) }}</button>
       </form>
       {% include "_creative_venue_form.html" %}
     {% elif c.status == 'making' %}

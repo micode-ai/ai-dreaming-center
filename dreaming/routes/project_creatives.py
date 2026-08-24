@@ -28,7 +28,7 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 _ORDER = ["proposed", "approved", "making", "drafted", "published",
-          "failed", "rejected"]
+          "done", "failed", "rejected"]
 
 # Mirrors SqliteDB._CREATIVE_DISPATCHABLE / _CREATIVE_ATTACHABLE, which are
 # the preconditions that actually enforce these at the write. Checked here too
@@ -584,14 +584,38 @@ async def creatives_reject(request: Request, slug: str, proposal_id: int):
     return RedirectResponse(f"/p/{project.slug}/creatives", status_code=303)
 
 
+@router.post("/p/{slug}/creatives/{proposal_id}/done")
+async def creatives_mark_done(request: Request, slug: str, proposal_id: int):
+    """Close a campaign as already made, without making it.
+
+    Distinct from reject on purpose: rejected means the idea was wrong, done
+    means it was right and the work already exists. The two read differently
+    when you come back to the queue a month later, and a scan that re-proposes
+    the same slug is refused either way by the unique (project_id, slug_hint)
+    index -- so this costs nothing in dedup and buys an honest record.
+
+    Reversible through the same restore button rejected campaigns use.
+    """
+    project = request.state.project
+    db = request.app.state.db
+    if not await db.set_creative_proposal_status(
+            proposal_id, "done", expect_statuses=("proposed", "failed")):
+        raise HTTPException(
+            status_code=409,
+            detail="only a proposed or failed campaign can be marked done",
+        )
+    return RedirectResponse(f"/p/{project.slug}/creatives", status_code=303)
+
+
 @router.post("/p/{slug}/creatives/{proposal_id}/restore")
 async def creatives_restore(request: Request, slug: str, proposal_id: int):
     project = request.state.project
     db = request.app.state.db
     if not await db.set_creative_proposal_status(
-            proposal_id, "proposed", expect_statuses=("rejected",)):
+            proposal_id, "proposed", expect_statuses=("rejected", "done")):
         raise HTTPException(
-            status_code=409, detail="only a rejected campaign can be restored")
+            status_code=409,
+            detail="only a rejected or already-made campaign can be restored")
     return RedirectResponse(f"/p/{project.slug}/creatives", status_code=303)
 
 

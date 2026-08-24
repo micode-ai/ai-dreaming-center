@@ -54,6 +54,7 @@ Cards are grouped by status:
 | Making | being built right now |
 | Drafted | ready to review |
 | Published | published |
+| Already made | closed without assembling — the work already existed |
 | Rejected | rejected |
 | Failed | the build failed or was cancelled |
 
@@ -79,11 +80,12 @@ If a campaign with the same slug already exists, the files still attach to it
 
 | Status | Buttons |
 |---|---|
-| Proposed | **Make** (dispatches the maker), **Reject**, a venue select |
-| Failed | **Retry**, a venue select |
+| Proposed | **Make** (dispatches the maker), **Reject**, **Already made**, a venue select |
+| Failed | **Retry**, **Already made**, a venue select |
 | Making | **Cancel** (moves it to Failed; does not kill the session itself) |
 | Drafted | **Publish** (if the gate allows it) or the refusal reason as text, plus a "build passed / unverified / build failed" badge |
 | Rejected | **Back to the queue** |
+| Already made | **Back to the queue** |
 | Published | the commit (first 8 chars of the sha) and the build-result badge |
 
 ## Attaching material

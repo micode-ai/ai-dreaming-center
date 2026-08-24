@@ -687,6 +687,80 @@ async def main() -> int:  # noqa: C901
             else:
                 os.environ["DC_DB_PATH"] = prior2
 
+        # ---- "already made" is a decision, not a rejection ---------------
+        # Closing a proposal you have already produced by hand must be its own
+        # terminal state: rejected says the idea was wrong, done says it was
+        # right and the work exists. Reversible, and refused from any state
+        # where it would contradict work in flight.
+        prior3 = os.environ.get("DC_DB_PATH")
+        page_db3 = Path(tempfile.mkdtemp(prefix="dc_smoke_cr_done_"))
+        repo3 = Path(tempfile.mkdtemp(prefix="dc_smoke_cr_donerepo_"))
+        (repo3 / "docs" / "marketing" / "creatives").mkdir(parents=True)
+        os.environ["DC_DB_PATH"] = str(page_db3 / "t.db")
+        try:
+            from starlette.testclient import TestClient as TC3
+            with TC3(app) as client:
+                svc = ProjectsService(app.state.db)
+                proj = await svc.create(
+                    slug="cr-done", label="CR done", working_dir=str(repo3))
+                await svc.set_setting(
+                    proj.id, "creative_dir", "docs/marketing/creatives")
+                d = app.state.db
+                cid_ = await d.add_creative_proposal(
+                    proj.id, source="manual", source_ref="", evidence="checked",
+                    title="Voice", angle="", slug_hint="voice")
+
+                if client.post(f"/p/cr-done/creatives/{cid_}/done",
+                               follow_redirects=False).status_code != 303:
+                    fail("marking a proposed campaign as already made was refused")
+                    return 1
+                if (await d.get_creative_proposal(cid_))["status"] != "done":
+                    fail("the campaign did not reach 'done'")
+                    return 1
+
+                # It must not be the same thing as rejected.
+                if (await d.get_creative_proposal(cid_))["status"] == "rejected":
+                    fail("'already made' collapsed into 'rejected'")
+                    return 1
+
+                # A re-scan cannot resurrect it: the unique (project_id,
+                # slug_hint) index is what stops the queue refilling with work
+                # that is done.
+                if await d.add_creative_proposal(
+                        proj.id, source="project_scan", source_ref="x",
+                        evidence="again", title="Voice", angle="",
+                        slug_hint="voice") is not None:
+                    fail("a scan re-proposed a campaign already marked done")
+                    return 1
+
+                # Reversible through the same restore the rejected ones use.
+                if client.post(f"/p/cr-done/creatives/{cid_}/restore",
+                               follow_redirects=False).status_code != 303:
+                    fail("an already-made campaign could not be restored")
+                    return 1
+                if (await d.get_creative_proposal(cid_))["status"] != "proposed":
+                    fail("restore did not return the campaign to the queue")
+                    return 1
+
+                # Refused mid-assembly: a session is running against it.
+                busy = await d.add_creative_proposal(
+                    proj.id, source="manual", source_ref="", evidence="checked",
+                    title="Two", angle="", slug_hint="two")
+                await d.start_creative_attempt(busy, session_id="s")
+                if client.post(f"/p/cr-done/creatives/{busy}/done",
+                               follow_redirects=False).status_code != 409:
+                    fail("a campaign being assembled was marked done -- the "
+                         "maker is still writing to its directory")
+                    return 1
+                print("ok: 'already made' closes a proposal without rejecting "
+                      "it, survives a re-scan, reverses, and is refused "
+                      "mid-assembly")
+        finally:
+            if prior3 is None:
+                os.environ.pop("DC_DB_PATH", None)
+            else:
+                os.environ["DC_DB_PATH"] = prior3
+
         # ---- the maker can ask at all ------------------------------------
         cmd = (ROOT / "templates" / "starter-kit" / "commands"
                / "make-creative.md").read_text(encoding="utf-8")
