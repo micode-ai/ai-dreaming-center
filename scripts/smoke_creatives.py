@@ -228,6 +228,31 @@ async def main() -> int:  # noqa: C901
         print("ok: classify_render prefers the longest format id and invents "
               "nothing")
 
+        # A venue may put the locale in a directory and ship multi-page formats
+        # as numbered sequences -- `renders/pl/carousel-01.png`. Observed in
+        # micode-landing-page. Without both, pl and en collapsed into one
+        # bucket and every deck page fell out of its format.
+        vf = ["carousel", "feed-4x5", "li-single", "og", "reel", "reel-4x5",
+              "story-9x16"]
+        cases = {
+            "renders/pl/reel.mp4": ("reel", "pl"),
+            "renders/en/reel.mp4": ("reel", "en"),
+            "renders/pl/carousel-01.png": ("carousel", "pl"),
+            "renders/pl/story-9x16-03.png": ("story-9x16", "pl"),
+            # A folder the venue never declared is not a locale.
+            "renders/de/reel.mp4": ("reel", ""),
+            # Trailing digits are only a page number when what remains is a
+            # format the venue declared.
+            "renders/pl/teaser-2024.png": ("", "pl"),
+        }
+        for path_, want in cases.items():
+            got = creatives.classify_render(path_, vf, locs)
+            if got != want:
+                fail(f"classify_render({path_!r}) -> {got}, want {want}")
+                return 1
+        print("ok: a directory locale and a page-numbered sequence are read, "
+              "and neither invents a locale nor a format")
+
         # A campaign slug is the directory attachments land in, before any
         # session runs, and it never changes — so unlike an article's slug_hint
         # (a seed the writer replaces) it must never be empty and should be

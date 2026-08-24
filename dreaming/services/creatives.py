@@ -157,6 +157,9 @@ def split_list(raw: str) -> list[str]:
     return [p.strip() for p in re.split(r"[,\n]+", raw or "") if p.strip()]
 
 
+_PAGE_SUFFIX = re.compile(r"-\d{1,3}$")
+
+
 def classify_render(path: str, formats: list[str], locales: list[str]) -> tuple[str, str]:
     """(format_id, locale) a render filename declares, or ("", "").
 
@@ -166,16 +169,43 @@ def classify_render(path: str, formats: list[str], locales: list[str]) -> tuple[
     locales the venue actually declared, so an unrelated filename cannot invent
     a format that does not exist.
     """
-    stem = Path(path).stem.lower()
+    pure = Path(path)
+    stem = pure.stem.lower()
     loc = next(
         (l for l in sorted(locales, key=len, reverse=True)
          if stem.endswith(f"-{l.lower()}")), "",
     )
-    rest = stem[: -(len(loc) + 1)] if loc else stem
+    # A venue may put the locale in a directory instead of the filename --
+    # `renders/pl/reel.mp4` rather than `...-reel-pl.mp4`. Both are real
+    # conventions, and without this the two languages collapse into one bucket
+    # and the preview shows them as if they were the same render. Only a
+    # directory matching a *declared* locale counts, so an unrelated folder
+    # cannot invent one.
+    if not loc:
+        lower = {l.lower(): l for l in locales}
+        loc = next(
+            (lower[part.lower()] for part in reversed(pure.parts[:-1])
+             if part.lower() in lower), "",
+        )
+        rest = stem
+    else:
+        rest = stem[: -(len(loc) + 1)]
     fmt = next(
         (f for f in sorted(formats, key=len, reverse=True)
          if rest.endswith(f"-{f.lower()}") or rest == f.lower()), "",
     )
+    # Multi-page formats ship as numbered sequences -- `carousel-01.png`,
+    # `story-9x16-03.png`. Strip a trailing page number and try once more, but
+    # only keep the result if what remains is a format the venue declared, so
+    # a filename ending in digits for any other reason still falls through.
+    if not fmt:
+        trimmed = _PAGE_SUFFIX.sub("", rest)
+        if trimmed != rest:
+            fmt = next(
+                (f for f in sorted(formats, key=len, reverse=True)
+                 if trimmed.endswith(f"-{f.lower()}") or trimmed == f.lower()),
+                "",
+            )
     return fmt, loc
 
 
