@@ -43,10 +43,18 @@ class OrchestrationHub:
     async def create_run(self, project_id: int, goal: str, external_id: str | None = None) -> str:
         run_id = str(uuid.uuid4())
         ts = _now()
+        # owner_instance is what stops another server on this database from
+        # sweeping this run out from under a working agent -- see
+        # SqliteDB.cancel_stale_orchestration_runs. A handle that never
+        # registered (a smoke script) leaves it '', i.e. ownerless, and the
+        # sweep treats it exactly as it did before the column existed.
         await self.db.execute(
-            "INSERT INTO orchestrator_runs (id, project_id, external_id, goal, status, started_at) "
-            "VALUES (?, ?, ?, ?, 'running', ?)",
-            (run_id, project_id, external_id, goal, ts),
+            "INSERT INTO orchestrator_runs "
+            "(id, project_id, external_id, goal, status, started_at, "
+            " owner_instance) "
+            "VALUES (?, ?, ?, ?, 'running', ?, ?)",
+            (run_id, project_id, external_id, goal, ts,
+             getattr(self.db, "instance_id", "") or ""),
         )
         return run_id
 

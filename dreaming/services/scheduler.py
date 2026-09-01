@@ -43,6 +43,39 @@ async def _ai_usage_ingest_job(app_state):
         log.warning("ai_usage_ingest failed: %s", e)
 
 
+async def _heartbeat_job(app_state):
+    """Say this instance is alive, and say out loud when it is not alone.
+
+    The heartbeat is what stops another server on this database from sweeping
+    our live sessions (see `_reconcile_job`). The log line is the other half:
+    a forgotten `uvicorn` on another port is invisible until it eats something,
+    and the only reason 514 took two days to explain is that nothing ever
+    mentioned the second instance. Logged when the set changes, not every
+    minute, so it reads as an event rather than noise.
+    """
+    db = app_state.db
+    try:
+        await db.heartbeat_instance()
+        others = await db.live_foreign_instances()
+    except Exception as e:
+        log.warning("heartbeat failed: %s", e)
+        return
+    seen = {i["id"] for i in others}
+    if seen != getattr(app_state, "_known_instances", None):
+        app_state._known_instances = seen
+        if others:
+            log.warning(
+                "another app instance is live on this database: %s -- both "
+                "run the reconcile job; sessions are matched to their owner "
+                "so neither sweeps the other's work",
+                ", ".join(
+                    f"{i['id'][:8]} (pid {i['pid']}, port {i['port']})"
+                    for i in others),
+            )
+        else:
+            log.info("this is now the only app instance on this database")
+
+
 async def _reconcile_job(app_state):
     """Close orphans across all process-backed tables:
       - agent_learning_sessions (self-study + cmd:* sessions)
@@ -64,6 +97,24 @@ async def _reconcile_job(app_state):
         proj = await app_state.projects.get_by_slug(slug)
         if proj:
             pairs.append((proj.id, agent))
+    # A second server on this database -- another port, a stale one left over
+    # from before a restart -- runs this same job, and everything below decides
+    # liveness from `cmd_session_ids`, which only ever describes THIS
+    # instance's processes. Left at that, each instance reads the other's live
+    # sessions as dead and fails the work under them: that is what killed
+    # article proposal 514 five minutes into a twenty-minute write, and the
+    # writer's own report was then refused as out-of-status. A session owned by
+    # an instance that is still heartbeating is running, whoever started it, so
+    # it joins the live set here and every sweep below inherits the fix.
+    try:
+        foreign = await app_state.db.sessions_owned_by_live_instances()
+    except Exception as e:
+        log.warning("reconcile_job foreign-session lookup failed: %s", e)
+        foreign = set()
+    if foreign:
+        log.info("reconcile_job: %d session(s) belong to another live "
+                 "instance -- leaving them alone", len(foreign))
+        cmd_session_ids |= foreign
     closed = 0
     try:
         closed += await pm.reconcile_stale_sessions(pairs) or 0
@@ -385,6 +436,13 @@ def build_scheduler(app_state) -> AsyncIOScheduler:
     sched.add_job(
         _reconcile_job, "interval", minutes=5, args=[app_state],
         id="reconcile_stale_sessions",
+    )
+    # Faster than the sweep it protects, on purpose: db.INSTANCE_STALE_AFTER_SEC
+    # allows three missed beats, so at a 5-minute interval a single skipped run
+    # would make this instance look dead to the other one mid-session.
+    sched.add_job(
+        _heartbeat_job, "interval", seconds=60, args=[app_state],
+        id="instance_heartbeat",
     )
     sched.add_job(
         _ai_usage_ingest_job, "interval", minutes=5, args=[app_state],

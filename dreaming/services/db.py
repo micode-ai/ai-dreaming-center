@@ -19,6 +19,12 @@ import aiosqlite
 
 log = logging.getLogger(__name__)
 
+# How long an app instance's heartbeat may be silent before the other
+# instances stop believing in it. Three missed 60-second beats: long enough
+# that a busy event loop skipping one does not make this instance's live
+# sessions look abandoned, short enough that a hard-killed instance's stranded
+# work is swept within a few minutes rather than sitting in 'writing' forever.
+INSTANCE_STALE_AFTER_SEC = 180
 
 _SCHEMA = """
 -- + dreaming: project registry
@@ -59,12 +65,45 @@ CREATE TABLE IF NOT EXISTS agent_learning_sessions (
     note_path TEXT,
     error_message TEXT,
     entity_page TEXT,
-    confidence REAL
+    confidence REAL,
+    -- Which app instance spawned this session. Appended via ALTER TABLE in
+    -- _migrate_orchestration, so it is declared last here too -- a fresh
+    -- database and a migrated one must not disagree about column order, and
+    -- any future addition belongs after it for the same reason.
+    --
+    -- Empty means "nobody claimed it": every row written before this column
+    -- existed, and any session created by a database handle that never
+    -- registered an instance. Those keep the old, ownerless behaviour.
+    owner_instance TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_als_agent ON agent_learning_sessions (agent_name);
 CREATE INDEX IF NOT EXISTS idx_als_started ON agent_learning_sessions (started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_als_project_started
     ON agent_learning_sessions (project_id, started_at DESC);
+
+-- Every app instance currently pointed at this database, heartbeating.
+--
+-- One database can have more than one server on it -- a second `uvicorn` left
+-- running on another port, a stale one from before a restart -- and each of
+-- them runs the same 5-minute reconcile job. That job's only liveness signal
+-- is its OWN ProcessManager, so without this table an instance happily
+-- declares another instance's live claude session dead and fails the work
+-- underneath it. (That is not hypothetical: it is what killed article
+-- proposal 514 mid-write.) `agent_learning_sessions.owner_instance` names the
+-- instance that spawned a session; a row here that is still heartbeating says
+-- that instance is alive and its sessions are not ours to judge.
+--
+-- An instance that dies -- gracefully or not -- stops updating `last_seen`,
+-- and once it is stale its sessions become sweepable again, so the
+-- self-healing the sweeps rely on survives a hard kill exactly as before,
+-- just a few minutes later.
+CREATE TABLE IF NOT EXISTS app_instances (
+    id         TEXT PRIMARY KEY,
+    pid        INTEGER NOT NULL DEFAULT 0,
+    port       INTEGER NOT NULL DEFAULT 0,
+    started_at TEXT NOT NULL,
+    last_seen  TEXT NOT NULL
+);
 
 -- + dreaming: PK rebuilt as (project_id, agent_name)
 CREATE TABLE IF NOT EXISTS agent_learning_rotation (
@@ -98,7 +137,13 @@ CREATE TABLE IF NOT EXISTS orchestrator_runs (
     status TEXT NOT NULL,
     started_at TEXT NOT NULL,
     finished_at TEXT,
-    error_message TEXT
+    error_message TEXT,
+    -- Which app instance spawned this run. The stale-run sweep needs it to
+    -- tell a neighbour's live run from an abandoned one; see
+    -- cancel_stale_orchestration_runs. '' means ownerless (everything from
+    -- before this column, plus runs created by a handle that never
+    -- registered), which reads exactly as it did before instances existed.
+    owner_instance TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_or_runs_started ON orchestrator_runs (started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_or_runs_project_started
@@ -397,6 +442,9 @@ class SqliteDB:
     def __init__(self, path: str):
         self._path = path
         self._conn: aiosqlite.Connection | None = None
+        # Set by register_instance; '' until then. Stamped on every session
+        # this handle creates, so the sweeps can tell whose work is whose.
+        self.instance_id: str = ""
 
     async def connect(self) -> None:
         Path(self._path).parent.mkdir(parents=True, exist_ok=True)
@@ -535,6 +583,45 @@ class SqliteDB:
             except Exception as e:
                 log.warning("Failed to add revision_notes column: %s", e)
 
+        # --- sessions: which app instance spawned this one. Same CREATE TABLE
+        # IF NOT EXISTS no-op problem as the article columns above. Existing
+        # rows get '' -- ownerless, i.e. the pre-instance behaviour -- which is
+        # the truth about them: nothing recorded who started them. ---
+        async with self._conn.execute(
+            "PRAGMA table_info(agent_learning_sessions)"
+        ) as cur:
+            session_cols = {row[1] for row in await cur.fetchall()}
+        if "owner_instance" not in session_cols:
+            try:
+                await self._conn.execute(
+                    "ALTER TABLE agent_learning_sessions ADD COLUMN "
+                    "owner_instance TEXT NOT NULL DEFAULT ''"
+                )
+            except Exception as e:
+                log.warning("Failed to add owner_instance column: %s", e)
+
+        # --- orchestration: same column on runs, and for a sharper reason.
+        # The sessions one above lets `sessions_owned_by_live_instances`
+        # protect a neighbour's article/creative work, but that lookup reads
+        # agent_learning_sessions -- and an orchestration run never has a row
+        # there, because dispatch passes an explicit session_id to
+        # start_command, which only creates a session row when it has to
+        # invent one. So the run had no recoverable owner at all and every
+        # instance read every other instance's live runs as abandoned. ---
+        async with self._conn.execute(
+            "PRAGMA table_info(orchestrator_runs)"
+        ) as cur:
+            run_cols = {row[1] for row in await cur.fetchall()}
+        if "owner_instance" not in run_cols:
+            try:
+                await self._conn.execute(
+                    "ALTER TABLE orchestrator_runs ADD COLUMN "
+                    "owner_instance TEXT NOT NULL DEFAULT ''"
+                )
+            except Exception as e:
+                log.warning(
+                    "Failed to add orchestrator_runs.owner_instance: %s", e)
+
         try:
             await self._conn.execute(
                 """
@@ -612,6 +699,186 @@ class SqliteDB:
         async with self._conn.execute(sql, params) as cur:
             return list(await cur.fetchall())
 
+    # ── App instances ─────────────────────────────────────────────
+    # Who else is pointed at this database right now. See the app_instances
+    # comment in _SCHEMA for why the sweeps need to know.
+
+    async def register_instance(
+        self, instance_id: str, *, pid: int = 0, port: int = 0,
+    ) -> None:
+        """Claim an id for this server and start heartbeating under it.
+
+        Also sets `self.instance_id`, which is what `create_session` stamps on
+        every session this instance spawns. A database handle that never calls
+        this (a smoke script, a one-off tool) keeps `instance_id == ''` and
+        creates ownerless sessions, which behave exactly as they did before
+        instances existed.
+
+        Long-dead instance rows are pruned here rather than on a timer: this
+        runs once per start, which is the only moment the table can have grown
+        by one, and a row nobody has heartbeated for a day is not coming back.
+        """
+        now = datetime.now(timezone.utc)
+        cutoff = (now - timedelta(days=1)).isoformat()
+        await self._conn.execute(
+            "DELETE FROM app_instances WHERE last_seen < ?", (cutoff,))
+        await self._conn.execute(
+            "INSERT INTO app_instances (id, pid, port, started_at, last_seen) "
+            "VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET pid=excluded.pid, "
+            "port=excluded.port, last_seen=excluded.last_seen",
+            (instance_id, pid, port, now.isoformat(), now.isoformat()),
+        )
+        await self._conn.commit()
+        self.instance_id = instance_id
+
+    async def heartbeat_instance(self) -> None:
+        """Say this instance is still alive. No-op without a registration.
+
+        Re-inserts rather than only updating: `register_instance`'s prune in
+        another instance could have deleted this row while this one was idle
+        past the cutoff, and a heartbeat that silently updated nothing would
+        leave a live server looking dead to every other instance forever.
+        """
+        if not self.instance_id:
+            return
+        now = datetime.now(timezone.utc).isoformat()
+        await self._conn.execute(
+            "INSERT INTO app_instances (id, pid, port, started_at, last_seen) "
+            "VALUES (?, 0, 0, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET last_seen=excluded.last_seen",
+            (self.instance_id, now, now),
+        )
+        await self._conn.commit()
+
+    async def unregister_instance(self) -> None:
+        """Drop this instance's row on a clean shutdown, so the sessions it
+        owned become sweepable on the next tick instead of waiting out the
+        staleness window. A hard kill skips this and the window covers it."""
+        if not self.instance_id:
+            return
+        await self._conn.execute(
+            "DELETE FROM app_instances WHERE id=?", (self.instance_id,))
+        await self._conn.commit()
+
+    async def find_conflicting_instance(
+        self, stale_after_sec: int = INSTANCE_STALE_AFTER_SEC,
+    ) -> dict | None:
+        """Another server demonstrably still running on this database, if any.
+
+        Two servers on one SQLite file is not a configuration, it is an
+        accident, and it degrades in ways that are invisible from either
+        terminal: uvicorn sets SO_REUSEADDR, so a second `--port 8086` binds
+        without an error and quietly takes new connections, while both
+        instances serialise their writes through one file. On 2026-08-31 that
+        pair stalled one instance's aiosqlite queue for five minutes (heartbeat
+        and jsonl tail frozen, `/finish` answering 500) and had each instance's
+        reconcile job failing the other's live runs. Owner-aware sweeps stop
+        the false failures; this stops the situation.
+
+        Called before `register_instance`, so `self.instance_id` is still ''
+        and every row in the table is somebody else by construction.
+
+        Liveness is decided by pid, not by `last_seen`: a hard-killed server
+        leaves its row behind for the whole staleness window, and refusing to
+        boot for three minutes after every `taskkill` would be worse than the
+        problem being solved. A pid that no longer exists -- or that now
+        belongs to something that is not python, i.e. was recycled -- proves
+        the server behind it is gone, and the row is deleted on the spot.
+        Only a row with no pid to check (pre-pid rows, and rows a heartbeat
+        re-created after a prune) falls back to the heartbeat window.
+
+        Returns the offending row, or None when this server is alone.
+        """
+        rows = await self.fetch_all(
+            "SELECT id, pid, port, started_at, last_seen FROM app_instances "
+            "WHERE id <> ?",
+            (self.instance_id or "",),
+        )
+        if not rows:
+            return None
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(seconds=stale_after_sec)
+        ).isoformat()
+        try:
+            import psutil
+        except Exception:  # pragma: no cover - psutil is a hard dependency
+            psutil = None
+
+        def _pid_is_ours(pid: int) -> bool:
+            try:
+                proc = psutil.Process(pid)
+                return "python" in (proc.name() or "").lower()
+            except Exception:
+                return False
+
+        conflict: dict | None = None
+        dead: list[str] = []
+        for row in rows:
+            pid = int(row["pid"] or 0)
+            if pid and psutil is not None:
+                alive = _pid_is_ours(pid)
+            else:
+                alive = (row["last_seen"] or "") >= cutoff
+            if alive:
+                if conflict is None:
+                    conflict = dict(row)
+            else:
+                dead.append(row["id"])
+        for row_id in dead:
+            await self._conn.execute(
+                "DELETE FROM app_instances WHERE id=?", (row_id,))
+        if dead:
+            await self._conn.commit()
+            log.info(
+                "pruned %d app_instances row(s) whose process is gone", len(dead))
+        return conflict
+
+    async def live_foreign_instances(
+        self, stale_after_sec: int = INSTANCE_STALE_AFTER_SEC,
+    ) -> list[dict]:
+        """Other instances that have heartbeated recently. Diagnostic + the
+        input to `sessions_owned_by_live_instances`."""
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(seconds=stale_after_sec)
+        ).isoformat()
+        rows = await self.fetch_all(
+            "SELECT id, pid, port, started_at, last_seen FROM app_instances "
+            "WHERE last_seen >= ? AND id <> ?",
+            (cutoff, self.instance_id or ""),
+        )
+        return [dict(r) for r in rows]
+
+    async def sessions_owned_by_live_instances(
+        self, stale_after_sec: int = INSTANCE_STALE_AFTER_SEC,
+    ) -> set[str]:
+        """Session ids belonging to a live instance that is not this one.
+
+        The three stranded-work sweeps (`cancel_stale_orchestration_runs`,
+        `reconcile_stranded_article_proposals`,
+        `reconcile_stranded_creative_proposals`) all decide liveness from one
+        set of session ids, built from the caller's own ProcessManager. That is
+        the right signal for sessions this instance spawned and says nothing
+        at all about anyone else's, which it used to read as "dead".
+
+        Unioning this into that set is the whole fix: a session another live
+        instance owns is simply treated as running, because it is, and the
+        instance that actually owns it is the one that will decide when it is
+        not. Ownerless rows ('' -- everything from before this column, plus
+        anything a handle without a registration created) are deliberately not
+        returned: nothing claims them, so the old behaviour is all there is.
+        """
+        live = {i["id"] for i in await self.live_foreign_instances(stale_after_sec)}
+        if not live:
+            return set()
+        placeholders = ",".join("?" * len(live))
+        rows = await self.fetch_all(
+            "SELECT id FROM agent_learning_sessions "
+            f"WHERE finished_at IS NULL AND owner_instance IN ({placeholders})",
+            tuple(live),
+        )
+        return {r["id"] for r in rows}
+
     # ── Orchestration node skills ─────────────────────────────────
 
     async def add_node_skill(
@@ -651,9 +918,10 @@ class SqliteDB:
         now = datetime.now(timezone.utc).isoformat()
         await self.execute(
             "INSERT INTO agent_learning_sessions "
-            "(id, project_id, agent_name, started_at, status, model) "
-            "VALUES (?, ?, ?, ?, 'running', ?)",
-            (sid, project_id, agent_name, now, model),
+            "(id, project_id, agent_name, started_at, status, model, "
+            " owner_instance) "
+            "VALUES (?, ?, ?, ?, 'running', ?, ?)",
+            (sid, project_id, agent_name, now, model, self.instance_id),
         )
         return sid
 
@@ -939,19 +1207,51 @@ class SqliteDB:
         than `grace_minutes` ago, is marked status='failed' with a synthetic
         error_message so the user sees what happened on the list page.
 
+        A run owned by another instance that is still heartbeating is skipped
+        outright, whatever `active_session_ids` says. That set is built from
+        the caller's own ProcessManager and so describes only this instance's
+        processes; left at that, every sweep reads a neighbour's live run as
+        abandoned and fails it under an agent that is still writing code. It
+        did exactly that to runs 79d99040, a1f2fe2b and 0b89f360 on
+        2026-08-31/09-01, twice while the agent was minutes from calling
+        /finish. The instance that owns a run is the one that gets to decide
+        when it is over.
+
+        `sessions_owned_by_live_instances` -- the equivalent guard for
+        articles and creatives -- cannot cover runs: it resolves owners
+        through agent_learning_sessions, and orchestration dispatch passes an
+        explicit session_id to `start_command`, which therefore never creates
+        a row there. Hence the owner is recorded on the run itself.
+
         Returns the count of runs closed.
         """
         now_dt = datetime.now(timezone.utc)
         cutoff = (now_dt - timedelta(minutes=grace_minutes)).isoformat()
         rows = await self.fetch_all(
-            "SELECT id, external_id, project_id FROM orchestrator_runs "
+            "SELECT id, external_id, project_id, owner_instance "
+            "FROM orchestrator_runs "
             "WHERE status='running' AND started_at < ?",
             (cutoff,),
         )
         active = set(active_session_ids)
+        try:
+            live_foreign = {
+                i["id"] for i in await self.live_foreign_instances()
+            }
+        except Exception as e:
+            # Failing closed here would resurrect the bug this guard exists to
+            # fix, so an unreadable instance table means "assume everyone is
+            # live" for this tick: a run left running one tick longer is
+            # cheap, a run failed under a working agent is not.
+            log.warning("stale-run sweep: instance lookup failed: %s", e)
+            live_foreign = None
         now_iso = now_dt.isoformat()
         closed = 0
         for row in rows:
+            owner = row["owner_instance"] or ""
+            if owner and owner != self.instance_id:
+                if live_foreign is None or owner in live_foreign:
+                    continue
             ext = row["external_id"]
             if ext and ext in active:
                 continue
@@ -1581,6 +1881,48 @@ class SqliteDB:
         await self._conn.commit()
         return n > 0
 
+    async def mark_article_drafted_by_hand(
+        self, proposal_id: int, *, draft_ref: str, verify_output: str,
+        verify_ok: bool, verify_label: str,
+    ) -> bool:
+        """'failed' -> 'drafted' for a draft that exists but was never reported.
+
+        A write-back can be lost while the draft itself is perfectly real: the
+        session is killed, the host restarts, or — as happened to proposal 514
+        — a second app instance fails the row out from under a writer that is
+        still working, and the writer's own `/written` is then refused for
+        being out of status. The files are on disk, verified, and the only
+        thing missing is the record. Retrying costs another full session to
+        rewrite work that already exists; this records it instead.
+
+        Refuses (returns False) anything that is not 'failed'. 'writing' is
+        deliberately not accepted: a session may still be working in that
+        directory, and recording a draft behind its back would leave the two
+        disagreeing about what it wrote. Cancel first — that is what the
+        cancel button on a 'writing' card is for — and the row lands in
+        'failed', which this accepts.
+
+        `writer_agent` becomes 'manual' because the *record* is manual,
+        whoever wrote the files; the card's footer then says so rather than
+        implying an agent reported it. `revision_notes` is cleared for the
+        same reason `mark_article_written` clears it: it describes the attempt
+        whose output is being recorded here, so it has been acted on, and
+        leaving it would make a later retry resend a request already answered.
+        """
+        now_iso = datetime.now(timezone.utc).isoformat()
+        async with self._conn.execute(
+            "UPDATE article_proposals SET status='drafted', draft_ref=?, "
+            "verify_output=?, writer_agent='manual', verify_ok=?, "
+            "verify_label=?, written_at=?, error_message='', "
+            "revision_notes='' "
+            "WHERE id=? AND status='failed'",
+            (draft_ref, verify_output[:8000], 1 if verify_ok else 0,
+             verify_label, now_iso, proposal_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
     async def set_article_revision_notes(
         self, proposal_id: int, notes: str,
     ) -> bool:
@@ -1617,6 +1959,38 @@ class SqliteDB:
             "UPDATE article_proposals SET status='published', commit_ref=?, "
             "published_at=? WHERE id=? AND status='drafted'",
             (commit_ref, now_iso, proposal_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
+    async def mark_article_published_by_hand(
+        self, proposal_id: int, *,
+        expect_statuses: tuple[str, ...] = ("drafted", "proposed", "failed"),
+    ) -> bool:
+        """'already out there' -> 'published', with no commit of ours.
+
+        The sibling above is the end of the publish pipeline and records the
+        sha it just made. This is the operator saying the article was
+        published outside this pipeline -- by hand, or before the queue
+        existed -- so there is no sha to record and `commit_ref` is left
+        exactly as it was, empty or otherwise. Claiming one would be a lie
+        the publish history then carries forever.
+
+        `published_at` is stamped because the fact being recorded is that it
+        *is* published. `decided_at` is filled in for a row that never left
+        'proposed', so the queue's own timeline stays honest.
+
+        Guarded like every other terminal transition: returns False, writing
+        nothing, if the row has already moved somewhere else.
+        """
+        now_iso = datetime.now(timezone.utc).isoformat()
+        placeholders = ",".join("?" * len(expect_statuses))
+        async with self._conn.execute(
+            "UPDATE article_proposals SET status='published', "
+            "published_at=?, decided_at=COALESCE(decided_at, ?) "
+            f"WHERE id=? AND status IN ({placeholders})",
+            (now_iso, now_iso, proposal_id, *expect_statuses),
         ) as cur:
             n = cur.rowcount
         await self._conn.commit()

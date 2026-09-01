@@ -70,11 +70,36 @@ proposed --(approve)--> writing --(written, verify_ok or not)--> drafted --(publ
    |                        |________________(revise / retry)________|
    |
    +--(reject)--> rejected --(restore)--> proposed
+   +--(done)----> done -----(restore)--> proposed
 
 writing --(written, error_message)--> failed --(approve/retry)--> writing
 writing --(cancel, manual)-----------> failed
 writing --(reconcile cron, session dead)--> failed
+failed  --(done)---------------------> done
+failed  --(draft-ready, manual)------> drafted
 ```
+
+The two exits from `failed` are not interchangeable. `done` ("already done")
+closes the row and commits nothing — the article exists outside this pipeline.
+It is deliberately separate from `rejected`: rejected says the topic was
+wrong, done says it was right and the work already exists. It costs nothing in
+dedup (the unique `(project_id, slug_hint)` index refuses a re-proposal under
+either outcome), but a month later the queue reads honestly. Reachable from
+`proposed` and `failed`, reversible through the same `restore` rejected rows
+use, refused from `writing` with a `409` — a session is still working there.
+
+`draft-ready` is a recovery, not a decision: the draft is on disk but the
+report never landed (the session was killed, the host restarted, or reconcile
+failed the row from under a working writer — see below). The route puts the
+row where `/written` would have put it, so the normal publish gate, and the
+commit behind it, become reachable again without paying for another session to
+rewrite files that already exist. The paths are validated by the same code
+publish uses (`article_publish.validate_draft_paths`) before anything is
+stored. The verification label on such a row is `manual`, never `verified`:
+the centre did not run the build, a human vouched for it, and the commit
+message says which of the two happened. Accepted only from `failed` — a
+`writing` row must be cancelled first, so nothing is recorded behind a live
+session.
 
 The status is written into the `status` column; there is no CHECK constraint,
 only code (`_ORDER` in the template and `_DISPATCHABLE_STATUSES` in the route)
@@ -321,6 +346,34 @@ write-article session and it never called `/written`.
 The manual "Cancel" button (`POST /p/{slug}/articles/{id}/cancel`) does the
 same thing immediately, on click — moves `writing → failed` without killing
 the underlying process (the route's own docstring says so in plain words).
+
+### Other people's sessions: one database file, several servers
+
+Nothing about this app is single-instance: a second `uvicorn` on another port
+opens the same `data/dreaming.db` happily and runs the same five-minute cron.
+Its live-process set is its own, so without a further check each instance
+reads the other's live sessions as dead and fails the work underneath them.
+That is not hypothetical — it is how proposal 514 died on 2026-08-25: the
+writer worked for 21 minutes, a forgotten server running code from 08-23
+failed the row on minute five, and the writer's own `/written` was then
+refused as out-of-status.
+
+So every instance registers itself in `app_instances` at startup
+(`main.lifespan` → `db.register_instance`) and refreshes `last_seen` once a
+minute (`scheduler._heartbeat_job`), while `create_session` stamps the owner
+into `agent_learning_sessions.owner_instance`. Before all three sweeps,
+`_reconcile_job` adds `db.sessions_owned_by_live_instances()` to the live set
+— the unfinished sessions of instances whose heartbeat is younger than
+`db.INSTANCE_STALE_AFTER_SEC` (180s, three missed beats). A live foreign
+instance's session counts as running because it is running, and the instance
+that owns it is the one that will decide when it is not.
+
+The self-healing survives: a hard-killed instance stops beating, and after the
+staleness window its rows become sweepable again; a clean shutdown drops the
+row immediately via `db.unregister_instance()`. Rows with an empty
+`owner_instance` (everything from before the column) behave exactly as they
+did. `_heartbeat_job` logs a warning whenever another live instance appears —
+a forgotten server is invisible right up until it eats something.
 
 ## Settings
 

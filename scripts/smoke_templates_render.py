@@ -14,11 +14,22 @@ stays useful on a fresh checkout.
 from __future__ import annotations
 
 import re
+import os
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+
+# These smokes boot the real app with TestClient against the real configured
+# database, on purpose -- that is what makes them end-to-end. Startup now
+# refuses to share a database with a live server (see
+# SqliteDB.find_conflicting_instance), which would otherwise make every run
+# fail whenever the dev server is up. A TestClient boot is not a second
+# server competing for the same work, so it takes the documented opt-out
+# rather than asking the operator to stop their server first.
+os.environ.setdefault("DC_ALLOW_MULTI_INSTANCE", "1")
+
 TEMPLATES = ROOT / "dreaming" / "templates"
 
 # SSE endpoints never complete -- a plain GET would hang the run.

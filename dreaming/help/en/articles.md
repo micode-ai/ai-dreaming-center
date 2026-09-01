@@ -28,15 +28,29 @@ created. For the manual form the app supplies it: "requested by hand on
 
 | Status | What it means | Buttons |
 |---|---|---|
-| **Proposed** | Awaiting your decision. | Approve and write, Reject, venue select |
+| **Proposed** | Awaiting your decision. | Approve and write, Reject, "Already done", venue select |
 | **Writing** | Being written right now. | Cancel |
 | **Drafted** | The draft is ready. | Preview, Publish, Retry |
 | **Published** | Published. A terminal status. | — |
+| **Already done** | Closed without a writer: the article already exists. | Back to queue |
 | **Rejected** | Turned down. | Back to queue |
-| **Failed** | The session crashed or was cancelled. | Retry, Session log |
+| **Failed** | The session crashed or was cancelled. | Retry, "Already done", "The draft is ready", Session log |
 
 **Cancel** moves the card to Failed but does not kill the session: if the
 process is alive it will finish — the card simply stops waiting for it.
+
+**"Already done" is not a rejection.** A rejected article says the topic was
+wrong; a done one says the topic was right and the work already exists. A
+month later those read differently, and a scan will not re-propose the slug
+under either. Reversible through the same button rejected rows use.
+
+**"The draft is ready"** is for when the files are already in the repository
+but the writer's report never landed (the session was killed, the host
+restarted, the watchdog failed the card). Expand it on a Failed card, give the
+paths comma-separated, and tick the box if the verification really passed. The
+card becomes Drafted and the normal **Publish** appears — instead of another
+writer run over work that already exists. The badge reads "checked by hand",
+not "build passed": the centre did not run the build, you vouched for it.
 
 ## Venue
 

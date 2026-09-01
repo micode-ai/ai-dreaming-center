@@ -28,6 +28,10 @@ class AppSettings(BaseSettings):
     # === Server ===
     host: str = "0.0.0.0"
     port: int = 8086
+    # Startup refuses to share `db_path` with another live server (see
+    # SqliteDB.find_conflicting_instance). Set DC_ALLOW_MULTI_INSTANCE=1 only
+    # if you actually mean to run two, and read that docstring first.
+    allow_multi_instance: bool = False
 
     # === Claude CLI / runners ===
     claude_path: str = "claude"

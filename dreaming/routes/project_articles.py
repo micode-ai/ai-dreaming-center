@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 _ORDER = ["proposed", "approved", "writing", "drafted", "published",
-          "failed", "rejected"]
+          "done", "failed", "rejected"]
 
 # A draft_ref can name a generated registry or a whole editorial plan
 # alongside the article — accounting-ai-agent's includes a content.ts, and
@@ -300,6 +300,267 @@ async def articles_reject(request: Request, slug: str, proposal_id: int):
     ok = await db.set_article_proposal_status(proposal_id, "rejected")
     if not ok:
         raise HTTPException(status_code=404, detail="proposal not found")
+    return RedirectResponse(
+        _back_to(request, f"/p/{project.slug}/articles"), status_code=303,
+    )
+
+
+@router.post("/p/{slug}/articles/{proposal_id}/done")
+async def articles_mark_done(request: Request, slug: str, proposal_id: int):
+    """Close a proposal as already written, without writing it.
+
+    The creative queue got this first (a campaign produced by hand had only
+    Reject to leave by, which records the wrong thing: rejected says the idea
+    was wrong, done says it was right and the work exists). Articles have the
+    same queue and the same gap.
+
+    Reachable from proposed and failed, and reversible through the same
+    restore button rejected proposals use. Note the difference from the
+    draft-ready button below: this one closes the row and nothing is ever
+    committed from it — use it when the article exists outside this pipeline,
+    not when a draft is sitting there waiting to be published.
+    """
+    project = request.state.project
+    db = request.app.state.db
+    row = await db.get_article_proposal(proposal_id)
+    if row is None or row["project_id"] != project.id:
+        raise HTTPException(status_code=404, detail="proposal not found")
+    if not await db.set_article_proposal_status(
+            proposal_id, "done", expect_statuses=("proposed", "failed")):
+        raise HTTPException(
+            status_code=409,
+            detail=f"only a proposed or failed article can be marked done "
+                   f"(this one is '{row['status']}')",
+        )
+    return RedirectResponse(
+        _back_to(request, f"/p/{project.slug}/articles"), status_code=303,
+    )
+
+
+async def _draft_files(request: Request, project, row: dict) -> tuple[str, list[str]]:
+    """The repository a draft was written into, and the draft's own paths.
+
+    Exactly publish's derivation, and for the same reason: draft_ref is
+    relative to the repository that owns the blog, which is not always
+    `venue.working_dir`. A rollback that resolved those paths differently
+    from the write would act on the wrong tree -- deleting someone else's
+    files, or silently finding nothing and reporting a clean discard.
+    """
+    from dreaming.services import article_publish
+    venue, blog_dir = await _venue_for(request, project, row)
+    root = await articles.resolve_article_root(venue.working_dir, blog_dir)
+    paths = article_publish.split_paths(row.get("draft_ref") or "", str(root))
+    return str(root), paths
+
+
+@router.get("/p/{slug}/articles/{proposal_id}/discard")
+async def articles_discard_confirm(request: Request, slug: str, proposal_id: int):
+    """Show what discarding this draft would do, before it does any of it.
+
+    Rejecting a drafted article is the one action in this queue that deletes
+    the operator's files, and `restore` (a file the writer edited rather than
+    created) takes the whole file back to HEAD -- an unrelated edge sitting
+    in the same file goes with it. Neither is guessable from a button label,
+    so the plan is rendered per path and the button lives on the far side of
+    it.
+    """
+    from dreaming.services import article_publish
+    project = request.state.project
+    db = request.app.state.db
+    row = await db.get_article_proposal(proposal_id)
+    if row is None or row["project_id"] != project.id:
+        raise HTTPException(status_code=404, detail="proposal not found")
+    if row["status"] != "drafted":
+        raise HTTPException(
+            status_code=409,
+            detail=f"only a drafted article can be discarded "
+                   f"(this one is '{row['status']}')",
+        )
+    root, paths = await _draft_files(request, project, row)
+    error = ""
+    plan: list[dict] = []
+    try:
+        plan = await article_publish.plan_rollback(paths, root)
+    except article_publish.PublishError as e:
+        # A draft_ref that cannot be read is exactly when the operator most
+        # needs the page: it says why, and offers rejecting the row without
+        # touching the tree.
+        error = str(e)
+    locale = request.cookies.get(
+        "dc_locale", request.app.state.settings.default_locale,
+    )
+    return request.app.state.templates.TemplateResponse(
+        request, "project_article_discard.html",
+        {"project": project, "row": row, "plan": plan, "root": root,
+         "error": error, "locale": locale},
+    )
+
+
+@router.post("/p/{slug}/articles/{proposal_id}/discard")
+async def articles_discard(request: Request, slug: str, proposal_id: int):
+    """Reject a drafted article and take its files back out of the tree.
+
+    The row is claimed first and the files are rolled back second. The other
+    order loses a race that matters: publish resolves its paths, then spends
+    seconds inside git, and a discard that deleted files during that window
+    would pull the tree out from under a commit already in flight. A guarded
+    UPDATE is the only lock available here, so it goes first; if the rollback
+    then fails, the row reads 'rejected' with files still on disk and the
+    flash says exactly that, which is recoverable by hand. Files deleted
+    under a live publish are not.
+    """
+    from dreaming.services import article_publish
+    project = request.state.project
+    db = request.app.state.db
+    row = await db.get_article_proposal(proposal_id)
+    if row is None or row["project_id"] != project.id:
+        raise HTTPException(status_code=404, detail="proposal not found")
+    root, paths = await _draft_files(request, project, row)
+    articles_url = _back_to(request, f"/p/{project.slug}/articles")
+    if not await db.set_article_proposal_status(
+            proposal_id, "rejected", expect_statuses=("drafted",)):
+        raise HTTPException(
+            status_code=409,
+            detail=f"only a drafted article can be discarded "
+                   f"(this one is '{row['status']}')",
+        )
+    i18n = request.app.state.i18n
+    locale = request.cookies.get(
+        "dc_locale", request.app.state.settings.default_locale,
+    )
+    try:
+        plan = await article_publish.rollback(paths, root)
+    except article_publish.PublishError as e:
+        resp = RedirectResponse(articles_url, status_code=303)
+        set_flash(
+            resp,
+            i18n.t("article.discard.flash.failed", locale=locale,
+                   err=str(e)[:400]),
+            level="error",
+        )
+        return resp
+    # Report in the same words the confirmation page used, counted per
+    # action -- "3 delete, 1 restore" says what happened to the tree, which
+    # is the thing an operator has to be able to check afterwards.
+    counts: dict[str, int] = {}
+    for item in plan:
+        counts[item["action"]] = counts.get(item["action"], 0) + 1
+    summary = ", ".join(
+        f"{n} × {i18n.t('article.discard.action.' + action, locale=locale)}"
+        for action, n in sorted(counts.items())
+    ) or i18n.t("article.discard.action.skip", locale=locale)
+    resp = RedirectResponse(articles_url, status_code=303)
+    set_flash(
+        resp,
+        i18n.t("article.discard.flash.ok", locale=locale, summary=summary),
+        level="success",
+    )
+    return resp
+
+
+@router.post("/p/{slug}/articles/{proposal_id}/mark-published")
+async def articles_mark_published(request: Request, slug: str, proposal_id: int):
+    """Close a proposal as already published, without publishing it.
+
+    Distinct from the 'done' button above, which says the work exists and
+    nothing more. This one says the article is live -- so it stamps
+    `published_at` and lands the row in the same bucket as a pipeline
+    publish, where the operator expects to find published articles. It never
+    touches git: whatever put the article out there is not ours to describe,
+    so `commit_ref` is left as it is rather than filled with a guess.
+    """
+    project = request.state.project
+    db = request.app.state.db
+    row = await db.get_article_proposal(proposal_id)
+    if row is None or row["project_id"] != project.id:
+        raise HTTPException(status_code=404, detail="proposal not found")
+    if not await db.mark_article_published_by_hand(proposal_id):
+        raise HTTPException(
+            status_code=409,
+            detail=f"only a drafted, proposed or failed article can be "
+                   f"marked published (this one is '{row['status']}')",
+        )
+    return RedirectResponse(
+        _back_to(request, f"/p/{project.slug}/articles"), status_code=303,
+    )
+
+
+@router.post("/p/{slug}/articles/{proposal_id}/draft-ready")
+async def articles_draft_ready(
+    request: Request, slug: str, proposal_id: int,
+    draft_ref: str = Form(""), verify_ok: str = Form(""),
+):
+    """Record a draft that exists on disk but never got reported.
+
+    A write-back can be lost while the draft is perfectly real — the session
+    was killed, the host restarted, or another app instance failed the row
+    from under a writer that was still working, after which the writer's own
+    `/written` is refused for being out of status. Retrying costs a whole
+    session to rewrite files that already exist. This puts the row where the
+    write-back would have put it, so the normal publish gate — and the commit
+    it makes — becomes reachable again.
+
+    The paths are validated against the venue's repository before anything is
+    stored, by the same check publish runs, so a typo is refused while the
+    operator is still looking at the field rather than surfacing later as a
+    failed publish on a row that already claims to hold a draft.
+
+    `verify_ok` is the operator's own claim and is labelled as such
+    ('manual', never 'verified'): the centre did not run the build, and the
+    commit message says which of the two happened.
+    """
+    from dreaming.services import article_publish
+
+    project = request.state.project
+    db = request.app.state.db
+    row = await db.get_article_proposal(proposal_id)
+    if row is None or row["project_id"] != project.id:
+        raise HTTPException(status_code=404, detail="proposal not found")
+    if row["status"] != "failed":
+        raise HTTPException(
+            status_code=409,
+            detail=f"only a failed article can have its draft recorded by "
+                   f"hand (this one is '{row['status']}') — a writing row "
+                   f"must be cancelled first, so nothing is recorded behind "
+                   f"a session still working in that directory",
+        )
+    ref = draft_ref.strip()
+    if not ref:
+        raise HTTPException(
+            status_code=422, detail="draft_ref required: name the files")
+    # The draft landed in the VENUE's repository, so that is what the paths
+    # are relative to and what they must exist in — the same derivation
+    # publish uses, for the same reason (see articles_publish).
+    venue, blog_dir = await _venue_for(request, project, row)
+    root = await articles.resolve_article_root(venue.working_dir, blog_dir)
+    paths = article_publish.split_paths(ref, root)
+    try:
+        article_publish.validate_draft_paths(paths, root)
+    except article_publish.PublishError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    resolver = request.app.state.resolver_factory(request)
+    verify_cmd = await resolver.get(venue, "article_verify_cmd", "")
+    claimed = verify_ok.strip().lower() in ("1", "true", "on", "yes")
+    label = articles.manual_publish_label(claimed, verify_cmd)
+    note = (
+        "Recorded by hand from the dashboard: the draft existed but the "
+        "write-back never landed. The centre did not run the verification "
+        "command; "
+        + ("an operator confirmed it passed."
+           if claimed else "nothing confirms it passed.")
+    )
+    if not await db.mark_article_drafted_by_hand(
+            proposal_id, draft_ref=ref, verify_output=note,
+            verify_ok=claimed, verify_label=label):
+        raise HTTPException(
+            status_code=409,
+            detail=f"proposal {proposal_id} changed status before the draft "
+                   f"could be recorded",
+        )
+    # Same reason articles_cancel and the /written failure path do it: the row
+    # is leaving 'failed' for good, and a question a dead attempt left pending
+    # must not keep claiming this proposal is waiting on an answer.
+    await db.dismiss_article_proposal_questions(proposal_id)
     return RedirectResponse(
         _back_to(request, f"/p/{project.slug}/articles"), status_code=303,
     )

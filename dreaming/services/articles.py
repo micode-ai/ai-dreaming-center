@@ -184,6 +184,24 @@ def publish_label(verify_ok: bool, verify_cmd: str) -> str:
     return "verified" if verify_ok else "failed"
 
 
+def manual_publish_label(verify_ok: bool, verify_cmd: str) -> str:
+    """The same claim, for a draft recorded by hand instead of reported.
+
+    'manual' rather than 'verified' because the centre did not watch this
+    build: a human is vouching for it, and the commit message should say
+    which of those happened. A green claim nobody can point at an output for
+    is the one thing this must not produce.
+
+    Without a verification command there was nothing to have verified, so
+    that case reads 'unverified' exactly as an automatic write-back would —
+    and an unticked box reads 'unverified' too, never 'failed': nothing
+    failed here, it simply was not confirmed.
+    """
+    if not verify_cmd.strip():
+        return "unverified"
+    return "manual" if verify_ok else "unverified"
+
+
 _LEGAL_PUBLISH_MODES = ("off", "commit", "commit+push")
 
 

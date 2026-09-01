@@ -2,6 +2,8 @@
 from __future__ import annotations
 import asyncio
 import logging
+import os
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI
@@ -37,6 +39,41 @@ async def lifespan(app: FastAPI):
     app.state.settings = load_settings()
     app.state.db = SqliteDB(app.state.settings.db_path)
     await app.state.db.connect()
+    # One server per database. A second `uvicorn` on this file is an accident
+    # that hides itself: SO_REUSEADDR lets it bind an already-served port
+    # without an error, so both terminals look healthy while the two of them
+    # serialise every write through one SQLite file and each reconcile job
+    # fails the other's live orchestration runs. Refusing to start is the only
+    # point where that is still cheap to say. See
+    # SqliteDB.find_conflicting_instance for how "live" is decided (by pid, so
+    # a hard kill does not lock you out) and config.allow_multi_instance for
+    # the deliberate-two-servers escape hatch.
+    if not getattr(app.state.settings, "allow_multi_instance", False):
+        try:
+            conflict = await app.state.db.find_conflicting_instance()
+        except Exception as e:
+            # Never let a broken check keep the app down -- the sweeps are
+            # owner-aware now, so a missed conflict is a degradation, not the
+            # data loss it used to be.
+            log.warning("instance conflict check failed: %s", e)
+            conflict = None
+        if conflict:
+            await app.state.db.close()
+            raise RuntimeError(
+                "another AI Dreaming Center is already running on "
+                f"{app.state.settings.db_path} (pid {conflict['pid']}, "
+                f"port {conflict['port']}, up since {conflict['started_at']}). "
+                "Stop it first, or set DC_ALLOW_MULTI_INSTANCE=1 if you "
+                "really mean to run two on one database."
+            )
+    # Claim an identity before anything can spawn a session, so every session
+    # this server starts is stamped with it -- the reconcile job needs to tell
+    # whose sessions are whose before it decides any of them are abandoned.
+    # See db.app_instances.
+    app.state.instance_id = str(uuid.uuid4())
+    await app.state.db.register_instance(
+        app.state.instance_id, pid=os.getpid(), port=app.state.settings.port,
+    )
     app.state.projects = ProjectsService(app.state.db)
     app.state.templates = Jinja2Templates(directory="dreaming/templates")
     app.state.i18n = I18n(Path("dreaming/i18n"))
@@ -105,6 +142,14 @@ async def lifespan(app: FastAPI):
     finally:
         # Cleanup runs even on exception during the yield body.
         app.state.scheduler.shutdown(wait=False)
+        # Give up the instance row before the connection goes: a clean
+        # shutdown makes this server's sessions sweepable on the next tick
+        # instead of waiting out the staleness window. Best-effort -- a
+        # failure here only costs those few minutes.
+        try:
+            await app.state.db.unregister_instance()
+        except Exception as e:
+            log.warning("unregister_instance failed: %s", e)
         await app.state.db.close()
 
 

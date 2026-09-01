@@ -25,6 +25,11 @@ which is the one thing this module exists to refuse. `_validate_paths`
 rejects all of that before git ever sees the string, and `--literal-pathspecs`
 on the git calls themselves is the belt-and-suspenders backstop in case
 something slips past the character checks.
+
+`plan_rollback` / `rollback` at the bottom are the same story in reverse --
+taking a draft back out of a working tree the operator decided against. They
+obey every rule above, for the same reason: undoing our own write must not be
+able to touch anything the writer did not report.
 """
 from __future__ import annotations
 import asyncio
@@ -79,6 +84,7 @@ def _find_nested_git(tree: Path) -> Path | None:
 
 def _validate_paths(
     paths: list[str], repo_root: Path, *, allow_dirs: bool = False,
+    require_exists: bool = True,
 ) -> None:
     """Refuse anything that is not a plain, in-repo, existing path.
 
@@ -95,6 +101,13 @@ def _validate_paths(
     legitimately is a subtree. Every other rule (no absolute paths, no `..`,
     no glob characters, containment, existence, no nested `.git`) applies
     identically to both, so the two modes cannot drift on those.
+
+    `require_exists=False` drops only the existence check, for
+    `plan_rollback`: a draft_ref path whose file is already gone is nothing
+    left to roll back, and refusing the whole discard over it would strand
+    the operator with a row they cannot close. Every hostile-string rule
+    still applies -- that is why this is a parameter here rather than a
+    second validator somewhere else.
     """
     for p in paths:
         if p.startswith(":"):
@@ -121,7 +134,9 @@ def _validate_paths(
                 f"invalid path (escapes the repository): {p!r}"
             )
         if not resolved.exists():
-            raise PublishError(f"invalid path (does not exist): {p!r}")
+            if require_exists:
+                raise PublishError(f"invalid path (does not exist): {p!r}")
+            continue
         if not allow_dirs and not resolved.is_file():
             raise PublishError(f"invalid path (not a regular file): {p!r}")
         if allow_dirs and resolved.is_dir():
@@ -211,6 +226,19 @@ async def _rollback_or_raise(
         f"{', '.join(rollback_paths)}\n"
         f"reset error: {(reset_err or reset_out).strip() or str(reset_rc)}"
     )
+
+
+def validate_draft_paths(paths: list[str], working_dir: str) -> None:
+    """The draft_ref check `publish` runs, callable before publish time.
+
+    Recording a draft by hand takes the paths from a form instead of from a
+    writer session, and a typo there must be refused while the operator is
+    still looking at the field — not saved and then re-discovered as a failed
+    publish on a row that already claims to hold a draft. Same rules and the
+    same messages as publish, deliberately: two ways of describing the same
+    string would eventually disagree.
+    """
+    _validate_paths(paths, Path(working_dir).resolve())
 
 
 async def publish(
@@ -366,3 +394,139 @@ async def publish(
                 commit=commit, output=(err or out).strip(),
             )
     return commit
+
+
+# ── Rollback: taking a rejected draft back out of the tree ────────────
+
+def _norm_path(p: str) -> str:
+    """Slash-separated, no leading/trailing separator — how git names files."""
+    return p.replace("\\", "/").strip("/")
+
+
+def _porcelain_states(out: str) -> dict[str, str]:
+    """{path: XY} from `git status --porcelain`.
+
+    A rename reads `XY old -> new`; the new name is the one on disk, so that
+    is what we key on. A path git chose to C-quote (unusual bytes in the
+    name) will not match its plain form and so falls through to `skip` —
+    the safe direction: an unrecognised file is left on disk rather than
+    deleted on a guess.
+    """
+    states: dict[str, str] = {}
+    for line in out.splitlines():
+        if len(line) < 4:
+            continue
+        code, rest = line[:2], line[3:]
+        if " -> " in rest:
+            rest = rest.split(" -> ", 1)[1]
+        states[_norm_path(rest.strip().strip('"'))] = code
+    return states
+
+
+async def plan_rollback(paths: list[str], working_dir: str) -> list[dict]:
+    """What discarding this draft would do to each of its files.
+
+    Four outcomes, decided by one `git status --porcelain` over exactly the
+    reported paths:
+
+      * `delete`   — untracked (`??`). The writer created it; it goes.
+      * `unstage`  — staged as new (`A` in the index). A publish that died
+                     between `git add` and `git commit` leaves this behind,
+                     and deleting the file alone would leave the index
+                     holding a path that no longer exists.
+      * `restore`  — tracked and changed some other way. The writer edited a
+                     file that already existed (`src/data/blog-posts.json` and
+                     friends), so the file goes back to HEAD rather than away.
+      * `skip`     — git reports nothing for it, or it is already gone.
+
+    Read this before acting on it: `restore` takes the whole file back to
+    HEAD, so an unrelated edit sitting in the same file is lost with ours.
+    That is why the route renders this plan and asks, instead of just doing
+    it.
+
+    Returns one dict per input path, in input order, with `path`, `action`
+    and the raw two-letter `status` git reported (empty when it reported
+    none).
+    """
+    wd = Path(working_dir).resolve()
+    if not (wd / ".git").exists():
+        raise PublishError(f"{working_dir} is not a git repository")
+    if not paths:
+        return []
+    _validate_paths(paths, wd, require_exists=False)
+    git = shutil.which("git") or "git"
+    rc, out, err = await _run(
+        [git, "--literal-pathspecs", "status", "--porcelain", "--", *paths],
+        str(wd),
+    )
+    if rc != 0:
+        raise PublishError(f"git status failed: {err.strip() or rc}")
+    states = _porcelain_states(out)
+    plan: list[dict] = []
+    for p in paths:
+        code = states.get(_norm_path(p), "")
+        if code == "??":
+            action = "delete"
+        elif code[:1] == "A":
+            action = "unstage"
+        elif code:
+            action = "restore"
+        else:
+            action = "skip"
+        plan.append({"path": p, "action": action, "status": code})
+    return plan
+
+
+async def rollback(paths: list[str], working_dir: str) -> list[dict]:
+    """Execute `plan_rollback`. Returns the plan it carried out.
+
+    `restore` and `unstage` both `git reset` the path first: without it,
+    `git checkout -- <path>` would restore from the index rather than from
+    HEAD, quietly reinstating a staged copy of the very draft being
+    discarded. Reset on an unstaged path is a no-op, so one order serves
+    both.
+
+    A step that fails stops the run and raises, naming what was already
+    undone and what was not — half a rollback in someone else's repository
+    is exactly the kind of thing that must not be reported as success.
+    """
+    plan = await plan_rollback(paths, working_dir)
+    wd = Path(working_dir).resolve()
+    git = shutil.which("git") or "git"
+    done: list[str] = []
+
+    def _fail(step: str, detail: str) -> None:
+        undone = ", ".join(done) or "nothing"
+        raise PublishError(
+            f"{step} failed: {detail}\n"
+            f"rolled back so far: {undone}; the remaining paths were left "
+            "untouched, so the working tree is part-way between the draft "
+            "and HEAD -- finish by hand before reusing this row."
+        )
+
+    for item in plan:
+        action, rel = item["action"], item["path"]
+        if action == "skip":
+            continue
+        if action in ("unstage", "restore"):
+            rc, out, err = await _run(
+                [git, "--literal-pathspecs", "reset", "-q", "--", rel], str(wd),
+            )
+            if rc != 0:
+                _fail(f"git reset -- {rel}", (err or out).strip() or str(rc))
+        if action == "restore":
+            rc, out, err = await _run(
+                [git, "--literal-pathspecs", "checkout", "-q", "--", rel],
+                str(wd),
+            )
+            if rc != 0:
+                _fail(f"git checkout -- {rel}", (err or out).strip() or str(rc))
+        else:
+            try:
+                (wd / rel).unlink()
+            except FileNotFoundError:
+                pass
+            except OSError as e:
+                _fail(f"delete {rel}", str(e))
+        done.append(rel)
+    return plan

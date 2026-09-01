@@ -54,6 +54,7 @@ Cards are grouped by status, each group with its own count:
 | Writing | being written right now |
 | Drafted | a draft exists, awaiting review/publish |
 | Published | published (terminal) |
+| Already done | closed without running the writer — the article already exists |
 | Rejected | rejected |
 | Failed | the session failed or was cancelled |
 
@@ -87,12 +88,30 @@ button — it must be updated by hand, and the banner says so plainly.
 
 | Status | Buttons |
 |---|---|
-| Proposed | **Approve and write** (dispatches the writer), **Reject**, a venue select + **Set venue** |
-| Failed | **Retry** (re-dispatches the writer on the same topic), a venue select |
+| Proposed | **Approve and write** (dispatches the writer), **Reject**, **Already done**, a venue select + **Set venue** |
+| Failed | **Retry** (re-dispatches the writer on the same topic), **Already done**, **The draft is ready**, a venue select |
 | Writing | **Cancel** (moves it to Failed; does not kill the underlying session — if the process is still alive it keeps going, the card just stops waiting on it) |
 | Drafted | **Publish** (if the gate allows it) or the refusal reason as text, plus **Retry** |
+| Already done | **Back to queue** (returns it to Proposed) |
 | Rejected | **Back to queue** (returns it to Proposed) |
 | Published | nothing — terminal |
+
+**"Already done" is not a rejection.** A rejected article says the topic was
+wrong; a done one says the topic was right and the work already exists. A
+month later those read differently, and a scan will not re-propose the same
+slug under either. Reversible through the same button rejected rows use.
+
+**"The draft is ready" is the recovery button.** It is for when the files are
+already in the repository but the writer's report never landed: the session
+was killed, the host restarted, the watchdog failed the card from under a
+working writer. Expand it on a Failed card, give the file paths
+comma-separated (relative to the venue's repository) and, if the verification
+really did pass, tick the box. The card moves to Drafted and the normal
+**Publish** button becomes available — the commit this was all for, instead of
+another paid writer run over work that already exists. A path that does not
+exist is refused. The badge on such a row reads "checked by hand", not "build
+passed": the centre did not run the build, you vouched for it, and the commit
+message says exactly that.
 
 ## The venue
 

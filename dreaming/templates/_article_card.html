@@ -74,6 +74,13 @@
       <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/reject" class="inline">
         <button class="btn btn-sm">{{ "article.btn.reject" | t(locale=locale) }}</button>
       </form>
+      {#- Not a rejection: the topic was right, the article already exists. -#}
+      <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/done" class="inline">
+        <button class="btn btn-sm">{{ "article.btn.done" | t(locale=locale) }}</button>
+      </form>
+      <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/mark-published" class="inline">
+        <button class="btn btn-sm">{{ "article.btn.mark_published" | t(locale=locale) }}</button>
+      </form>
       <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/venue"
             class="inline flex items-center gap-1">
         <select name="venue" class="text-xs rounded px-1 py-1 bg-elevated">
@@ -83,13 +90,19 @@
         </select>
         <button class="btn btn-sm">{{ "article.venue.set" | t(locale=locale) }}</button>
       </form>
-    {% elif a.status == 'rejected' %}
+    {% elif a.status in ('rejected', 'done') %}
       <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/restore" class="inline">
         <button class="btn btn-sm">{{ "article.btn.restore" | t(locale=locale) }}</button>
       </form>
     {% elif a.status == 'failed' %}
       <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/approve" class="inline">
         <button class="btn btn-sm">{{ "article.btn.retry" | t(locale=locale) }}</button>
+      </form>
+      <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/done" class="inline">
+        <button class="btn btn-sm">{{ "article.btn.done" | t(locale=locale) }}</button>
+      </form>
+      <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/mark-published" class="inline">
+        <button class="btn btn-sm">{{ "article.btn.mark_published" | t(locale=locale) }}</button>
       </form>
       <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/venue"
             class="inline flex items-center gap-1">
@@ -120,9 +133,41 @@
       <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/approve" class="inline">
         <button class="btn btn-sm">{{ "article.btn.retry" | t(locale=locale) }}</button>
       </form>
+      <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/mark-published" class="inline">
+        <button class="btn btn-sm">{{ "article.btn.mark_published" | t(locale=locale) }}</button>
+      </form>
+      {#- Rejecting a drafted article deletes files, so this one is a link to
+          a confirmation page rather than a submit button. -#}
+      <a class="btn btn-sm" href="/p/{{ project.slug }}/articles/{{ a.id }}/discard">
+        {{ "article.btn.discard" | t(locale=locale) }}</a>
     {% endif %}
     {% if a.writer_agent %}
       <span class="ml-auto font-mono faint">{{ a.writer_agent }}</span>
     {% endif %}
   </footer>
+
+  {#- Recording a draft that exists but was never reported. Outside the footer
+      because the form is full-width, and folded away because it is a recovery
+      path, not part of the normal loop: the writer reports its own draft, and
+      this is only for when that report was lost (session killed, host
+      restarted, the row failed out from under a writer still working). -#}
+  {% if a.status == 'failed' %}
+    <details class="mt-2">
+      <summary class="btn btn-sm cursor-pointer">{{ "article.btn.draft_ready" | t(locale=locale) }}</summary>
+      <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/draft-ready"
+            class="mt-2 flex flex-col gap-2">
+        <p class="text-xs faint">{{ "article.draft_ready.hint" | t(locale=locale) }}</p>
+        <input type="text" name="draft_ref" required value="{{ a.draft_ref }}"
+               placeholder="{{ 'article.draft_ready.ref' | t(locale=locale) }}"
+               class="rounded px-2 py-1 bg-elevated text-sm">
+        <label class="flex items-center gap-2 text-xs">
+          <input type="checkbox" name="verify_ok" value="1">
+          {{ "article.draft_ready.verified" | t(locale=locale) }}
+        </label>
+        <div>
+          <button class="btn btn-sm btn-primary">{{ "article.draft_ready.submit" | t(locale=locale) }}</button>
+        </div>
+      </form>
+    </details>
+  {% endif %}
 </article>

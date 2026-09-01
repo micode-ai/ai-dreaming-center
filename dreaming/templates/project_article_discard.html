@@ -1,0 +1,52 @@
+{% extends "_project_layout.html" %}
+{% set active = 'articles' %}
+{% block project_content %}
+<header class="mb-4">
+  <div class="flex items-baseline gap-3 flex-wrap">
+    <a class="text-xs underline faint" href="/p/{{ project.slug }}/articles">
+      &larr; {{ "article.title" | t(locale=locale) }}
+    </a>
+    <h2 class="text-lg font-semibold strong">{{ row.title }}</h2>
+    <span class="badge badge-neutral">{{ ("article.status." ~ row.status) | t(locale=locale) }}</span>
+  </div>
+  <p class="text-xs faint mt-1">
+    #{{ row.id }} &middot; <span class="font-mono">{{ root }}</span>
+  </p>
+</header>
+
+{% if error %}
+  {# The paths could not be read at all. Say so, and still offer the exit
+     that touches nothing -- a row whose draft_ref is broken is precisely
+     the one an operator needs to be able to close. #}
+  <p class="text-sm mb-3">{{ "article.discard.unreadable" | t(locale=locale) }}</p>
+  <pre class="text-xs whitespace-pre-wrap p-2 bg-elevated mb-4">{{ error }}</pre>
+{% else %}
+  <p class="text-sm mb-3">{{ "article.discard.intro" | t(locale=locale) }}</p>
+  <table class="w-full text-xs mb-3">
+    <tbody>
+      {% for item in plan %}
+        <tr class="border-t">
+          <td class="py-1 pr-3 font-mono">{{ item.path }}</td>
+          <td class="py-1 pr-3">
+            <span class="badge badge-{{ {'delete':'failed','unstage':'failed','restore':'running'}.get(item.action, 'neutral') }}">
+              {{ ("article.discard.action." ~ item.action) | t(locale=locale) }}
+            </span>
+          </td>
+          <td class="py-1 faint font-mono">{{ item.status }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {# Only worth warning about when a restore is actually on the list. #}
+  {% if plan | selectattr("action", "equalto", "restore") | list %}
+    <p class="text-xs mb-4">{{ "article.discard.restore_warning" | t(locale=locale) }}</p>
+  {% endif %}
+{% endif %}
+
+<div class="flex gap-2 items-center">
+  <form method="post" action="/p/{{ project.slug }}/articles/{{ row.id }}/discard" class="inline">
+    <button class="btn btn-sm btn-primary">{{ "article.discard.submit" | t(locale=locale) }}</button>
+  </form>
+  <a class="btn btn-sm" href="/p/{{ project.slug }}/articles">{{ "article.discard.cancel" | t(locale=locale) }}</a>
+</div>
+{% endblock %}

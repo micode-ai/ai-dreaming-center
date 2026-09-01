@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import sys
 import tempfile
 from datetime import datetime, timedelta, timezone
@@ -16,6 +17,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+
+# These smokes boot the real app with TestClient against the real configured
+# database, on purpose -- that is what makes them end-to-end. Startup now
+# refuses to share a database with a live server (see
+# SqliteDB.find_conflicting_instance), which would otherwise make every run
+# fail whenever the dev server is up. A TestClient boot is not a second
+# server competing for the same work, so it takes the documented opt-out
+# rather than asking the operator to stop their server first.
+os.environ.setdefault("DC_ALLOW_MULTI_INSTANCE", "1")
+
 
 # Windows console here is cp1250: an unencodable char in print() aborts the
 # run mid-way. Force UTF-8 on both streams (fail() writes to stderr).
@@ -3561,6 +3572,241 @@ async def main() -> int:
                  f"{st.stale}")
             return 1
         print("ok: converting an entire installed kit to LF adds no drift")
+
+        # ── the two ways a card leaves the queue without paying for another
+        # session ────────────────────────────────────────────────────────
+        # They are deliberately different exits and must not collapse into
+        # one: "already done" closes the row and commits nothing (the article
+        # exists outside this pipeline), "the draft is ready" records a draft
+        # that IS on disk so the publish gate — and the commit behind it —
+        # becomes reachable again.
+        prior_done_env = os.environ.get("DC_DB_PATH")
+        done_db_dir = Path(tempfile.mkdtemp(prefix="dc_smoke_art_done_"))
+        done_repo = Path(tempfile.mkdtemp(prefix="dc_smoke_art_donerepo_"))
+        (done_repo / "blog").mkdir()
+        (done_repo / "blog" / "ready.md").write_text("# draft\n", encoding="utf-8")
+        os.environ["DC_DB_PATH"] = str(done_db_dir / "t.db")
+        try:
+            with TestClient(app) as client:
+                svc = ProjectsService(app.state.db)
+                proj = await svc.create(
+                    slug="art-done", label="Art done", working_dir=str(done_repo))
+                await svc.set_setting(proj.id, "article_blog_dir", "blog")
+                await svc.set_setting(proj.id, "article_publish_mode", "commit")
+                await svc.set_setting(proj.id, "article_verify_cmd", "echo build")
+                d = app.state.db
+                aid = await d.add_article_proposal(
+                    proj.id, source="manual", source_ref="", evidence="checked",
+                    title="Already written elsewhere", angle="",
+                    slug_hint="already-written")
+
+                if client.post(f"/p/art-done/articles/{aid}/done",
+                               follow_redirects=False).status_code != 303:
+                    fail("marking a proposed article as already done was refused")
+                    return 1
+                row = await d.get_article_proposal(aid)
+                if row["status"] != "done":
+                    fail(f"the article did not reach 'done': {row['status']!r}")
+                    return 1
+                if row["status"] == "rejected":
+                    fail("'already done' collapsed into 'rejected' — the whole "
+                         "point is that a month later those read differently")
+                    return 1
+
+                # A re-scan cannot refill the queue with work that is finished:
+                # the unique (project_id, slug_hint) index is what stops it.
+                if await d.add_article_proposal(
+                        proj.id, source="project_scan", source_ref="x",
+                        evidence="again", title="Already written elsewhere",
+                        angle="", slug_hint="already-written") is not None:
+                    fail("a scan re-proposed an article already marked done")
+                    return 1
+
+                if client.post(f"/p/art-done/articles/{aid}/restore",
+                               follow_redirects=False).status_code != 303:
+                    fail("an already-done article could not be restored")
+                    return 1
+                if (await d.get_article_proposal(aid))["status"] != "proposed":
+                    fail("restore did not return the article to the queue")
+                    return 1
+
+                # Refused mid-write: a session is writing into that repository
+                # and closing the row behind it leaves the two disagreeing.
+                await d.set_article_proposal_status(aid, "writing")
+                if client.post(f"/p/art-done/articles/{aid}/done",
+                               follow_redirects=False).status_code != 409:
+                    fail("marking a 'writing' article as done was allowed — a "
+                         "session is still working in that directory")
+                    return 1
+                print("ok: 'already done' is its own terminal status, reversible, "
+                      "dedup-proof, and refused mid-write")
+
+                # ---- the draft-ready recovery ---------------------------
+                await d.set_article_proposal_status(
+                    aid, "failed", error_message="session died")
+
+                # A typo must be refused while the operator is still looking
+                # at the field, not stored and re-discovered as a failed
+                # publish on a row that already claims to hold a draft.
+                bad = client.post(
+                    f"/p/art-done/articles/{aid}/draft-ready",
+                    data={"draft_ref": "blog/nope.md"}, follow_redirects=False)
+                if bad.status_code != 400:
+                    fail(f"draft-ready accepted a path that does not exist: "
+                         f"{bad.status_code}")
+                    return 1
+                if (await d.get_article_proposal(aid))["status"] != "failed":
+                    fail("a refused draft-ready still moved the row")
+                    return 1
+
+                ok_resp = client.post(
+                    f"/p/art-done/articles/{aid}/draft-ready",
+                    data={"draft_ref": "blog/ready.md", "verify_ok": "1"},
+                    follow_redirects=False)
+                if ok_resp.status_code != 303:
+                    fail(f"draft-ready refused a real draft: {ok_resp.status_code}")
+                    return 1
+                row = await d.get_article_proposal(aid)
+                if row["status"] != "drafted" or row["draft_ref"] != "blog/ready.md":
+                    fail(f"draft-ready did not record the draft: {dict(row)}")
+                    return 1
+                if row["verify_label"] != "manual":
+                    fail(f"a hand-recorded draft claims {row['verify_label']!r} — "
+                         "it must never claim 'verified': the centre did not "
+                         "run the build, a human vouched for it")
+                    return 1
+                if row["writer_agent"] != "manual":
+                    fail(f"writer_agent={row['writer_agent']!r}, want 'manual' — "
+                         "the card must not imply an agent reported this")
+                    return 1
+                allowed, reason = articles.can_publish(
+                    dict(row), "echo build", "commit")
+                if not allowed:
+                    fail(f"a recorded draft still cannot be published: {reason} — "
+                         "reaching the publish gate is the entire point")
+                    return 1
+
+                # Not a second time: the row holds a draft now.
+                again = client.post(
+                    f"/p/art-done/articles/{aid}/draft-ready",
+                    data={"draft_ref": "blog/ready.md"}, follow_redirects=False)
+                if again.status_code != 409:
+                    fail(f"draft-ready re-recorded a 'drafted' row: "
+                         f"{again.status_code}")
+                    return 1
+
+                # An unticked box is not a failure and not a pass: with a
+                # verify command configured it reads 'unverified', and the
+                # gate keeps publishing shut.
+                aid2 = await d.add_article_proposal(
+                    proj.id, source="manual", source_ref="", evidence="checked",
+                    title="Unconfirmed draft", angle="", slug_hint="unconfirmed")
+                await d.set_article_proposal_status(aid2, "failed")
+                if client.post(
+                        f"/p/art-done/articles/{aid2}/draft-ready",
+                        data={"draft_ref": "blog/ready.md"},
+                        follow_redirects=False).status_code != 303:
+                    fail("draft-ready refused an unconfirmed draft")
+                    return 1
+                row2 = await d.get_article_proposal(aid2)
+                if row2["verify_label"] != "unverified" or row2["verify_ok"]:
+                    fail(f"an unticked box recorded {row2['verify_label']!r} / "
+                         f"verify_ok={row2['verify_ok']}")
+                    return 1
+                if articles.can_publish(dict(row2), "echo build", "commit")[0]:
+                    fail("an unconfirmed draft opened the publish gate")
+                    return 1
+        finally:
+            if prior_done_env is None:
+                os.environ.pop("DC_DB_PATH", None)
+            else:
+                os.environ["DC_DB_PATH"] = prior_done_env
+        print("ok: 'the draft is ready' records a real draft (labelled "
+              "'manual', never 'verified'), refuses a bad path, refuses a "
+              "second recording, and only opens the gate when confirmed")
+
+        # ── one database, two servers ─────────────────────────────────────
+        # Nothing about this app is single-instance: a second uvicorn on
+        # another port shares the database happily, and runs the same
+        # reconcile job. That job decides liveness from its OWN
+        # ProcessManager, so without instance ownership each server reads the
+        # other's live sessions as dead and fails the work under them —
+        # which is exactly what killed article proposal 514 five minutes into
+        # a twenty-minute write.
+        from dreaming.services.scheduler import _reconcile_job
+
+        class _StubPM:
+            """A server with nothing of its own running — the state the
+            second instance is always in with respect to the first."""
+
+            def list_running(self):
+                return {}
+
+            async def reconcile_stale_sessions(self, pairs):
+                return 0
+
+        class _StubState:
+            def __init__(self, db_, projects_):
+                self.db = db_
+                self.projects = projects_
+                self.process_manager = _StubPM()
+
+        inst_dir = Path(tempfile.mkdtemp(prefix="dc_smoke_instances_"))
+        db_a = SqliteDB(str(inst_dir / "shared.db"))
+        await db_a.connect()
+        db_b = SqliteDB(str(inst_dir / "shared.db"))
+        await db_b.connect()
+        try:
+            projects_a = ProjectsService(db_a)
+            two = await projects_a.create(
+                slug="two-servers", label="Two servers", working_dir=str(inst_dir))
+            await db_a.register_instance("inst-a", pid=1, port=8086)
+            await db_b.register_instance("inst-b", pid=2, port=8099)
+
+            # B dispatches a writer; A is the one running the sweep.
+            sid_b = await db_b.create_session(two.id, "cmd:two-servers:write-article")
+            prop = await db_a.add_article_proposal(
+                two.id, source="smoke", source_ref="two-servers",
+                evidence="test", title="Written by the other server",
+                angle="", slug_hint="other-server")
+            await db_a.start_article_attempt(prop, session_id=sid_b)
+
+            owned = await db_a.sessions_owned_by_live_instances()
+            if sid_b not in owned:
+                fail("A does not recognise B's live session as B's — the "
+                     "sweep would treat it as abandoned work")
+                return 1
+            sid_a = await db_a.create_session(two.id, "cmd:two-servers:self-study")
+            if sid_a in await db_a.sessions_owned_by_live_instances():
+                fail("A counted its OWN session as a foreign one — its own "
+                     "ProcessManager is the only thing allowed to judge those")
+                return 1
+
+            state = _StubState(db_a, projects_a)
+            await _reconcile_job(state)
+            if (await db_a.get_article_proposal(prop))["status"] != "writing":
+                fail("A's reconcile job failed a proposal whose writer is "
+                     "running under a live second instance — this is bug 514")
+                return 1
+
+            # …and when B stops heartbeating, its work becomes sweepable
+            # again: a hard-killed server must not strand rows forever.
+            stale = (datetime.now(timezone.utc)
+                     - timedelta(seconds=600)).isoformat()
+            await db_a.execute(
+                "UPDATE app_instances SET last_seen=? WHERE id='inst-b'",
+                (stale,))
+            await _reconcile_job(state)
+            row = await db_a.get_article_proposal(prop)
+            if row["status"] != "failed":
+                fail(f"a proposal owned by a dead instance stayed "
+                     f"{row['status']!r} — the self-healing sweep is gone")
+                return 1
+        finally:
+            await db_a.close()
+            await db_b.close()
+        print("ok: two servers on one database leave each other's live "
+              "sessions alone, and a dead one's work is still swept")
 
         print("PASS")
         return 0
