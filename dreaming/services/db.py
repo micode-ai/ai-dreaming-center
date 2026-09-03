@@ -1549,7 +1549,19 @@ class SqliteDB:
             )
             needle = f"%,{project_slug},%"
             params += [needle, needle]
-        sql += " ORDER BY discovered_at DESC LIMIT ?"
+        # Сортируем по той дате, которую карточка и показывает
+        # (`published_at or discovered_at`), а не по discovered_at.
+        # Один скан пишет всем найденным findings ОДИН И ТОТ ЖЕ
+        # discovered_at, поэтому ORDER BY discovered_at вырождался в порядок
+        # вставки — лента шла группами по источникам, а видимые даты в ней
+        # прыгали. NULLIF повторяет Jinja-шную truthiness (`or`): пустая
+        # строка в published_at — это тоже «даты публикации нет».
+        # discovered_at и id добиваем как tie-breaker, иначе LIMIT
+        # отдаёт нестабильную выборку при равных датах.
+        sql += (
+            " ORDER BY COALESCE(NULLIF(published_at, ''), discovered_at) DESC,"
+            " discovered_at DESC, id DESC LIMIT ?"
+        )
         params.append(limit)
         return await self.fetch_all(sql, tuple(params))
 

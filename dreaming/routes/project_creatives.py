@@ -257,6 +257,10 @@ async def creatives_page(request: Request, slug: str):
         ) if override_id is not None else None
         d["venue_override_slug"] = override.slug if override else None
         enriched.append(d)
+    # Newest proposal first, inside every status group. The query already
+    # returns created_at DESC; said again here because the order the cards
+    # appear in is this page's own promise, not a detail of a shared helper.
+    enriched.sort(key=lambda r: r.get("created_at") or "", reverse=True)
     groups = [(st, [r for r in enriched if r["status"] == st]) for st in _ORDER]
     other = [r for r in enriched if not r["status_known"]]
     if other:

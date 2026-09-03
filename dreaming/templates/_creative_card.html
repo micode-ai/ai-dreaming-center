@@ -11,6 +11,12 @@
     {% endif %}
     <span class="text-xs font-mono faint">{{ c.slug_hint }}</span>
     <span class="text-xs faint ml-auto">{{ c.source }}</span>
+    {#- When the campaign was proposed, which is also the order the cards come
+        in. `data-ts` is repainted into local time by timeago.js; the date
+        inside it is the pre-hydration fallback. -#}
+    {% if c.created_at %}
+      <time class="text-xs faint" data-ts="{{ c.created_at }}">{{ c.created_at[:10] }}</time>
+    {% endif %}
   </header>
 
   {% if c.angle %}<p class="text-sm mb-2">{{ c.angle }}</p>{% endif %}

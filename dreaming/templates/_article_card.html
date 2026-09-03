@@ -19,6 +19,12 @@
       </span>
     {% endif %}
     <span class="text-xs faint ml-auto">{{ a.source }}{% if a.source_ref %} · {{ a.source_ref }}{% endif %}</span>
+    {#- Когда заявка появилась — по этой дате карточки и упорядочены. `data-ts`
+        перерисовывает timeago.js в локальное время; дата внутри —
+        fallback до гидратации. -#}
+    {% if a.created_at %}
+      <time class="text-xs faint" data-ts="{{ a.created_at }}">{{ a.created_at[:10] }}</time>
+    {% endif %}
   </header>
 
   {% if a.angle %}<p class="text-sm mb-2">{{ a.angle }}</p>{% endif %}

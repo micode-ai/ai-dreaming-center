@@ -161,6 +161,10 @@ async def articles_page(request: Request, slug: str):
         d["venue_override_slug"] = override_project.slug if override_project else None
         d["has_pending_question"] = str(row_dict["id"]) in pending_run_ids
         enriched.append(d)
+    # Newest proposal first, inside every status group. The query already
+    # returns created_at DESC; said again here because the order the cards
+    # appear in is this page's own promise, not a detail of a shared helper.
+    enriched.sort(key=lambda r: r.get("created_at") or "", reverse=True)
     groups = [(st, [r for r in enriched if r["status"] == st]) for st in _ORDER]
     # A status outside _ORDER (no CHECK constraint stops one existing) would
     # otherwise silently vanish from every group above; catch it in one more
