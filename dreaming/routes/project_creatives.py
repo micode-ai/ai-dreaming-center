@@ -504,9 +504,21 @@ async def creatives_attach(
 
 
 @router.post("/p/{slug}/creatives/{proposal_id}/approve")
-async def creatives_approve(request: Request, slug: str, proposal_id: int):
+async def creatives_approve(
+    request: Request, slug: str, proposal_id: int, brief: str = Form(""),
+):
     """Dispatch the maker. bypassPermissions, for the reason self-study settled:
-    with --allowedTools the session silently loses the ability to write."""
+    with --allowedTools the session silently loses the ability to write.
+
+    `brief` is what the operator typed next to the button: extra direction for
+    THIS campaign. A blank one leaves whatever is already stored alone, so a
+    retry keeps the direction the operator gave the first time instead of
+    silently rebuilding what they already steered away from. It reaches the
+    maker as $DC_CREATIVE_BRIEF -- an environment variable, never appended to
+    the prompt: anything after the bare slash command turns the spawn into a
+    multi-part task that lands in "don't ask" mode and denies its own writes
+    (settled on self-study; see _build_self_study_prompt).
+    """
     project = request.state.project
     db = request.app.state.db
     pm = request.app.state.process_manager
@@ -520,6 +532,9 @@ async def creatives_approve(request: Request, slug: str, proposal_id: int):
             status_code=409,
             detail=f"a '{row['status']}' campaign cannot be dispatched",
         )
+    if (brief or "").strip():
+        await db.set_creative_brief(proposal_id, brief.strip())
+        row = await db.get_creative_proposal(proposal_id)
     venue, creative_dir = await _venue_for(request, project, row)
     _require_dir(creative_dir)
     _venue, root, camp_rel = await _campaign(request, project, row)
@@ -562,6 +577,9 @@ async def creatives_approve(request: Request, slug: str, proposal_id: int):
                 "DC_CREATIVE_SUBJECT_SLUG": project.slug,
                 # Non-empty only when a human sent this back.
                 "DC_CREATIVE_REVISION_NOTES": row.get("revision_notes") or "",
+                # The operator's own direction for this campaign, if they
+                # gave one. Outlives every attempt, unlike the notes above.
+                "DC_CREATIVE_BRIEF": row.get("brief") or "",
                 "DC_CREATIVE_DRAFT_REF": row.get("draft_ref") or "",
             },
         )
@@ -816,7 +834,11 @@ async def creatives_revise(
             status_code=409,
             detail="only a drafted campaign can be sent back for revision",
         )
-    return await creatives_approve(request, slug, proposal_id)
+    # A plain Python call, not a request: FastAPI is not resolving the
+    # signature here, so `brief` must be passed explicitly or the Form("")
+    # default arrives as a FieldInfo. Empty on purpose -- a revision changes
+    # the notes, never the standing brief, which the row already carries.
+    return await creatives_approve(request, slug, proposal_id, brief="")
 
 
 @router.post("/p/{slug}/creatives/{proposal_id}/publish")

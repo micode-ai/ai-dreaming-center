@@ -72,9 +72,26 @@
     <pre class="text-xs mb-2 overflow-x-auto">{{ a.verify_output }}</pre>
   {% endif %}
 
+  {#- Уточнение к запуску: направление оператора именно для этой заявки.
+      Стоит здесь, а не в футере, потому что раскрытая textarea в одну строку
+      с кнопками не влезает; со своей формой запуска связана через form=, так
+      что поле может стоять где угодно в документе. Открыто сразу, если бриф
+      уже есть: повторный запуск должен показывать, с чем он поедет. Пустое
+      поле ничего не перетирает — роут игнорирует пустое значение. -#}
+  {% if a.status in ('proposed', 'approved', 'failed', 'drafted') %}
+    <details class="mb-2"{% if a.brief %} open{% endif %}>
+      <summary class="text-xs cursor-pointer">{{ "article.brief.title" | t(locale=locale) }}</summary>
+      <p class="text-xs faint mt-1">{{ "article.brief.hint" | t(locale=locale) }}</p>
+      <textarea name="brief" form="article-write-{{ a.id }}" rows="3"
+                placeholder="{{ 'article.brief.placeholder' | t(locale=locale) }}"
+                class="rounded px-2 py-1 bg-elevated text-sm w-full mt-1">{{ a.brief or '' }}</textarea>
+    </details>
+  {% endif %}
+
   <footer class="flex gap-2 items-center text-xs flex-wrap mt-2">
     {% if a.status == 'proposed' %}
-      <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/approve" class="inline">
+      <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/approve"
+            class="inline" id="article-write-{{ a.id }}">
         <button class="btn btn-sm btn-primary">{{ "article.btn.approve" | t(locale=locale) }}</button>
       </form>
       <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/reject" class="inline">
@@ -101,7 +118,8 @@
         <button class="btn btn-sm">{{ "article.btn.restore" | t(locale=locale) }}</button>
       </form>
     {% elif a.status == 'failed' %}
-      <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/approve" class="inline">
+      <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/approve"
+            class="inline" id="article-write-{{ a.id }}">
         <button class="btn btn-sm">{{ "article.btn.retry" | t(locale=locale) }}</button>
       </form>
       <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/done" class="inline">
@@ -136,7 +154,8 @@
       {% else %}
         <span class="faint">{{ ("article.gate." ~ a.gate_reason) | t(locale=locale) }}</span>
       {% endif %}
-      <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/approve" class="inline">
+      <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/approve"
+            class="inline" id="article-write-{{ a.id }}">
         <button class="btn btn-sm">{{ "article.btn.retry" | t(locale=locale) }}</button>
       </form>
       <form method="post" action="/p/{{ project.slug }}/articles/{{ a.id }}/mark-published" class="inline">

@@ -186,7 +186,9 @@ write-back, а не пересчитывается заново при ренд�
    (пересчитан относительно `root`, см. `session_blog_dir`),
    `DC_ARTICLE_VERIFY_CMD`, `DC_ARTICLE_LOCALES`, `DC_ARTICLE_SUBJECT_DIR`,
    `DC_ARTICLE_SUBJECT_SLUG`, `DC_ARTICLE_REVISION_NOTES`, `DC_ARTICLE_DRAFT_REF`
-   (два последних непусты только при повторной доработке).
+   (два последних непусты только при повторной доработке), `DC_ARTICLE_BRIEF`
+   (уточнение оператора, введённое на самом запуске; живёт на заявке и
+   переживает все попытки).
 7. Пинит venue, затем `db.start_article_attempt` — переводит строку в
    `writing`, стирает `draft_ref`/`verify_output`/`writer_agent`/`error_message`
    от прошлой попытки (иначе retry показывал бы старый "сборка прошла" рядом с

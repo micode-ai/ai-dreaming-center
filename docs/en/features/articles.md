@@ -191,7 +191,9 @@ second while failing to dedup the same topic submitted seconds later.
    `session_blog_dir`), `DC_ARTICLE_VERIFY_CMD`, `DC_ARTICLE_LOCALES`,
    `DC_ARTICLE_SUBJECT_DIR`, `DC_ARTICLE_SUBJECT_SLUG`,
    `DC_ARTICLE_REVISION_NOTES`, `DC_ARTICLE_DRAFT_REF` (the last two non-blank
-   only on a resend for revision).
+   only on a resend for revision), `DC_ARTICLE_BRIEF` (the operator's
+   direction, typed at dispatch time; stored on the proposal and outliving
+   every attempt).
 7. Pins the venue, then `db.start_article_attempt` — moves the row to
    `writing`, wipes the previous attempt's `draft_ref`/`verify_output`/
    `writer_agent`/`error_message` (otherwise a retry would show a stale "build

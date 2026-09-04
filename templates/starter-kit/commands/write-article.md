@@ -44,6 +44,22 @@ sent it back. `$DC_ARTICLE_DRAFT_REF` lists the files you produced last time.
 Then verify and report exactly as a first write does; the center moves the row
 back to `drafted` on your report either way.
 
+## 1b. The operator's own direction, if there is one
+
+`$DC_ARTICLE_BRIEF` is non-empty when the operator typed direction next to the
+button that dispatched you: what to lead on, what to avoid, which tone.
+
+- It **outranks the payload's `angle`.** The angle is what the scan guessed
+  when it proposed the topic; this is what the human who pressed the button
+  actually wants. Where they disagree, follow this and say so in your report.
+- It does **not** loosen the evidence rule. Direction chooses among true
+  things to say; it cannot make an unestablished fact sayable. If it asks for
+  a claim neither repository establishes, ask for that fact (step 4a) rather
+  than writing it.
+- It is **not** a revision. It is set on a first run too, and it stays set
+  across retries — seeing it does not mean files already exist. Only
+  `$DC_ARTICLE_REVISION_NOTES` means that.
+
 ## 2. Know which repository is which
 
 Your working directory for this session is the **venue** — the repository

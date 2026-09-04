@@ -43,6 +43,7 @@ Environment, all set by the center:
 | `$DC_CREATIVE_AGENT` | the agent the center resolved for this work |
 | `$DC_CREATIVE_SUBJECT_DIR` | the repository the campaign is *about* |
 | `$DC_CREATIVE_REVISION_NOTES` | non-empty only when a human sent this back |
+| `$DC_CREATIVE_BRIEF` | the operator's own direction for this campaign, if they gave one |
 | `$DC_CREATIVE_DRAFT_REF` | what you produced last time, if this is a revision |
 
 Prefer `$DC_CREATIVE_FORMATS` and `$DC_CREATIVE_LOCALES` over the payload's own
@@ -65,6 +66,22 @@ and sent them back. `$DC_CREATIVE_DRAFT_REF` lists what you produced.
   half-doing it.
 
 Then verify and report exactly as a first build does.
+
+## 1b. The operator's own direction, if there is one
+
+`$DC_CREATIVE_BRIEF` is non-empty when the operator typed direction next to
+the button that dispatched you: what to lead on, what to avoid, which tone.
+
+- It **outranks the payload's `angle`.** The angle is what the scan guessed
+  when it proposed the campaign; this is what the human who pressed the button
+  actually wants. Where they disagree, follow this and say so in your report.
+- It does **not** loosen the evidence rule. Direction chooses among true
+  things to show; it cannot make an unestablished fact showable. If it asks
+  for a fact neither repository establishes, ask for it (step 4a) rather than
+  inventing it.
+- It is **not** a revision. It is set on a first build too, and it stays set
+  across retries — seeing it does not mean renders already exist. Only
+  `$DC_CREATIVE_REVISION_NOTES` means that.
 
 ## 2. Know which repository is which
 

@@ -185,7 +185,9 @@ nearly word-for-word `articles_approve`, with the same reason for
   (fixed), `DC_CREATIVE_FORMATS`, `DC_CREATIVE_LOCALES`,
   `DC_CREATIVE_VERIFY_CMD`, `DC_CREATIVE_SUBJECT_DIR`,
   `DC_CREATIVE_SUBJECT_SLUG`, `DC_CREATIVE_REVISION_NOTES`,
-  `DC_CREATIVE_DRAFT_REF`.
+  `DC_CREATIVE_DRAFT_REF`, `DC_CREATIVE_BRIEF` (the operator's direction,
+  typed at dispatch time; stored on the proposal and outliving every
+  attempt, unlike the revision notes).
 - There is no separate `article_blog_dir`-style 400 at the start: a missing
   `creative_dir` is caught earlier, by `_require_dir` — the same check that
   also blocks attaching without a directory.

@@ -670,11 +670,21 @@ async def articles_scan(request: Request, slug: str):
 
 
 @router.post("/p/{slug}/articles/{proposal_id}/approve")
-async def articles_approve(request: Request, slug: str, proposal_id: int):
+async def articles_approve(
+    request: Request, slug: str, proposal_id: int, brief: str = Form(""),
+):
     """The first human gate: approve a proposal and dispatch the writer.
 
     bypassPermissions is required — with --allowedTools the session silently
-    loses the ability to write into the repo (settled on self-study)."""
+    loses the ability to write into the repo (settled on self-study).
+
+    `brief` is what the operator typed next to the button: extra direction for
+    THIS article. A blank one leaves whatever is already stored alone, so a
+    retry keeps the direction they gave the first time. It reaches the writer
+    as $DC_ARTICLE_BRIEF — an environment variable, never appended to the
+    prompt: anything after the bare slash command turns the spawn into a
+    multi-part task that lands in "don't ask" mode and denies its own writes.
+    """
     project = request.state.project
     db = request.app.state.db
     pm = request.app.state.process_manager
@@ -700,6 +710,9 @@ async def articles_approve(request: Request, slug: str, proposal_id: int):
                 "be cancelled first."
             ),
         )
+    if (brief or "").strip():
+        await db.set_article_brief(proposal_id, brief.strip())
+        row = await db.get_article_proposal(proposal_id)
     # Wave B: the article lands in the venue's repository, not necessarily
     # the subject's — every setting from here on is read against the venue.
     # With no override and no article_venue_project setting this resolves to
@@ -783,6 +796,9 @@ async def articles_approve(request: Request, slug: str, proposal_id: int):
                 # rather than starting a second article on the same subject.
                 "DC_ARTICLE_REVISION_NOTES": row.get("revision_notes") or "",
                 "DC_ARTICLE_DRAFT_REF": row.get("draft_ref") or "",
+                # The operator's own direction for this article, if they gave
+                # one. Outlives every attempt, unlike the notes above.
+                "DC_ARTICLE_BRIEF": row.get("brief") or "",
             },
         )
     except RuntimeError as e:
@@ -918,7 +934,11 @@ async def articles_revise(
     # Same dispatch as the first write, on purpose: one code path decides the
     # venue, the writer, the session's cwd and its limits, so a revision can
     # never resolve any of those differently than the write it revises.
-    return await articles_approve(request, slug, proposal_id)
+    # A plain Python call, not a request: FastAPI is not resolving the
+    # signature here, so `brief` must be passed explicitly or the Form("")
+    # default arrives as a FieldInfo. Empty on purpose — a revision changes
+    # the notes, never the standing brief, which the row already carries.
+    return await articles_approve(request, slug, proposal_id, brief="")
 
 
 @router.get("/p/{slug}/articles/{proposal_id}/preview")

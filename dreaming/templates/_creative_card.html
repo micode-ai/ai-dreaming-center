@@ -111,9 +111,26 @@
     </details>
   {% endif %}
 
+  {#- Уточнение к запуску: направление оператора именно для этой заявки.
+      Стоит здесь, а не в футере, потому что раскрытая textarea в одну строку
+      с кнопками не влезает; со своей формой запуска связана через form=, так
+      что поле может стоять где угодно в документе. Открыто сразу, если бриф
+      уже есть: повторный запуск должен показывать, с чем он поедет. Пустое
+      поле ничего не перетирает — роут игнорирует пустое значение. -#}
+  {% if c.status in ('proposed', 'approved', 'failed') %}
+    <details class="mb-2"{% if c.brief %} open{% endif %}>
+      <summary class="text-xs cursor-pointer">{{ "creative.brief.title" | t(locale=locale) }}</summary>
+      <p class="text-xs faint mt-1">{{ "creative.brief.hint" | t(locale=locale) }}</p>
+      <textarea name="brief" form="creative-make-{{ c.id }}" rows="3"
+                placeholder="{{ 'creative.brief.placeholder' | t(locale=locale) }}"
+                class="rounded px-2 py-1 bg-elevated text-sm w-full mt-1">{{ c.brief or '' }}</textarea>
+    </details>
+  {% endif %}
+
   <footer class="flex gap-2 items-center text-xs flex-wrap mt-2">
     {% if c.status == 'proposed' %}
-      <form method="post" action="/p/{{ project.slug }}/creatives/{{ c.id }}/approve" class="inline">
+      <form method="post" action="/p/{{ project.slug }}/creatives/{{ c.id }}/approve"
+            class="inline" id="creative-make-{{ c.id }}">
         <button class="btn btn-sm btn-primary">{{ "creative.btn.make" | t(locale=locale) }}</button>
       </form>
       <form method="post" action="/p/{{ project.slug }}/creatives/{{ c.id }}/reject" class="inline">
@@ -129,7 +146,8 @@
         <button class="btn btn-sm">{{ "creative.btn.restore" | t(locale=locale) }}</button>
       </form>
     {% elif c.status == 'failed' %}
-      <form method="post" action="/p/{{ project.slug }}/creatives/{{ c.id }}/approve" class="inline">
+      <form method="post" action="/p/{{ project.slug }}/creatives/{{ c.id }}/approve"
+            class="inline" id="creative-make-{{ c.id }}">
         <button class="btn btn-sm">{{ "creative.btn.retry" | t(locale=locale) }}</button>
       </form>
       <form method="post" action="/p/{{ project.slug }}/creatives/{{ c.id }}/done" class="inline">

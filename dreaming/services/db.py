@@ -371,7 +371,8 @@ CREATE TABLE IF NOT EXISTS article_proposals (
     -- too, appended in the same order it is appended live.
     verify_label    TEXT NOT NULL DEFAULT '',
     target_project_id INTEGER,
-    revision_notes  TEXT NOT NULL DEFAULT ''
+    revision_notes  TEXT NOT NULL DEFAULT '',
+    brief           TEXT NOT NULL DEFAULT ''
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_article_project_slug
     ON article_proposals (project_id, slug_hint);
@@ -425,7 +426,11 @@ CREATE TABLE IF NOT EXISTS creative_proposals (
     created_at      TEXT NOT NULL,
     decided_at      TEXT,
     made_at         TEXT,
-    published_at    TEXT
+    published_at    TEXT,
+    -- Appended after this table's first release, via ALTER TABLE ADD COLUMN
+    -- in _migrate_orchestration, which can only append -- so it is declared
+    -- last here too, per the column-order note above.
+    brief           TEXT NOT NULL DEFAULT ''
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_creative_project_slug
     ON creative_proposals (project_id, slug_hint);
@@ -582,6 +587,36 @@ class SqliteDB:
                 )
             except Exception as e:
                 log.warning("Failed to add revision_notes column: %s", e)
+
+        # --- articles & creatives: `brief` is the operator's own direction for
+        # this one item, typed at the moment they pressed the button that
+        # dispatches the writer/maker. Deliberately NOT revision_notes: that
+        # field means "a human read the draft and sent it back", the command
+        # branches on it to edit existing files in place, and mark_*_made
+        # clears it after each attempt. A brief outlives every attempt and
+        # describes work that does not exist yet. Empty on every pre-existing
+        # row, which is the truth about them: nobody was asked. Same CREATE
+        # TABLE IF NOT EXISTS no-op problem as the columns above. ---
+        if "brief" not in article_cols:
+            try:
+                await self._conn.execute(
+                    "ALTER TABLE article_proposals ADD COLUMN "
+                    "brief TEXT NOT NULL DEFAULT ''"
+                )
+            except Exception as e:
+                log.warning("Failed to add article brief column: %s", e)
+        async with self._conn.execute(
+            "PRAGMA table_info(creative_proposals)"
+        ) as cur:
+            creative_cols = {row[1] for row in await cur.fetchall()}
+        if "brief" not in creative_cols:
+            try:
+                await self._conn.execute(
+                    "ALTER TABLE creative_proposals ADD COLUMN "
+                    "brief TEXT NOT NULL DEFAULT ''"
+                )
+            except Exception as e:
+                log.warning("Failed to add creative brief column: %s", e)
 
         # --- sessions: which app instance spawned this one. Same CREATE TABLE
         # IF NOT EXISTS no-op problem as the article columns above. Existing
@@ -1935,6 +1970,18 @@ class SqliteDB:
         await self._conn.commit()
         return n > 0
 
+    async def set_article_brief(self, proposal_id: int, brief: str) -> bool:
+        """Record the operator's own direction for this article. See
+        set_creative_brief for why this one has no status precondition and is
+        never cleared between attempts."""
+        async with self._conn.execute(
+            "UPDATE article_proposals SET brief=? WHERE id=?",
+            (brief[:8000], proposal_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
     async def set_article_revision_notes(
         self, proposal_id: int, notes: str,
     ) -> bool:
@@ -2335,6 +2382,30 @@ class SqliteDB:
             "UPDATE creative_proposals SET revision_notes=? "
             "WHERE id=? AND status='drafted'",
             (notes[:8000], proposal_id),
+        ) as cur:
+            n = cur.rowcount
+        await self._conn.commit()
+        return n > 0
+
+    async def set_creative_brief(self, proposal_id: int, brief: str) -> bool:
+        """Record the operator's own direction for this campaign.
+
+        Unlike set_creative_revision_notes this has no status precondition:
+        a brief is written at the moment the operator dispatches, and every
+        status the approve route accepts ('proposed', 'approved', 'failed',
+        'drafted') is a legal moment to say what to aim for. Nor is it
+        cleared by mark_creative_made -- notes describe one attempt, a brief
+        describes the campaign, and a retry that silently dropped it would
+        rebuild the thing the operator already steered away from.
+
+        Trimmed at the same 8000 chars as the notes: this reaches a session
+        as an environment variable, and an operator pasting a whole document
+        into it should get a truncated brief rather than a spawn that fails
+        on its environment block.
+        """
+        async with self._conn.execute(
+            "UPDATE creative_proposals SET brief=? WHERE id=?",
+            (brief[:8000], proposal_id),
         ) as cur:
             n = cur.rowcount
         await self._conn.commit()

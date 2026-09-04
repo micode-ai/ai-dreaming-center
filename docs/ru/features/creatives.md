@@ -179,7 +179,9 @@ failed  --(done)----------------> done
   кампании), `DC_CREATIVE_SLUG` (фиксированный), `DC_CREATIVE_FORMATS`,
   `DC_CREATIVE_LOCALES`, `DC_CREATIVE_VERIFY_CMD`, `DC_CREATIVE_SUBJECT_DIR`,
   `DC_CREATIVE_SUBJECT_SLUG`, `DC_CREATIVE_REVISION_NOTES`,
-  `DC_CREATIVE_DRAFT_REF`.
+  `DC_CREATIVE_DRAFT_REF`, `DC_CREATIVE_BRIEF` (уточнение оператора,
+  введённое на самом запуске; живёт на заявке и переживает все попытки,
+  в отличие от замечаний к доработке).
 - Нет отдельного `article_blog_dir`-подобного 400 на старте: отсутствие
   `creative_dir` отсекается раньше, `_require_dir`, тем же кодом, что не даёт
   прикреплять вложения без каталога.

@@ -3020,11 +3020,12 @@ async def main() -> int:
               "regardless of status, unlike the user-facing setter")
 
         # ── schema-order regression pin ──────────────────────────────
-        # article_proposals has two columns (verify_label, target_project_id)
-        # that were added after the table's first release via ALTER TABLE
-        # ADD COLUMN in _migrate_orchestration, which can only append -- so a
-        # database migrated from before either column existed ends up with
-        # them at the end, in append order. The CREATE TABLE string has to
+        # article_proposals has four columns (verify_label,
+        # target_project_id, revision_notes, brief) that were added after the
+        # table's first release via ALTER TABLE ADD COLUMN in
+        # _migrate_orchestration, which can only append -- so a database
+        # migrated from before any of them existed ends up with them at the
+        # end, in append order. The CREATE TABLE string has to
         # declare them in that same trailing order, or a fresh database and
         # a migrated one silently disagree about column order (harmless
         # today since every reader uses name-based access, but a footgun for
@@ -3048,15 +3049,15 @@ async def main() -> int:
             "verify_output", "verify_ok", "commit_ref", "session_id",
             "error_message", "created_at", "decided_at", "written_at",
             "published_at", "verify_label", "target_project_id",
-            "revision_notes",
+            "revision_notes", "brief",
         ]
         if fresh_cols != want_cols:
             fail(f"article_proposals column order: got {fresh_cols}, "
                  f"want {want_cols}")
             return 1
         print("ok: article_proposals column order matches a migrated "
-              "database's (verify_label, target_project_id trail in "
-              "append order)")
+              "database's (verify_label, target_project_id, revision_notes, "
+              "brief trail in append order)")
 
         # ---- preview: language derivation and file scoping -----------------
         # The number of languages is per project, not a constant: the two
